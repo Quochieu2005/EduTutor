@@ -35,3 +35,33 @@
 ## Mục tiêu
 
 EduTutor hướng tới việc xây dựng một **nền tảng giáo dục trực tuyến hiện đại**, giúp người học dễ dàng tìm được gia sư phù hợp và hỗ trợ gia sư quản lý hoạt động giảng dạy một cách hiệu quả và chuyên nghiệp.
+
+---
+## Cài đặt và chạy dự án
+
+### Backend (Django)
+\`\`\`bash
+cd backend
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+\`\`\`
+
+### Frontend (Next.js)
+\`\`\`bash
+cd frontend
+npm install
+npm run dev
+\`\`\`
+---
+## Cấu trúc dự án
+\`\`\`
+EduTutor/
+├── backend/     # Django REST Framework API
+└── frontend/    # Next.js (App Router)
+\`\`\`
+---
+## License
+MIT
