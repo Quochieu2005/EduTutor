@@ -1,0 +1,4 @@
+<div class="dashboard-notification{% if welcome_email %} is-visible{% endif %}" data-dashboard-notification data-welcome-email="{{ welcome_email }}" role="status" aria-live="polite"{% if not welcome_email %} hidden{% endif %}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m8 12 2.5 2.5L16 9"></path></svg>
+    <strong data-dashboard-notification-message>Welcome back{% if welcome_email %}, {{ welcome_email }}{% endif %}!</strong>
+</div>

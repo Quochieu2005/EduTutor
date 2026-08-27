@@ -1,0 +1,28 @@
+<main class="profile-page">
+    <header class="profile-page__header">
+        <div>
+            <p class="profile-page__eyebrow">Account settings</p>
+            <h1>Profile</h1>
+            <p>Manage your personal information and how it appears across EduTutor.</p>
+        </div>
+    </header>
+
+    <section class="profile-card">
+        <div class="profile-card__avatar">{{ profile.name|slice:':1'|upper }}</div>
+        <div><h2>{{ profile.name }}</h2><p>{{ profile.email }}</p><span>{{ profile.role }}</span></div>
+    </section>
+
+    <form class="profile-form" method="post">
+        {% csrf_token %}
+        <section class="profile-panel">
+            <header><h2>Personal information</h2><p>Update your name and contact details.</p></header>
+            <div class="profile-form__grid">
+                <label>Name<input name="name" type="text" value="{{ profile.name }}" required></label>
+                <label>Email<input name="email" type="email" value="{{ profile.email }}" required></label>
+                <label>Role<input name="role" type="text" value="{{ profile.role }}"></label>
+                <label class="profile-form__full">Bio<textarea name="bio" rows="4" placeholder="Tell us a little about yourself.">{{ profile.bio }}</textarea></label>
+            </div>
+        </section>
+        <div class="profile-form__actions"><a href="{% url 'dashboard-slash' %}">Cancel</a><button type="submit">Save changes</button></div>
+    </form>
+</main>

@@ -1,0 +1,20 @@
+document.addEventListener('DOMContentLoaded', () => {
+  const checks = [...document.querySelectorAll('.users-table input[type="checkbox"]')];
+  const bar = document.querySelector('.users-bulk-actions');
+  const invite = bar?.querySelector('[title="Invite selected users"]');
+  if (invite) invite.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"></path><rect x="2" y="4" width="20" height="16" rx="2"></rect></svg><span class="sr-only">Invite selected users</span>';
+  invite?.querySelector('.sr-only')?.remove();
+  const activate = bar?.querySelector('[title="Activate selected users"]');
+  if (activate) activate.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 11 2 2 4-4"></path><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>';
+  const deactivate = bar?.querySelector('[title="Deactivate selected users"]');
+  if (deactivate) deactivate.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="17" x2="22" y1="8" y2="13"></line><line x1="22" x2="17" y1="8" y2="13"></line></svg>';
+  const remove = bar?.querySelector('[title="Delete selected users"]');
+  if (remove) remove.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
+  const count = document.querySelector('[data-selected-count]');
+  const clearButton = bar?.querySelector('[data-clear-selection]');
+  if (clearButton) clearButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
+  const update = () => { const selected = checks.slice(1).filter((item) => item.checked); const allSelected = selected.length === checks.length - 1; checks.slice(1).forEach((item) => item.closest('tr')?.classList.toggle('is-selected', item.checked)); bar.hidden = selected.length === 0; count.textContent = selected.length; checks[0].checked = selected.length > 0; checks[0].classList.toggle('is-all-selected', allSelected); };
+  checks.forEach((item, index) => item.addEventListener('change', () => { if (index === 0) checks.slice(1).forEach((row) => { row.checked = item.checked; }); update(); }));
+  clearButton?.addEventListener('click', () => { checks.forEach((item) => { item.checked = false; }); update(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') document.querySelector('[data-clear-selection]')?.click(); });
+});

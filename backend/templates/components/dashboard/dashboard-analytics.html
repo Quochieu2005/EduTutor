@@ -1,0 +1,37 @@
+<section class="dashboard-tab-panel dashboard-analytics-panel" role="tabpanel" data-panel="analytics" hidden>
+    <article class="dashboard-panel dashboard-traffic-panel">
+        <header class="dashboard-panel__header dashboard-panel__header--stacked">
+            <h2>Traffic Overview</h2>
+            <p>Weekly clicks and unique visitors</p>
+        </header>
+        <div class="dashboard-traffic-chart" aria-label="Weekly traffic overview">
+            <svg class="dashboard-traffic-chart__svg" viewBox="0 0 1188 300" preserveAspectRatio="none" aria-hidden="true">
+                <g class="dashboard-traffic-chart__grid"><path d="M65 5H1183"></path><path d="M65 70H1183"></path><path d="M65 135H1183"></path><path d="M65 200H1183"></path><path d="M65 265H1183"></path></g>
+                <g class="dashboard-traffic-chart__y-labels"><text x="8" y="9">1000</text><text x="16" y="74">750</text><text x="16" y="139">500</text><text x="16" y="204">250</text><text x="26" y="269">0</text></g>
+                <path class="dashboard-traffic-chart__area dashboard-traffic-chart__area--primary" d="M65 163 C127 137 189 111 251 111 C313 111 376 214 438 214 C500 214 562 22 624 22 C686 22 748 50 810 59 C872 68 935 65 997 77 C1059 88 1121 141 1183 194 L1183 265 H65 Z"></path>
+                <path class="dashboard-traffic-chart__area dashboard-traffic-chart__area--secondary" d="M65 66 C127 130 189 195 251 195 C313 195 376 64 438 64 C500 64 562 234 624 234 C686 234 748 192 810 187 C872 182 935 185 997 180 C1059 175 1121 157 1183 140 L1183 265 H65 Z"></path>
+                <path class="dashboard-traffic-chart__line dashboard-traffic-chart__line--primary" d="M65 163 C127 137 189 111 251 111 C313 111 376 214 438 214 C500 214 562 22 624 22 C686 22 748 50 810 59 C872 68 935 65 997 77 C1059 88 1121 141 1183 194"></path>
+                <path class="dashboard-traffic-chart__line dashboard-traffic-chart__line--secondary" d="M65 66 C127 130 189 195 251 195 C313 195 376 64 438 64 C500 64 562 234 624 234 C686 234 748 192 810 187 C872 182 935 185 997 180 C1059 175 1121 157 1183 140"></path>
+                <g class="dashboard-traffic-chart__points dashboard-traffic-chart__points--primary">
+                    <circle data-point-x="65" cx="65" cy="163" r="4"></circle><circle data-point-x="251" cx="251" cy="111" r="4"></circle><circle data-point-x="438" cx="438" cy="214" r="4"></circle><circle data-point-x="624" cx="624" cy="22" r="4"></circle><circle data-point-x="810" cx="810" cy="59" r="4"></circle><circle data-point-x="997" cx="997" cy="77" r="4"></circle><circle data-point-x="1183" cx="1183" cy="194" r="4"></circle>
+                </g>
+                <g class="dashboard-traffic-chart__points dashboard-traffic-chart__points--secondary">
+                    <circle data-point-x="65" cx="65" cy="66" r="4"></circle><circle data-point-x="251" cx="251" cy="195" r="4"></circle><circle data-point-x="438" cx="438" cy="64" r="4"></circle><circle data-point-x="624" cx="624" cy="234" r="4"></circle><circle data-point-x="810" cx="810" cy="187" r="4"></circle><circle data-point-x="997" cx="997" cy="180" r="4"></circle><circle data-point-x="1183" cx="1183" cy="140" r="4"></circle>
+                </g>
+            </svg>
+            <div class="dashboard-traffic-chart__labels"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+        </div>
+    </article>
+
+    <section class="dashboard-analytics-stats" aria-label="Analytics statistics">
+        <article class="dashboard-stat-card"><div class="dashboard-stat-card__header"><h2>Total Clicks</h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"></path><path d="M7 15l4-4 4 4 4-6"></path></svg></div><div class="dashboard-stat-card__content"><strong>1,248</strong><p>+12.4% vs last week</p></div></article>
+        <article class="dashboard-stat-card"><div class="dashboard-stat-card__header"><h2>Unique Visitors</h2><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"></circle><path d="M6 21v-2a6 6 0 0 1 12 0v2"></path></svg></div><div class="dashboard-stat-card__content"><strong>832</strong><p>+5.8% vs last week</p></div></article>
+        <article class="dashboard-stat-card"><div class="dashboard-stat-card__header"><h2>Bounce Rate</h2><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h6l3 6 3-6h6"></path></svg></div><div class="dashboard-stat-card__content"><strong>42%</strong><p>-3.2% vs last week</p></div></article>
+        <article class="dashboard-stat-card"><div class="dashboard-stat-card__header"><h2>Avg. Session</h2><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg></div><div class="dashboard-stat-card__content"><strong>3m 24s</strong><p>+18s vs last week</p></div></article>
+    </section>
+
+    <section class="dashboard-analytics-grid">
+        <article class="dashboard-panel dashboard-referrers-panel"><header class="dashboard-panel__header dashboard-panel__header--stacked"><h2>Referrers</h2><p>Top sources driving traffic</p></header><div class="dashboard-progress-list"><div><span>Direct</span><b>512</b><i><em style="--progress:100%"></em></i></div><div><span>Product Hunt</span><b>238</b><i><em style="--progress:46%"></em></i></div><div><span>Twitter</span><b>174</b><i><em style="--progress:34%"></em></i></div><div><span>Blog</span><b>104</b><i><em style="--progress:20%"></em></i></div></div></article>
+        <article class="dashboard-panel dashboard-devices-panel"><header class="dashboard-panel__header dashboard-panel__header--stacked"><h2>Devices</h2><p>How users access your app</p></header><div class="dashboard-progress-list dashboard-progress-list--muted"><div><span>Desktop</span><b>74%</b><i><em style="--progress:100%"></em></i></div><div><span>Mobile</span><b>22%</b><i><em style="--progress:30%"></em></i></div><div><span>Tablet</span><b>4%</b><i><em style="--progress:5%"></em></i></div></div></article>
+    </section>
+</section>

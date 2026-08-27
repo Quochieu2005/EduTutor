@@ -1,0 +1,45 @@
+<main class="sign-in-page">
+  <div class="sign-in-page__progress" aria-hidden="true"><span></span></div>
+  <div class="sign-in-page__content">
+    <div class="sign-in-page__brand"><svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"></path>
+      </svg>
+      <h1>EduTutor Admin</h1>
+    </div>
+    <section class="sign-in-card" aria-labelledby="sign-in-title">
+      <header class="sign-in-card__header">
+        <h2 id="sign-in-title">Sign in</h2>
+        <p>Enter your email and password below to log into your account.</p>
+      </header>
+      <form class="sign-in-form" data-sign-in-form action="{% url 'sign-in' %}" method="post">
+        {% csrf_token %}
+        <div class="sign-in-form__field"><label for="email">Email</label><input id="email" name="email" type="email"
+            placeholder="name@example.com" autocomplete="email" required></div>
+        <div class="sign-in-form__field sign-in-form__field--password"><label for="password">Password</label><a
+            href="/admin/forgot-password">Forgot password?</a>
+          <div class="sign-in-form__password-wrap"><input id="password" data-password-input name="password" type="password"
+              placeholder="********" autocomplete="current-password" required><button class="sign-in-form__show-password" data-password-toggle
+              type="button" aria-label="Show password" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10.7 5.1a10.7 10.7 0 0 1 11.2 6.6 1 1 0 0 1 0 .7 10.7 10.7 0 0 1-1.4 2.5"></path>
+                <path d="M14.1 14.2a3 3 0 0 1-4.2-4.2"></path>
+                <path d="M17.5 17.5a10.8 10.8 0 0 1-15.4-5.2 1 1 0 0 1 0-.7 10.8 10.8 0 0 1 4.4-5.1"></path>
+                <path d="m2 2 20 20"></path>
+              </svg></button></div>
+        </div>
+        <button class="sign-in-form__submit" type="submit"><svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m10 17 5-5-5-5"></path>
+            <path d="M15 12H3"></path>
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+          </svg>Sign in<span class="sign-in-form__loading-spinner" aria-hidden="true"></span></button>
+      </form>
+      <div class="sign-in-status" data-sign-in-status role="status" aria-live="polite" hidden>
+        <svg class="forgot-password-status__spinner" viewBox="0 0 24 24" aria-hidden="true"><rect x="10.5" y="1" width="3" height="6" rx="1.5" opacity="1"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(30 12 12)" opacity=".92"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(60 12 12)" opacity=".84"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(90 12 12)" opacity=".76"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(120 12 12)" opacity=".68"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(150 12 12)" opacity=".60"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(180 12 12)" opacity=".52"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(210 12 12)" opacity=".44"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(240 12 12)" opacity=".36"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(270 12 12)" opacity=".28"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(300 12 12)" opacity=".20"></rect><rect x="10.5" y="1" width="3" height="6" rx="1.5" transform="rotate(330 12 12)" opacity=".12"></rect></svg>
+        <strong>Signing in...</strong>
+      </div>
+      <footer class="sign-in-card__footer">
+        <p>By clicking sign in, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+        </p>
+      </footer>
+    </section>
+  </div>
+</main>
