@@ -1,0 +1,32 @@
+<div class="setting-layout">
+  {% include "setting/setting-nav.html" %}
+  <section class="setting-content">
+    <header>
+      <h2>Appearance</h2>
+      <p>
+        Customize the appearance of the app. Automatically switch between day
+        and night themes.
+      </p>
+    </header>
+    <div class="setting-separator"></div>
+    <form class="setting-form appearance-form">
+      <label
+        >Font<span class="appearance-select"
+          ><select name="font" id="appearance-font">
+            <option value="inter">Inter</option>
+            <option value="manrope">Manrope</option>
+            <option value="system">System</option></select
+          ><svg viewBox="0 0 15 15" aria-hidden="true">
+            <path d="m3.2 6.1 4.3 4 4.3-4"></path></svg></span
+      ></label>
+      <p>Set the font you want to use in the dashboard.</p>
+      <fieldset class="appearance-themes">
+        <legend>Theme</legend>
+        <p>Select the theme for the dashboard.</p>
+        <div class="appearance-theme-options"><label class="appearance-theme-option"><input type="radio" name="theme" value="light" checked><span class="appearance-preview appearance-preview--light"><i></i><i></i><i></i></span><b>Light</b></label><label class="appearance-theme-option"><input type="radio" name="theme" value="dark"><span class="appearance-preview appearance-preview--dark"><i></i><i></i><i></i></span><b>Dark</b></label></div>
+      </fieldset>
+      <button class="setting-button" id="appearance-update-button" type="button">Update preferences</button>
+      <div class="appearance-submit-message" id="appearance-submit-message" hidden><strong>You submitted the following values:</strong><pre id="appearance-submit-values"></pre></div>
+    </form>
+  </section>
+</div>

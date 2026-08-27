@@ -1,0 +1,30 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduTutor Admin</title>
+    <link rel="stylesheet" href="{% static 'admin_ui/css/dashboard.css' %}?v=14">
+</head>
+<body>
+    <div class="admin-shell">
+        {% include "layouts/sidebar.html" %}
+        <div class="admin-main">
+            {% include "layouts/header.html" %}
+
+            <main id="admin-dashboard">
+                {% include "dashboard/dashboard-heading.html" %}
+                {% include "dashboard/dashboard-stats.html" %}
+                {% include "dashboard/dashboard-overview.html" %}
+                {% include "dashboard/dashboard-analytics.html" %}
+            </main>
+        </div>
+    </div>
+    {% include "dashboard/dashboard-notification.html" %}
+
+    <script src="{% static 'admin_ui/js/collapsible.js' %}?v=2"></script>
+    <script src="{% static 'admin_ui/js/dashboard.js' %}?v=13"></script>
+    <script src="{% static 'admin_ui/js/dashboard-notification.js' %}?v=6"></script>
+</body>
+</html>

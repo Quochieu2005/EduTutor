@@ -1,0 +1,23 @@
+<div class="setting-layout">
+  {% include "setting/setting-nav.html" %}
+  <section class="setting-content">
+    <header>
+      <h2>Display</h2>
+      <p>Turn items on or off to control what's displayed in the app.</p>
+    </header>
+    <div class="setting-separator"></div>
+    <form class="setting-form display-settings-form">
+      <section class="display-sidebar-options" aria-labelledby="display-sidebar-title">
+        <h3 id="display-sidebar-title">Sidebar</h3>
+        <p>Select the items you want to display in the sidebar.</p>
+        <label class="display-checkbox-option"><input type="checkbox" name="recents" checked /><span>Recents</span></label>
+        <label class="display-checkbox-option"><input type="checkbox" name="home" checked /><span>Home</span></label>
+        <label class="display-checkbox-option"><input type="checkbox" name="applications" /><span>Applications</span></label>
+        <label class="display-checkbox-option"><input type="checkbox" name="desktop" /><span>Desktop</span></label>
+        <label class="display-checkbox-option"><input type="checkbox" name="downloads" /><span>Downloads</span></label>
+        <label class="display-checkbox-option"><input type="checkbox" name="documents" /><span>Documents</span></label>
+      </section>
+      <button class="setting-button" type="submit">Update display</button>
+    </form>
+  </section>
+</div>

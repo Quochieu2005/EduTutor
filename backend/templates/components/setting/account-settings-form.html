@@ -1,0 +1,27 @@
+<div class="setting-layout">
+  {% include "setting/setting-nav.html" %}
+  <section class="setting-content">
+    <header>
+      <h2>Account</h2>
+      <p>
+        Update your account settings. Set your preferred language and timezone.
+      </p>
+    </header>
+    <div class="setting-separator"></div>
+    <form class="setting-form">
+      <label>Name<input placeholder="Your name" /></label>
+      <p>This is the name displayed on your profile and in emails.</p>
+      <label>Date of birth<input type="date" /></label>
+      <p>Your date of birth is used to calculate your age.</p>
+      <label
+        >Language<select>
+          <option>Select language</option>
+          <option>Vietnamese</option>
+          <option>English</option>
+        </select></label
+      >
+      <p>This language will be used in the dashboard.</p>
+      <button class="setting-button">Update account</button>
+    </form>
+  </section>
+</div>

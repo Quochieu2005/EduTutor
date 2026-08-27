@@ -1,0 +1,60 @@
+{# Header tham chiếu từ đoạn mã bạn cung cấp; component dùng Tailwind CSS. #}
+<header class="z-50 h-16 shadow-none">
+    <div class="profile-alternate-header__inner relative flex h-full items-center gap-3 p-4 sm:gap-4">
+        <button
+            data-slot="sidebar-trigger"
+            data-sidebar="trigger"
+            id="sidebar-toggle"
+            class="inline-flex size-7 shrink-0 items-center justify-center rounded-md border bg-background text-sm font-medium shadow-xs transition-all hover:bg-accent hover:text-accent-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 max-md:scale-125"
+            type="button"
+            aria-label="Toggle sidebar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path></svg>
+            <span class="sr-only">Toggle Sidebar</span>
+        </button>
+
+        <div class="h-6 w-px shrink-0 bg-border" role="separator" aria-orientation="vertical"></div>
+
+        <button
+            data-slot="search-trigger"
+            id="search-button"
+            class="group relative me-auto flex h-8 w-full flex-1 items-center justify-start rounded-md bg-muted/25 px-4 py-2 text-sm font-normal text-muted-foreground shadow-none transition-all hover:bg-accent hover:text-accent-foreground sm:w-40 sm:pe-12 md:flex-none lg:w-52 xl:w-64"
+            type="button"
+            aria-keyshortcuts="Meta+K Control+K">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute start-1.5 top-1/2 -translate-y-1/2" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+            <span class="ms-4">Search</span>
+            <kbd class="pointer-events-none absolute end-[0.3rem] top-[0.3rem] hidden h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium sm:flex"><span class="text-xs">⌘</span>K</kbd>
+        </button>
+
+        <button data-slot="theme-toggle" id="theme-toggle" class="inline-flex size-9 items-center justify-center rounded-full text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground" type="button" aria-label="Toggle theme">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-[1.2rem]" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+            <span class="sr-only">Toggle theme</span>
+        </button>
+
+        {% include "layouts/notification-menu.html" %}
+
+        <details class="admin-user-menu">
+            <summary class="admin-avatar" id="user-menu-button" aria-label="Mở tài khoản">GU</summary>
+            <div class="admin-user-menu__content" role="menu">
+                <div class="admin-user-menu__identity"><strong>Guest User</strong><small>admin@edututor.local</small></div>
+                <div class="admin-user-menu__separator"></div>
+                <a href="{% url 'profile' %}" role="menuitem">Profile <kbd>⇧⌘P</kbd></a>
+                <a href="#" role="menuitem">Billing <kbd>⌘B</kbd></a>
+                <a href="#" role="menuitem">Settings <kbd>⌘S</kbd></a>
+                <button type="button" role="menuitem">New Team</button>
+                <div class="admin-user-menu__separator"></div>
+                <button class="admin-user-menu__sign-out" type="button" role="menuitem">Sign out <kbd>⇧⌘Q</kbd></button>
+            </div>
+        </details>
+    </div>
+
+    <div class="profile-command-overlay" id="search-panel" hidden>
+        <div class="profile-command-dialog" role="dialog" aria-modal="true" aria-label="Tìm kiếm">
+            <div class="profile-command-input-wrap">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+                <input id="command-input" type="search" placeholder="Nhập để tìm kiếm..." autocomplete="off" aria-label="Tìm kiếm">
+                <kbd>ESC</kbd>
+            </div>
+            <p class="profile-command-empty">Chức năng tìm kiếm đã sẵn sàng.</p>
+        </div>
+    </div>
+</header>

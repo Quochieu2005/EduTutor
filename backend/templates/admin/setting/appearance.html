@@ -1,0 +1,72 @@
+{% load static %}
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Appearance | EduTutor Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{% static 'admin_ui/css/dashboard.css' %}?v=14"
+    />
+    <link
+      rel="stylesheet"
+      href="{% static 'admin_ui/css/setting.css' %}?v=26"
+    />
+  </head>
+  <body>
+    <div class="admin-shell">
+      {% include "layouts/sidebar.html" %}
+      <div class="admin-main">
+        {% include "layouts/header-alternate.html" %}
+        <main class="setting-page">
+          {% include "setting/setting-heading.html" %} 
+          {% include "setting/setting-separator.html" %} 
+          {% include "setting/appearance-settings-form.html" %}
+        </main>
+      </div>
+    </div>
+    <script src="{% static 'admin_ui/js/collapsible.js' %}?v=3"></script>
+    <script src="{% static 'admin_ui/js/dashboard.js' %}?v=13"></script>
+    <script src="{% static 'admin_ui/js/appearance.js' %}?v=2"></script>
+    <script>
+      let appearanceToastTimer;
+      window.applyAppearancePreferences = function () {
+        const font =
+          document.querySelector("#appearance-font")?.value || "inter";
+        const theme =
+          document.querySelector('input[name="theme"]:checked')?.value ||
+          "light";
+        const families = {
+          inter: "Inter, sans-serif",
+          manrope: "Manrope, sans-serif",
+          system: "system-ui, sans-serif",
+        };
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.setProperty(
+          "--settings-font-family",
+          families[font],
+        );
+        localStorage.setItem("edututor-theme", theme);
+        localStorage.setItem("edututor-font", font);
+        const message = document.querySelector("#appearance-submit-message");
+        document.querySelector("#appearance-submit-values").textContent =
+          JSON.stringify({ theme, font }, null, 2);
+        message.hidden = false;
+        clearTimeout(appearanceToastTimer);
+        appearanceToastTimer = setTimeout(() => {
+          message.hidden = true;
+        }, 6000);
+      };
+      document
+        .querySelector("#appearance-update-button")
+        ?.addEventListener("click", window.applyAppearancePreferences);
+    </script>
+  </body>
+</html>

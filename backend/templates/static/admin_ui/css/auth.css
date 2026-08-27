@@ -1,0 +1,460 @@
+:root {
+  --background: #fff;
+  --foreground: #172033;
+  --card: #fff;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --accent: #f1f5f9;
+  --primary: #172033;
+  --primary-foreground: #f8fafc;
+  --ring: #94a3b8;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  min-width: 320px;
+  min-height: 100svh;
+  margin: 0;
+  color: var(--foreground);
+  background: var(--background);
+}
+button,
+input {
+  font: inherit;
+}
+a {
+  color: inherit;
+}
+.sign-in-page {
+  min-height: 100svh;
+}
+.sign-in-page__progress {
+  position: fixed;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: transparent;
+}
+.sign-in-page__progress span {
+  position: relative;
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--muted-foreground);
+}
+.sign-in-page__progress span::after {
+  position: absolute;
+  top: 0;
+  left: -5.5%;
+  width: 5%;
+  height: 100%;
+  content: "";
+  box-shadow:
+    0 0 10px var(--muted-foreground),
+    0 0 10px var(--muted-foreground);
+  transform: rotate(2deg) translateY(-2px);
+}
+.sign-in-page__content {
+  display: flex;
+  width: min(100% - 32px, 384px);
+  min-height: 100svh;
+  flex-direction: column;
+  justify-content: center;
+  padding: 32px 0;
+  margin: auto;
+}
+.sign-in-page__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.sign-in-page__brand svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+.sign-in-page__brand h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+}
+.sign-in-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+.sign-in-card__header {
+  padding: 24px 24px 0;
+}
+.sign-in-card__header h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.sign-in-card__header p,
+.sign-in-card__footer p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.sign-in-card a {
+  text-underline-offset: 4px;
+}
+.sign-in-card a:hover {
+  color: var(--foreground);
+}
+.sign-in-form {
+  display: grid;
+  gap: 12px;
+  padding: 0 24px;
+}
+.sign-in-card--forgot-password .sign-in-form {
+  padding-bottom: 24px;
+}
+.sign-in-form__field {
+  display: grid;
+  gap: 8px;
+}
+.sign-in-form label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.sign-in-form input {
+  width: 100%;
+  height: 36px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--foreground);
+  font-size: 14px;
+  outline: none;
+  background: transparent;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+.sign-in-form input::placeholder {
+  color: var(--muted-foreground);
+}
+.sign-in-form input:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgb(148 163 184 / 35%);
+}
+.sign-in-form__field--password {
+  position: relative;
+}
+.sign-in-form__field--password > a {
+  position: absolute;
+  top: 0;
+  right: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.sign-in-form__password-wrap {
+  position: relative;
+}
+.sign-in-form__password-wrap input {
+  padding-right: 42px;
+}
+.sign-in-form__show-password {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  background: transparent;
+  transform: translateY(-50%);
+}
+.sign-in-form__show-password:hover {
+  background: var(--accent);
+}
+.sign-in-form__show-password svg,
+.sign-in-form__submit svg,
+.sign-in-form__providers svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+.sign-in-form__submit,
+.sign-in-form__providers button {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.sign-in-form__submit {
+  margin-top: 8px;
+  border: 0;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+.sign-in-form__submit:hover {
+  opacity: 0.9;
+}
+.sign-in-form__submit:disabled {
+  cursor: wait;
+  opacity: 1;
+}
+.sign-in-form__submit.is-loading {
+  color: #f8fafc;
+  background: #8e96a3;
+}
+.sign-in-form__submit.is-loading > svg {
+  display: none;
+}
+.sign-in-form__loading-spinner {
+  display: none;
+  width: 18px;
+  height: 18px;
+  border: 3px solid rgb(255 255 255 / 45%);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: forgot-password-spin 0.7s linear infinite;
+}
+.sign-in-form__submit.is-loading .sign-in-form__loading-spinner {
+  display: inline-block;
+}
+.sign-in-form__separator {
+  position: relative;
+  margin: 8px 0;
+  text-align: center;
+}
+.sign-in-form__separator::before {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  content: "";
+  background: var(--border);
+}
+.sign-in-form__separator span {
+  position: relative;
+  z-index: 1;
+  padding: 0 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-transform: uppercase;
+  background: var(--card);
+}
+.sign-in-form__providers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.sign-in-form__providers button {
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+.sign-in-form__providers button:hover {
+  background: var(--accent);
+}
+.sign-in-card__footer {
+  padding: 0 24px 24px;
+}
+.sign-in-card__footer p {
+  padding: 0 22px;
+  text-align: center;
+  font-size: 14px;
+}
+.otp-form__field {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+.otp-form__field legend {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.otp-form__inputs {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+.sign-in-form .otp-form__inputs input {
+  min-width: 0;
+  padding: 4px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+}
+.sign-in-page__content--otp {
+  width: min(100% - 32px, 448px);
+}
+.otp-form__field {
+  position: relative;
+  cursor: text;
+}
+.otp-form__slots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.otp-form__group {
+  display: flex;
+}
+.otp-form__slots span {
+  display: grid;
+  width: 48px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-right: 0;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+}
+.otp-form__group span:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.otp-form__group span:last-child {
+  border-right: 1px solid var(--border);
+  border-radius: 0 6px 6px 0;
+}
+.otp-form__slots i {
+  color: var(--muted-foreground);
+  font-style: normal;
+}
+.otp-form__slots span.is-active {
+  position: relative;
+  z-index: 1;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgb(148 163 184 / 35%);
+}
+.otp-form__slots span.is-active:empty::after {
+  width: 1px;
+  height: 18px;
+  content: "";
+  background: var(--foreground);
+  animation: otp-caret-blink 1s steps(1) infinite;
+}
+.otp-form__field > input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: text;
+}
+.sign-in-form__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+@keyframes otp-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.forgot-password-status,
+.sign-in-status,
+.otp-status {
+  position: fixed;
+  right: 32px;
+  bottom: 24px;
+  z-index: 10;
+  display: flex;
+  width: min(calc(100% - 48px), 375px);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 10px 30px rgb(15 23 42 / 12%);
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.forgot-password-status.is-visible,
+.sign-in-status.is-visible,
+.otp-status.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.forgot-password-status strong,
+.sign-in-status strong,
+.otp-status strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.forgot-password-status__spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  fill: var(--muted-foreground);
+  animation: forgot-password-spin 0.85s steps(12) infinite;
+}
+.otp-status__icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  fill: var(--foreground);
+  stroke: var(--primary-foreground);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@keyframes forgot-password-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 420px) {
+  .sign-in-page__content {
+    width: min(100% - 24px, 384px);
+  }
+  .sign-in-card__header,
+  .sign-in-form,
+  .sign-in-card__footer {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+}

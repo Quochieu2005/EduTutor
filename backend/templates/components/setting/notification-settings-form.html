@@ -1,0 +1,59 @@
+<div class="setting-layout">
+  {% include "setting/setting-nav.html" %}
+  <section class="setting-content">
+    <header>
+      <h2>Notifications</h2>
+      <p>Configure how you receive notifications.</p>
+    </header>
+    <div class="setting-separator"></div>
+    <form class="setting-form notification-settings-form">
+      <fieldset class="notification-preferences">
+        <legend>Notify me about...</legend>
+        <label class="notification-radio-option">
+          <input type="radio" name="message_notifications" value="all" />
+          <span>All new messages</span>
+        </label>
+        <label class="notification-radio-option">
+          <input type="radio" name="message_notifications" value="mentions" checked />
+          <span>Direct messages and mentions</span>
+        </label>
+        <label class="notification-radio-option">
+          <input type="radio" name="message_notifications" value="none" />
+          <span>Nothing</span>
+        </label>
+      </fieldset>
+
+      <section class="notification-email-section" aria-labelledby="email-notifications-title">
+        <h3 id="email-notifications-title">Email Notifications</h3>
+        <div class="notification-email-options">
+          <label class="notification-switch-card">
+            <span><strong>Communication emails</strong><small>Receive emails about your account activity.</small></span>
+            <input type="checkbox" name="communication_emails" />
+            <i aria-hidden="true"></i>
+          </label>
+          <label class="notification-switch-card">
+            <span><strong>Marketing emails</strong><small>Receive emails about new products, features, and more.</small></span>
+            <input type="checkbox" name="marketing_emails" />
+            <i aria-hidden="true"></i>
+          </label>
+          <label class="notification-switch-card">
+            <span><strong>Social emails</strong><small>Receive emails for friend requests, follows, and more.</small></span>
+            <input type="checkbox" name="social_emails" checked />
+            <i aria-hidden="true"></i>
+          </label>
+          <label class="notification-switch-card">
+            <span><strong>Security emails</strong><small>Receive emails about your account activity and security.</small></span>
+            <input type="checkbox" name="security_emails" checked disabled />
+            <i aria-hidden="true"></i>
+          </label>
+        </div>
+      </section>
+
+      <label class="notification-mobile-option">
+        <input type="checkbox" name="mobile_settings" />
+        <span><strong>Use different settings for my mobile devices</strong><small>You can manage your mobile notifications in the mobile settings page.</small></span>
+      </label>
+      <button class="setting-button" type="submit">Update notifications</button>
+    </form>
+  </section>
+</div>
