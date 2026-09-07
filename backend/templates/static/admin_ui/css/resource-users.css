@@ -1,0 +1,77 @@
+.resource-table th[data-resource-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.resource-table th[data-resource-sort]::after {
+  margin-left: 8px;
+  color: var(--muted-foreground);
+  content: "↕";
+  font-size: 11px;
+}
+
+.resource-table th[data-sort-direction="asc"]::after { content: "↑"; }
+.resource-table th[data-sort-direction="desc"]::after { content: "↓"; }
+
+.users-status--success { background: #dcfce7; color: #15803d; }
+.users-status--warning { background: #fef3c7; color: #b45309; }
+.users-status--danger { background: #fee2e2; color: #b91c1c; }
+.users-status--info { background: #e0f2fe; color: #0369a1; }
+.users-status--neutral { background: #e2e8f0; color: #475569; }
+
+.resource-form-modal .add-user-dialog textarea {
+  min-height: 88px;
+  resize: vertical;
+  padding: 11px 14px;
+  border: 1px solid var(--input);
+  border-radius: 9px;
+  outline: none;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+}
+
+.resource-form-modal .add-user-dialog input,
+.resource-form-modal .add-user-dialog select,
+.resource-form-modal .add-user-dialog textarea {
+  color: var(--foreground);
+}
+
+.resource-form-modal .add-user-dialog input:focus,
+.resource-form-modal .add-user-dialog select:focus,
+.resource-form-modal .add-user-dialog textarea:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.resource-list .users-view-popover label.is-hidden .users-view-check {
+  visibility: hidden;
+}
+
+.resource-list .users-bulk-actions [data-resource-delete-selected] svg,
+.resource-list .users-bulk-actions [data-resource-clear] svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.resource-list .users-no-results td {
+  height: 120px;
+  text-align: center;
+}
+
+html[data-theme="dark"] .users-status--success { background: rgb(21 128 61 / 24%); color: #86efac; }
+html[data-theme="dark"] .users-status--warning { background: rgb(180 83 9 / 24%); color: #fcd34d; }
+html[data-theme="dark"] .users-status--danger { background: rgb(185 28 28 / 24%); color: #fca5a5; }
+html[data-theme="dark"] .users-status--info { background: rgb(3 105 161 / 24%); color: #7dd3fc; }
+html[data-theme="dark"] .users-status--neutral { background: rgb(71 85 105 / 32%); color: #cbd5e1; }
+
+@media (max-width: 600px) {
+  .resource-form-modal .add-user-dialog textarea {
+    width: 100%;
+  }
+}

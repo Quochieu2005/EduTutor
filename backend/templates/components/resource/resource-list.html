@@ -1,0 +1,64 @@
+<section class="users-list resource-list" aria-label="{{ page.title }}">
+  <div class="users-toolbar">
+    <div class="users-toolbar__filters">
+      <label class="users-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+        <input type="search" placeholder="Tìm kiếm {{ page.singular|lower }}..." aria-label="Tìm kiếm" data-resource-search />
+      </label>
+      {% if page.statuses %}
+        <div class="users-toolbar__filter-options">
+          <button class="users-filter-button" type="button" data-status-filter aria-expanded="false" aria-controls="status-filter-menu">
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M7.5.88a6.62 6.62 0 1 0 0 13.24A6.62 6.62 0 0 0 7.5.88Zm0 .95a5.67 5.67 0 1 1 0 11.34 5.67 5.67 0 0 1 0-11.34ZM7 4.5V7H4.5a.5.5 0 0 0 0 1H7v2.5a.5.5 0 0 0 1 0V8h2.5a.5.5 0 0 0 0-1H8V4.5a.5.5 0 0 0-1 0Z" fill="currentColor"></path></svg>
+            Status
+          </button>
+        </div>
+        <div class="users-status-popover" id="status-filter-menu" hidden>
+          <label class="users-status-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+            <input type="search" placeholder="Status" aria-label="Search status" />
+          </label>
+          <div class="users-status-options">
+            {% for status in page.statuses %}<label><input type="checkbox" value="{{ status|lower }}" /><span>{{ status }}</span><b data-status-count>0</b></label>{% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+    <button class="users-filter-button users-view-button" type="button" data-resource-view>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path><circle cx="8" cy="7" r="2"></circle><circle cx="16" cy="12" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>
+      View
+    </button>
+    <div class="users-view-popover" hidden>
+      <p>Toggle columns</p>
+      {% for column in page.columns %}
+        <label data-column-toggle="{{ column.key }}"><span class="users-view-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>{{ column.label }}</label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="users-table-wrap">
+    <div class="users-table-scroll">
+      <table class="users-table resource-table">
+        <thead><tr><th><input type="checkbox" aria-label="Chọn tất cả" data-resource-select-all /></th>{% for column in page.columns %}<th data-field="{{ column.key }}" data-resource-sort>{{ column.label }}</th>{% endfor %}<th>Actions</th></tr></thead>
+        <tbody data-resource-body>
+          {% for row in page.rows %}
+            <tr data-record-id="{{ row.id }}">
+              <td><input type="checkbox" aria-label="Chọn {{ page.singular|lower }}" data-resource-select /></td>
+              {% for cell in row.cells %}<td data-field="{{ cell.field }}" data-value="{{ cell.value }}">{% if cell.tone %}<span class="users-status users-status--{{ cell.tone }}">{{ cell.value }}</span>{% else %}{{ cell.value }}{% endif %}</td>{% endfor %}
+              <td><button class="users-row-menu" type="button" aria-label="Thao tác">&hellip;</button></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="users-pagination">
+    <p data-resource-page-summary>Page 1 of 1</p>
+    <label>Rows per page <select aria-label="Rows per page" data-resource-page-size><option>5</option><option selected>10</option><option>20</option><option>50</option></select></label>
+    <nav aria-label="Phân trang"><button type="button" data-resource-prev aria-label="Previous page">&lsaquo;</button><button class="is-active" type="button" data-resource-current>1</button><button type="button" data-resource-next aria-label="Next page">&rsaquo;</button></nav>
+  </footer>
+
+  <div class="users-bulk-actions" role="toolbar" aria-label="Bulk actions" data-resource-bulk hidden>
+    <button type="button" data-resource-clear aria-label="Clear selection">&times;</button><i></i><span><b data-resource-selected-count>0</b> mục đã chọn</span><i></i><button class="users-bulk-actions__delete" type="button" data-resource-delete-selected aria-label="Delete selected">&#9003;</button>
+  </div>
+</section>

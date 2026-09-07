@@ -1,1 +1,2 @@
 .add-user-dialog{width:min(540px,calc(100% - 32px));padding:22px 24px;font-size:14px}.add-user-dialog h2{font-size:20px}.add-user-dialog>p{margin-bottom:18px;font-size:14px}.add-user-dialog form{grid-template-columns:130px 1fr;gap:12px 20px}.add-user-dialog input,.add-user-dialog select{height:40px;font-size:14px}.add-user-save{margin-top:12px;padding:10px 16px;font-size:14px}
+.add-user-dialog select:focus{outline:none;border-color:var(--input);box-shadow:0 0 0 2px rgb(100 116 139/.12)}

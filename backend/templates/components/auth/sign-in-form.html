@@ -13,8 +13,10 @@
       </header>
       <form class="sign-in-form" data-sign-in-form action="{% url 'sign-in' %}" method="post">
         {% csrf_token %}
+        <input name="next" type="hidden" value="{{ next }}">
+        {% include "auth/auth-messages.html" %}
         <div class="sign-in-form__field"><label for="email">Email</label><input id="email" name="email" type="email"
-            placeholder="name@example.com" autocomplete="email" required></div>
+            placeholder="name@example.com" autocomplete="email" value="{{ entered_email }}" required></div>
         <div class="sign-in-form__field sign-in-form__field--password"><label for="password">Password</label><a
             href="/admin/forgot-password">Forgot password?</a>
           <div class="sign-in-form__password-wrap"><input id="password" data-password-input name="password" type="password"

@@ -2,6 +2,8 @@
 	const root = document.documentElement;
 	const sidebarToggle = document.querySelector('#sidebar-toggle');
 	const sidebar = document.querySelector('#admin-sidebar');
+	const sidebarContent = sidebar?.querySelector('.admin-sidebar__content');
+	const sidebarScrollKey = 'edututor-admin-sidebar-scroll';
 	const mobileMenu = document.querySelector('#mobile-menu');
 	const navigation = document.querySelector('#admin-nav');
 	const searchButton = document.querySelector('#search-button');
@@ -15,6 +17,35 @@
 	const viewAllNotifications = document.querySelector('[data-view-all-notifications]');
 	const settingsToggle = document.querySelector('[data-settings-not-used]');
 	let settingsSubmenu = document.querySelector('[data-collapsible-menu]');
+
+	const saveSidebarScroll = () => {
+		if (!sidebarContent) return;
+		try {
+			sessionStorage.setItem(sidebarScrollKey, String(sidebarContent.scrollTop));
+		} catch {
+		}
+	};
+
+	const restoreSidebarScroll = () => {
+		if (!sidebarContent) return;
+		let savedPosition = null;
+		try {
+			savedPosition = sessionStorage.getItem(sidebarScrollKey);
+		} catch {
+		}
+		if (savedPosition !== null) {
+			sidebarContent.scrollTop = Number(savedPosition) || 0;
+			return;
+		}
+		sidebarContent.querySelector('.admin-sidebar__link.is-active')?.scrollIntoView({ block: 'nearest' });
+	};
+
+	sidebarContent?.addEventListener('scroll', saveSidebarScroll, { passive: true });
+	sidebarContent?.addEventListener('click', (event) => {
+		if (event.target.closest('a.admin-sidebar__link, a.admin-sidebar__sub-link')) saveSidebarScroll();
+	});
+	window.addEventListener('pagehide', saveSidebarScroll);
+	window.requestAnimationFrame(restoreSidebarScroll);
 	if (settingsToggle && !settingsSubmenu) {
 		settingsToggle.classList.add('admin-sidebar__link--collapsible');
 		settingsToggle.setAttribute('aria-expanded', 'false');

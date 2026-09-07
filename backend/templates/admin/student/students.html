@@ -1,0 +1,53 @@
+{% load static %}
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Students | EduTutor Admin</title>
+    <link rel="stylesheet" href="{% static 'admin_ui/css/dashboard.css' %}?v=15" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/user.css' %}?v=40" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/filter-chips.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/view-fix.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/add-user.css' %}?v=2" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/add-user-compact.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/add-user-enhancements.css' %}?v=2" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/profile-upload.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/row-actions.css' %}?v=2" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/delete-user.css' %}?v=2" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/delete-user-compact.css' %}?v=3" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/invite-user.css' %}?v=2" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/pagination-layout.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/pagination-compact.css' %}?v=1" />
+  </head>
+  <body data-entity-label="Student" data-entity-plural="students">
+    <div class="admin-shell">
+      {% include "layouts/sidebar.html" %}
+      <div class="admin-main">
+        {% include "layouts/header-alternate.html" %}
+        <main class="users-page students-page">
+          {% include "student/student-heading.html" %}
+          {% include "student/student-list.html" %}
+        </main>
+      </div>
+    </div>
+
+    <script src="{% static 'admin_ui/js/collapsible.js' %}?v=3"></script>
+    <script src="{% static 'admin_ui/js/dashboard.js' %}?v=14"></script>
+    <script src="{% static 'admin_ui/js/user.js' %}?v=4"></script>
+    <script src="{% static 'admin_ui/js/view.js' %}?v=3"></script>
+    <script src="{% static 'admin_ui/js/more-students.js' %}?v=1"></script>
+    <script src="{% static 'admin_ui/js/sort-icons.js' %}?v=1"></script>
+    <script src="{% static 'admin_ui/js/sort-menus.js' %}?v=3"></script>
+    <script src="{% static 'admin_ui/js/bulk-actions.js' %}?v=16"></script>
+    <script src="{% static 'admin_ui/js/pagination.js' %}?v=2"></script>
+    <script src="{% static 'admin_ui/js/filter-chips.js' %}?v=2"></script>
+    <script src="{% static 'admin_ui/js/user-search.js' %}?v=3"></script>
+    <script src="{% static 'admin_ui/js/add-user.js' %}?v=4"></script>
+    <script src="{% static 'admin_ui/js/add-user-enhancements.js' %}?v=3"></script>
+    <script src="{% static 'admin_ui/js/row-actions.js' %}?v=1"></script>
+    <script src="{% static 'admin_ui/js/edit-user.js' %}?v=2"></script>
+    <script src="{% static 'admin_ui/js/delete-user.js' %}?v=3"></script>
+    <script src="{% static 'admin_ui/js/invite-user.js' %}?v=4"></script>
+  </body>
+</html>

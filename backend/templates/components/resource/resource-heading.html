@@ -1,0 +1,16 @@
+<section class="users-heading">
+  <div>
+    <h1>{{ page.title }}</h1>
+    <p>{{ page.description }}</p>
+  </div>
+  <div class="users-heading__actions">
+    <button class="users-button users-button--secondary" type="button" data-resource-export>
+      <span>Xuất CSV</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"></path><path d="M4 17v3h16v-3"></path></svg>
+    </button>
+    <button class="users-button users-button--primary" type="button" data-resource-add>
+      <span>{{ page.action_label }}</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+    </button>
+  </div>
+</section>

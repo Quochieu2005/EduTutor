@@ -31,16 +31,19 @@
             </button>
             {% include "layouts/notification-menu.html" %}
             <details class="admin-user-menu">
-                <summary class="admin-avatar" id="user-menu-button" aria-label="Mo tai khoan">GU</summary>
+                <summary class="admin-avatar" id="user-menu-button" aria-label="Mo tai khoan">{{ request.admin_account.initials }}</summary>
                 <div class="admin-user-menu__content" role="menu">
-                    <div class="admin-user-menu__identity"><strong>Guest User</strong><small>admin@edututor.local</small></div>
+                    <div class="admin-user-menu__identity"><strong>{{ request.admin_account.name }}</strong><small>{{ request.admin_account.email }}</small></div>
                     <div class="admin-user-menu__separator"></div>
                     <a href="{% url 'profile' %}" role="menuitem">Profile <kbd>⇧⌘P</kbd></a>
                     <a href="#" role="menuitem">Billing <kbd>⌘B</kbd></a>
                     <a href="#" role="menuitem">Settings <kbd>⌘S</kbd></a>
                     <button type="button" role="menuitem">New Team</button>
                     <div class="admin-user-menu__separator"></div>
-                    <button class="admin-user-menu__sign-out" type="button" role="menuitem">Sign out <kbd>⇧⌘Q</kbd></button>
+                    <form class="admin-user-menu__sign-out-form" action="{% url 'logout' %}" method="post">
+                        {% csrf_token %}
+                        <button class="admin-user-menu__sign-out" type="submit" role="menuitem">Sign out <kbd>⇧⌘Q</kbd></button>
+                    </form>
                 </div>
             </details>
         </div>

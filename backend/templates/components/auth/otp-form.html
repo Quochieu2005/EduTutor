@@ -3,8 +3,10 @@
     <div class="sign-in-page__content sign-in-page__content--otp">
         <div class="sign-in-page__brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"></path></svg><h1>EduTutor Admin</h1></div>
         <section class="sign-in-card otp-card" aria-labelledby="otp-title">
-            <header class="sign-in-card__header"><h2 id="otp-title">Two-factor Authentication</h2><p>Please enter the authentication code. <br>We have sent the authentication code to your email.</p></header>
-            <form class="sign-in-form" data-otp-form action="#" method="post">
+            <header class="sign-in-card__header"><h2 id="otp-title">Xác minh mã OTP</h2><p>Nhập mã OTP 6 số đã được gửi đến email của bạn.</p></header>
+            <form class="sign-in-form" data-otp-form action="{% url 'otp' %}" method="post" data-otp-expires-at="{{ otp_expires_at }}">
+                {% csrf_token %}
+                {% include "auth/auth-messages.html" %}
                 <label class="sr-only" for="otp-input">One-Time Password</label>
                 <div class="otp-form__field" data-otp-container>
                     <div class="otp-form__slots" aria-hidden="true">
@@ -16,9 +18,10 @@
                     </div>
                     <input id="otp-input" data-otp-input name="otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="One-Time Password">
                 </div>
-                <button class="sign-in-form__submit" data-otp-verify type="button" disabled>Verify</button>
+                <p class="otp-form__countdown">Mã hết hạn sau <strong data-otp-countdown>05:00</strong></p>
+                <button class="sign-in-form__submit" data-otp-verify type="submit" disabled>Xác minh</button>
             </form>
-            <footer class="sign-in-card__footer"><p>Haven't received it? <a href="#">Resend a new code.</a></p></footer>
+            <footer class="sign-in-card__footer"><p>Chưa nhận được mã? <a href="{% url 'forgot-password' %}">Gửi lại mã mới</a>.</p></footer>
         </section>
         <div class="otp-status" data-otp-status role="status" aria-live="polite" hidden>
             <svg class="otp-status__icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="m8 12 2.5 2.5L16 9"></path></svg>

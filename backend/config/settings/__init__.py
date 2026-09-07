@@ -1,3 +1,9 @@
-"""Default Django settings for local development."""
+"""Select development or production settings from the environment."""
 
-from .dev import *  # noqa: F403
+import os
+
+
+if os.getenv('RENDER') or os.getenv('DJANGO_ENV') == 'production':
+    from .prod import *  # noqa: F403
+else:
+    from .dev import *  # noqa: F403

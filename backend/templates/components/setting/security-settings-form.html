@@ -1,0 +1,25 @@
+<div class="setting-layout">
+  {% include "setting/setting-nav.html" %}
+  <section class="setting-content">
+    <header>
+      <h2>Security</h2>
+      <p>Thay đổi mật khẩu đăng nhập của tài khoản Admin.</p>
+    </header>
+    <div class="setting-separator"></div>
+    <form class="setting-form security-settings-form" method="post">
+      {% csrf_token %}
+      {% include "setting/setting-messages.html" %}
+      <label>Mật khẩu hiện tại
+        <span class="setting-password-field"><input name="current_password" type="password" autocomplete="current-password" required /><button type="button" data-setting-password-toggle aria-label="Hiện mật khẩu" aria-pressed="false" title="Hiện mật khẩu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></span>
+      </label>
+      <label>Mật khẩu mới
+        <span class="setting-password-field"><input name="new_password" type="password" autocomplete="new-password" minlength="8" required /><button type="button" data-setting-password-toggle aria-label="Hiện mật khẩu" aria-pressed="false" title="Hiện mật khẩu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></span>
+      </label>
+      <p>Tối thiểu 8 ký tự và không được trùng mật khẩu hiện tại.</p>
+      <label>Xác nhận mật khẩu mới
+        <span class="setting-password-field"><input name="confirm_password" type="password" autocomplete="new-password" minlength="8" required /><button type="button" data-setting-password-toggle aria-label="Hiện mật khẩu" aria-pressed="false" title="Hiện mật khẩu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></span>
+      </label>
+      <button class="setting-button" type="submit">Đổi mật khẩu</button>
+    </form>
+  </section>
+</div>

@@ -1,0 +1,58 @@
+<aside class="chat-list" aria-label="Danh sách cuộc trò chuyện">
+  <div class="chat-list__top">
+    <div>
+      <h2>Tin nhắn</h2>
+      <span>3 chưa đọc</span>
+    </div>
+    <button class="chat-icon-button" type="button" aria-label="Tùy chọn danh sách">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>
+    </button>
+  </div>
+
+  <label class="chat-search" for="conversation-search">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+    <input id="conversation-search" type="search" placeholder="Tìm cuộc trò chuyện..." autocomplete="off" />
+  </label>
+
+  <div class="chat-list__filters" aria-label="Lọc cuộc trò chuyện">
+    <button class="is-active" type="button" data-chat-filter="all">Tất cả</button>
+    <button type="button" data-chat-filter="unread">Chưa đọc</button>
+    <button type="button" data-chat-filter="tutor">Gia sư</button>
+  </div>
+
+  <div class="chat-conversations" id="conversation-list">
+    <button class="chat-conversation" type="button" data-name="Nguyễn Minh Anh" data-role="Học viên" data-status="Đang hoạt động" data-kind="student" data-unread="true">
+      <span class="chat-avatar chat-avatar--blue">MA<i></i></span>
+      <span class="chat-conversation__body">
+        <span class="chat-conversation__meta"><strong>Nguyễn Minh Anh</strong><time>10:24</time></span>
+        <span class="chat-conversation__preview"><span>Em muốn đổi lịch học Toán ạ.</span><b>2</b></span>
+      </span>
+    </button>
+
+    <button class="chat-conversation" type="button" data-name="Trần Hoàng Nam" data-role="Gia sư Toán" data-status="Hoạt động 5 phút trước" data-kind="tutor" data-unread="true">
+      <span class="chat-avatar chat-avatar--violet">HN</span>
+      <span class="chat-conversation__body">
+        <span class="chat-conversation__meta"><strong>Trần Hoàng Nam</strong><time>09:48</time></span>
+        <span class="chat-conversation__preview"><span>Tôi đã cập nhật lịch rảnh.</span><b>1</b></span>
+      </span>
+    </button>
+
+    <button class="chat-conversation" type="button" data-name="Lê Thu Hà" data-role="Học viên" data-status="Hoạt động 20 phút trước" data-kind="student" data-unread="false">
+      <span class="chat-avatar chat-avatar--rose">TH</span>
+      <span class="chat-conversation__body">
+        <span class="chat-conversation__meta"><strong>Lê Thu Hà</strong><time>Hôm qua</time></span>
+        <span class="chat-conversation__preview"><span>Cảm ơn quản trị viên.</span></span>
+      </span>
+    </button>
+
+    <button class="chat-conversation" type="button" data-name="Phạm Quốc Bảo" data-role="Gia sư Tiếng Anh" data-status="Ngoại tuyến" data-kind="tutor" data-unread="false">
+      <span class="chat-avatar chat-avatar--amber">QB</span>
+      <span class="chat-conversation__body">
+        <span class="chat-conversation__meta"><strong>Phạm Quốc Bảo</strong><time>Thứ 3</time></span>
+        <span class="chat-conversation__preview"><span>Hồ sơ của tôi đã được duyệt chưa?</span></span>
+      </span>
+    </button>
+
+    <p class="chat-list__empty" id="chat-list-empty" hidden>Không tìm thấy cuộc trò chuyện.</p>
+  </div>
+</aside>

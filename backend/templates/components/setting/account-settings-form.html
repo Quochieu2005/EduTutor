@@ -3,25 +3,39 @@
   <section class="setting-content">
     <header>
       <h2>Account</h2>
-      <p>
-        Update your account settings. Set your preferred language and timezone.
-      </p>
+      <p>Quản lý email đăng nhập và thông tin tài khoản Admin.</p>
     </header>
     <div class="setting-separator"></div>
-    <form class="setting-form">
-      <label>Name<input placeholder="Your name" /></label>
-      <p>This is the name displayed on your profile and in emails.</p>
-      <label>Date of birth<input type="date" /></label>
-      <p>Your date of birth is used to calculate your age.</p>
-      <label
-        >Language<select>
-          <option>Select language</option>
-          <option>Vietnamese</option>
-          <option>English</option>
-        </select></label
-      >
-      <p>This language will be used in the dashboard.</p>
-      <button class="setting-button">Update account</button>
+    <form class="setting-form" method="post">
+      {% csrf_token %}
+      {% include "setting/setting-messages.html" %}
+      <div class="account-detail-grid">
+        <div><span>Admin ID</span><strong>{{ account.id }}</strong></div>
+        <div><span>Vai trò</span><strong>{{ account.role }}</strong></div>
+        <div><span>Trạng thái</span><strong class="account-status account-status--{{ account.status|lower }}">{{ account.status }}</strong></div>
+        <div><span>Quản lý bởi</span><strong>{{ account.managed_by }}</strong></div>
+        <div><span>Đăng nhập gần nhất</span><strong>{{ account.last_login|date:'d/m/Y H:i'|default:'Chưa có' }}</strong></div>
+        <div><span>Ngày tạo</span><strong>{{ account.created_at|date:'d/m/Y H:i' }}</strong></div>
+      </div>
+      <label>Email đăng nhập<input name="email" type="email" value="{{ account.email }}" autocomplete="email" required /></label>
+      <p>Email phải là duy nhất và sẽ được dùng cho lần đăng nhập tiếp theo.</p>
+      <label>Mật khẩu hiện tại
+        <span class="setting-password-field"><input name="current_password" type="password" autocomplete="current-password" required /><button type="button" data-setting-password-toggle aria-label="Hiện mật khẩu" aria-pressed="false" title="Hiện mật khẩu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></span>
+      </label>
+      <p>Nhập mật khẩu hiện tại để xác nhận thay đổi email.</p>
+      <button name="action" value="update_email" class="setting-button" type="submit">Cập nhật Account</button>
     </form>
+    <div class="setting-separator"></div>
+    <section class="account-danger-zone">
+      <h3>Đăng xuất tất cả thiết bị</h3>
+      <p>Vô hiệu hóa toàn bộ phiên đăng nhập, bao gồm thiết bị hiện tại.</p>
+      <form class="setting-form" method="post">
+        {% csrf_token %}
+        <label>Mật khẩu hiện tại
+          <span class="setting-password-field"><input name="current_password" type="password" autocomplete="current-password" required /><button type="button" data-setting-password-toggle aria-label="Hiện mật khẩu" aria-pressed="false" title="Hiện mật khẩu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></span>
+        </label>
+        <button name="action" value="sign_out_all" class="setting-button setting-button--danger" type="submit">Đăng xuất tất cả thiết bị</button>
+      </form>
+    </section>
   </section>
 </div>

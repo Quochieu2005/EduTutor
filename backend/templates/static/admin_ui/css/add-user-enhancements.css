@@ -1,1 +1,12 @@
 .add-user-dialog input[type=file]{padding:8px;font-size:12px}.password-field{position:relative}.password-field input{width:100%;padding-right:42px}.password-toggle{position:absolute;top:50%;right:10px;display:grid;width:24px;height:24px;place-items:center;border:0;background:transparent;color:var(--muted-foreground);cursor:pointer;transform:translateY(-50%)}.password-toggle svg{width:18px;height:18px}
+
+/* Add/Edit User modal: use the same colour tokens in light and dark themes. */
+.add-user-dialog { color: var(--foreground); }
+.add-user-dialog input, .add-user-dialog select { color: var(--foreground); background: var(--background); caret-color: var(--foreground); }
+.add-user-dialog input::placeholder { color: var(--muted-foreground); opacity: 1; }
+.add-user-dialog select option { color: var(--foreground); background: var(--background); }
+.add-user-close { color: var(--foreground); }
+.add-user-close:hover, .add-user-close:focus-visible, .password-toggle:hover, .password-toggle:focus-visible { color: var(--foreground); outline: 0; }
+html[data-theme="dark"] .add-user-modal { background: rgb(0 0 0 / 68%); }
+html[data-theme="dark"] .add-user-dialog { border-color: rgb(255 255 255 / 12%); background: var(--card); box-shadow: 0 24px 56px rgb(0 0 0 / 55%); }
+html[data-theme="dark"] .add-user-dialog input, html[data-theme="dark"] .add-user-dialog select { border-color: var(--input); background: var(--background); }

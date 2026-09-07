@@ -1,0 +1,40 @@
+{% load static %}
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ page.title }} | EduTutor Admin</title>
+    <link rel="stylesheet" href="{% static 'admin_ui/css/dashboard.css' %}?v=15" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/user.css' %}?v=40" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/filter-chips.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/view-fix.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/add-user.css' %}?v=2" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/add-user-compact.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/add-user-enhancements.css' %}?v=2" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/row-actions.css' %}?v=2" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/delete-user.css' %}?v=2" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/delete-user-compact.css' %}?v=3" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/pagination-layout.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/pagination-compact.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/resource-users.css' %}?v=1" />
+  </head>
+  <body data-resource-key="{{ page.key }}" data-entity-label="{{ page.singular }}" data-entity-plural="{{ page.title|lower }}">
+    <div class="admin-shell">
+      {% include "layouts/sidebar.html" %}
+      <div class="admin-main">
+        {% include "layouts/header-alternate.html" %}
+        <main class="users-page resource-page">
+          {% block resource_content %}{% endblock %}
+        </main>
+      </div>
+    </div>
+
+    {% include "resource/resource-form-modal.html" %}
+
+    <script src="{% static 'admin_ui/js/collapsible.js' %}?v=3"></script>
+    <script src="{% static 'admin_ui/js/dashboard.js' %}?v=14"></script>
+    <script src="{% static 'admin_ui/js/user.js' %}?v=4"></script>
+    <script src="{% static 'admin_ui/js/resource-users.js' %}?v=4"></script>
+  </body>
+</html>

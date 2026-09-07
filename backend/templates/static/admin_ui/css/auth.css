@@ -17,6 +17,19 @@
     "Segoe UI",
     sans-serif;
 }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #020817;
+  --foreground: #f8fafc;
+  --card: #0f172a;
+  --muted-foreground: #94a3b8;
+  --border: rgb(148 163 184 / 25%);
+  --accent: #1e293b;
+  --primary: #e2e8f0;
+  --primary-foreground: #0f172a;
+  --ring: #64748b;
+}
 * {
   box-sizing: border-box;
 }
@@ -130,6 +143,86 @@ a {
   display: grid;
   gap: 12px;
   padding: 0 24px;
+}
+.sign-in-form__message {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 8px 9px 11px;
+  margin: 0;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.sign-in-form__message > span {
+  min-width: 0;
+  flex: 1;
+}
+.sign-in-form__message::before {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-radius: 50%;
+  place-items: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.sign-in-form__message--error {
+  border-color: #fca5a5;
+  color: #b91c1c;
+  background: #fee2e2;
+}
+.sign-in-form__message--error::before {
+  background: #dc2626;
+  content: "!";
+}
+.sign-in-form__message--success {
+  border-color: #86efac;
+  color: #166534;
+  background: #dcfce7;
+}
+.sign-in-form__message--success::before {
+  background: #16a34a;
+  content: "✓";
+}
+.sign-in-form__message-close {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  place-items: center;
+  color: currentColor;
+  cursor: pointer;
+  background: transparent;
+}
+.sign-in-form__message-close:hover {
+  background: rgb(15 23 42 / 10%);
+}
+.sign-in-form__message-close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+html[data-theme="dark"] .sign-in-form__message--error {
+  border-color: rgb(239 68 68 / 45%);
+  color: #fca5a5;
+  background: rgb(127 29 29 / 30%);
+}
+html[data-theme="dark"] .sign-in-form__message--success {
+  border-color: rgb(34 197 94 / 45%);
+  color: #86efac;
+  background: rgb(20 83 45 / 30%);
 }
 .sign-in-card--forgot-password .sign-in-form {
   padding-bottom: 24px;
@@ -381,6 +474,20 @@ a {
   height: 100%;
   opacity: 0;
   cursor: text;
+}
+.otp-form__countdown {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
+}
+.otp-form__countdown strong {
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+.otp-form__countdown.is-expired,
+.otp-form__countdown.is-expired strong {
+  color: #dc2626;
 }
 .sign-in-form__submit:disabled {
   cursor: not-allowed;
