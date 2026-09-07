@@ -22,14 +22,19 @@ from django.urls import include, path
 from templates.views import (
     account_settings,
     appearance_settings,
+    chats,
     dashboard,
     display_settings,
     forgot_password,
-    notification_settings,
+    management_page,
+    security_settings,
     otp,
     page_not_found,
     profile,
+    reset_password,
     sign_in,
+    sign_out,
+    students,
     users,
 )
 
@@ -40,16 +45,26 @@ urlpatterns = [
     path('api/', include('api.urls')),
     path('admin/dashboard', dashboard, name='dashboard'),
     path('admin/dashboard/', dashboard, name='dashboard-slash'),
+    path('admin/chats/', chats, name='chats'),
+    path('admin/students/', students, name='students'),
     path('admin/users/', users, name='users'),
+    path('admin/management/<slug:module>/', management_page, name='management-page'),
     path('admin/profile/', profile, name='profile'),
     path('admin/setting/account/', account_settings, name='account-settings'),
     path('admin/setting/appearance/', appearance_settings, name='appearance-settings'),
-    path('admin/setting/notifications/', notification_settings, name='notification-settings'),
+    path('admin/setting/security/', security_settings, name='security-settings'),
+    path(
+        'admin/setting/notifications/',
+        RedirectView.as_view(pattern_name='security-settings', permanent=False),
+        name='notification-settings',
+    ),
     path('admin/setting/display/', display_settings, name='display-settings'),
     path('admin/sign-in', sign_in, name='sign-in'),
     path('admin/login', sign_in, name='login'),
+    path('admin/logout', sign_out, name='logout'),
     path('admin/forgot-password', forgot_password, name='forgot-password'),
     path('admin/otp', otp, name='otp'),
+    path('admin/reset-password', reset_password, name='reset-password'),
 ]
 
 if settings.DEBUG:

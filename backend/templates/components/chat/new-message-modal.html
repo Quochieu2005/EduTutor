@@ -1,0 +1,44 @@
+<div class="chat-modal" data-new-message-modal hidden>
+  <section class="chat-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="new-message-title">
+    <header class="chat-modal__header">
+      <h2 id="new-message-title">New message</h2>
+      <button class="chat-modal__close" type="button" data-new-message-close aria-label="Đóng">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+      </button>
+    </header>
+
+    <p class="chat-modal__label">To:</p>
+    <div class="chat-people-picker">
+      <label class="chat-people-search" for="people-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+        <input id="people-search" type="search" placeholder="Search people..." autocomplete="off" />
+      </label>
+
+      <div class="chat-people-list" role="listbox" aria-label="Chọn người để nhắn tin">
+        <button type="button" class="chat-person" data-person-name="Nguyễn Minh Anh" data-person-role="Học viên" data-person-status="Đang hoạt động">
+          <span class="chat-avatar chat-avatar--blue">MA<i></i></span>
+          <span><strong>Nguyễn Minh Anh</strong><small>minhanh_student</small></span>
+        </button>
+        <button type="button" class="chat-person" data-person-name="Trần Hoàng Nam" data-person-role="Gia sư Toán" data-person-status="Hoạt động 5 phút trước">
+          <span class="chat-avatar chat-avatar--violet">HN</span>
+          <span><strong>Trần Hoàng Nam</strong><small>hoangnam_math</small></span>
+        </button>
+        <button type="button" class="chat-person" data-person-name="Lê Thu Hà" data-person-role="Học viên" data-person-status="Hoạt động 20 phút trước">
+          <span class="chat-avatar chat-avatar--rose">TH</span>
+          <span><strong>Lê Thu Hà</strong><small>thuha_student</small></span>
+        </button>
+        <button type="button" class="chat-person" data-person-name="Phạm Quốc Bảo" data-person-role="Gia sư Tiếng Anh" data-person-status="Ngoại tuyến">
+          <span class="chat-avatar chat-avatar--amber">QB</span>
+          <span><strong>Phạm Quốc Bảo</strong><small>quocbao_english</small></span>
+        </button>
+        <button type="button" class="chat-person" data-person-name="Võ Ngọc Lan" data-person-role="Gia sư Vật lý" data-person-status="Ngoại tuyến">
+          <span class="chat-avatar chat-avatar--green">NL</span>
+          <span><strong>Võ Ngọc Lan</strong><small>ngoclan_physics</small></span>
+        </button>
+        <p class="chat-people-empty" data-people-empty hidden>Không tìm thấy người dùng.</p>
+      </div>
+    </div>
+
+    <button class="chat-modal__submit" type="button" data-start-chat disabled>Chat</button>
+  </section>
+</div>

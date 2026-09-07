@@ -37,6 +37,7 @@
 }
 
 html[data-theme="dark"] {
+  color-scheme: dark;
   --background: oklch(0.129 0.042 264.695);
   --foreground: oklch(0.984 0.003 247.858);
   --card: oklch(0.14 0.04 259.21);
@@ -62,6 +63,10 @@ html[data-theme="dark"] {
   --sidebar-accent: var(--accent);
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
 }
 
 * {
@@ -1347,6 +1352,9 @@ html[data-theme="dark"] .admin-sidebar__link i {
 }
 .admin-user-menu__sign-out {
   color: var(--destructive) !important;
+}
+.admin-user-menu__sign-out-form {
+  margin: 0;
 }
 .command-overlay {
   position: fixed;

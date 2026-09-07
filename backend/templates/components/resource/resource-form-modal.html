@@ -1,0 +1,14 @@
+<div class="add-user-modal resource-form-modal" data-resource-modal hidden>
+  <div class="add-user-dialog" role="dialog" aria-modal="true" aria-labelledby="resource-form-title">
+    <button class="add-user-close" type="button" data-resource-modal-close aria-label="Close">&times;</button>
+    <h2 id="resource-form-title" data-resource-form-title>{{ page.action_label }}</h2>
+    <p>Nhập thông tin và lưu khi hoàn tất.</p>
+    <form data-resource-form>
+      <input type="hidden" name="record_id" />
+      {% for field in page.form_fields %}
+        <label>{{ field.label }}{% if field.options %}<select name="{{ field.name }}" required>{% for option in field.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}</select>{% elif field.type == 'textarea' %}<textarea name="{{ field.name }}" rows="3" placeholder="{{ field.placeholder }}" required></textarea>{% else %}<input name="{{ field.name }}" type="{{ field.type|default:'text' }}" placeholder="{{ field.placeholder }}" required />{% endif %}</label>
+      {% endfor %}
+      <button class="add-user-save" type="submit">Save changes</button>
+    </form>
+  </div>
+</div>

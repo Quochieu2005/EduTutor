@@ -5,6 +5,10 @@
 
     if (!form || !status) return;
 
+    document.querySelectorAll('[data-auth-message-close]').forEach((button) => {
+        button.addEventListener('click', () => button.closest('[data-auth-message]')?.remove());
+    });
+
     const resetSignInPage = () => {
         window.clearTimeout(submitTimer);
         form.reset();

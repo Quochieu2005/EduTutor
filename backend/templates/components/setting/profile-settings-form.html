@@ -8,6 +8,7 @@
     <div class="setting-separator" role="separator"></div>
     <form class="setting-form" method="post">
       {% csrf_token %}
+      {% include "setting/setting-messages.html" %}
       <label
         >Username<input
           name="username"
@@ -19,12 +20,6 @@
         days.
       </p>
       <label
-        >Email<select name="email">
-          <option>{{ profile.email }}</option>
-        </select></label
-      >
-      <p>You can manage verified email addresses in your email settings.</p>
-      <label
         >Bio<textarea
           name="bio"
           rows="4"
@@ -34,9 +29,24 @@
         >
       </label>
       <p>You can @mention other users and organizations to link to them.</p>
-      <label>URLs<input name="url" value="https://edututor.local" /></label>
+      <div class="setting-form__urls" data-profile-urls>
+        <span class="setting-form__label">URLs</span>
+        <div class="setting-form__url-list" data-profile-url-list>
+          {% for url in profile.urls %}
+          <div class="setting-form__url-row">
+            <input name="urls" type="url" value="{{ url }}" placeholder="https://example.com" />
+            <button type="button" class="setting-form__url-remove" data-remove-url aria-label="Xóa URL">×</button>
+          </div>
+          {% empty %}
+          <div class="setting-form__url-row">
+            <input name="urls" type="url" placeholder="https://example.com" />
+            <button type="button" class="setting-form__url-remove" data-remove-url aria-label="Xóa URL">×</button>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
       <p>Add links to your website, blog, or social media profiles.</p>
-      <button type="button" class="setting-button setting-button--secondary">
+      <button type="button" class="setting-button setting-button--secondary" data-add-url>
         Add URL
       </button>
       <button type="submit" class="setting-button">Update profile</button>

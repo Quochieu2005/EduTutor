@@ -167,6 +167,222 @@
   background: var(--background);
   color: var(--foreground);
 }
+.setting-form__message {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.setting-form__message::before {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.setting-form__message > span {
+  min-width: 0;
+  flex: 1;
+}
+.setting-form .setting-form__message-close {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  place-items: center;
+  color: currentColor;
+  cursor: pointer;
+  background: transparent;
+}
+.setting-form .setting-form__message-close:hover {
+  background: rgb(15 23 42 / 10%);
+}
+.setting-form__message-close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.setting-form .setting-form__message--success {
+  border-color: #86efac !important;
+  background-color: #dcfce7 !important;
+  color: #166534 !important;
+}
+.setting-form__message--success::before {
+  background: #16a34a;
+  content: "✓";
+}
+.setting-form .setting-form__message--error {
+  border-color: #fca5a5 !important;
+  background-color: #fee2e2 !important;
+  color: #b91c1c !important;
+}
+.setting-form__message--error::before {
+  background: #dc2626;
+  content: "!";
+}
+html[data-theme="dark"] .setting-form .setting-form__message--success {
+  border-color: rgb(34 197 94 / 45%) !important;
+  background-color: rgb(20 83 45 / 30%) !important;
+  color: #86efac !important;
+}
+html[data-theme="dark"] .setting-form .setting-form__message--error {
+  border-color: rgb(239 68 68 / 45%) !important;
+  background-color: rgb(127 29 29 / 30%) !important;
+  color: #fca5a5 !important;
+}
+.setting-form__urls {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.setting-form__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.setting-form__url-list {
+  display: grid;
+  gap: 8px;
+}
+.setting-form__url-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 8px;
+}
+.setting-form__url-remove {
+  border: 1px solid var(--input);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 20px;
+}
+.setting-form__url-remove:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.account-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.account-detail-grid > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+.account-detail-grid span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.account-detail-grid strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 600;
+}
+.account-status {
+  width: max-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.account-status--active {
+  background: #dcfce7;
+  color: #15803d;
+}
+.account-status--inactive {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+html[data-theme="dark"] .account-status--active {
+  background: rgb(21 128 61 / 24%);
+  color: #86efac;
+}
+html[data-theme="dark"] .account-status--inactive {
+  background: rgb(185 28 28 / 24%);
+  color: #fca5a5;
+}
+.account-danger-zone {
+  width: min(100%, 720px);
+  padding: 16px;
+  border: 1px solid rgb(239 68 68 / 40%);
+  border-radius: 8px;
+}
+.account-danger-zone h3,
+.account-danger-zone p {
+  margin: 0;
+}
+.account-danger-zone h3 {
+  color: #b91c1c;
+  font-size: 15px;
+}
+.account-danger-zone p {
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.setting-button--danger {
+  background: #dc2626;
+  color: #fff;
+}
+.setting-password-field {
+  position: relative;
+  display: block;
+}
+.setting-password-field input {
+  padding-right: 42px;
+}
+.setting-form .setting-password-field button {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  place-items: center;
+  color: var(--muted-foreground);
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+.setting-form .setting-password-field button:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+.setting-password-field svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 640px) {
+  .account-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* Notification settings */
 .notification-settings-form {

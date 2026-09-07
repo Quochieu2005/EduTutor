@@ -17,3 +17,15 @@ document.addEventListener('DOMContentLoaded', () => {
     menu.querySelectorAll('.users-status-options label').forEach((option) => { option.hidden = !option.textContent.toLowerCase().includes(query); });
   });
 });
+
+document.addEventListener('DOMContentLoaded', () => {
+  const header = document.querySelector('.header-fixed');
+  if (!header) return;
+
+  const updateHeaderShadow = () => {
+    header.classList.toggle('is-scrolled', window.scrollY > 1);
+  };
+
+  updateHeaderShadow();
+  window.addEventListener('scroll', updateHeaderShadow, { passive: true });
+});

@@ -27,18 +27,46 @@
             <h2>General</h2>
             <nav class="admin-sidebar__nav" aria-label="General">
                 <a class="admin-sidebar__link{% if request.path == '/admin/dashboard/' or request.path == '/admin/dashboard' %} is-active{% endif %}" href="/admin/dashboard/"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="8" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="15" width="7" height="6" rx="1"></rect></svg><span>Dashboard</span></a>
-                <a class="admin-sidebar__link" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H7l-4 3V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6ZM20 9a2 2 0 0 1 2 2v10l-4-3h-7a2 2 0 0 1-2-2v-1"></path></svg><span>Chats</span><b>3</b></a>
+                <a class="admin-sidebar__link{% if request.path == '/admin/chats/' %} is-active{% endif %}" href="{% url 'chats' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H7l-4 3V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6ZM20 9a2 2 0 0 1 2 2v10l-4-3h-7a2 2 0 0 1-2-2v-1"></path></svg><span>Chats</span><b>3</b></a>
                 <a class="admin-sidebar__link{% if request.path == '/admin/users/' %} is-active{% endif %}" href="{% url 'users' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="4"></circle><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3.1a4 4 0 0 1 0 7.7M22 21v-2a4 4 0 0 0-3-3.9"></path></svg><span>Users</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'slides' %} is-active{% endif %}" href="{% url 'management-page' module='slides' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="m7 15 3-3 2 2 3-4 2 3"></path><circle cx="8" cy="8" r="1"></circle></svg><span>Slides</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'contacts' %} is-active{% endif %}" href="{% url 'management-page' module='contacts' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></svg><span>Contact</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'blog' %} is-active{% endif %}" href="{% url 'management-page' module='blog' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 8h8M8 12h8M8 16h5"></path></svg><span>Blog</span></a>
+            </nav>
+        </section>
+
+        <section class="admin-sidebar__group">
+            <h2>Recruitment</h2>
+            <nav class="admin-sidebar__nav" aria-label="Tuyển dụng gia sư">
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'tutor-jobs' %} is-active{% endif %}" href="{% url 'management-page' module='tutor-jobs' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"></rect><path d="M8 6V4h8v2M3 11h18M10 11v2h4v-2"></path></svg><span>Tin tuyển dụng</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'tutor-candidates' %} is-active{% endif %}" href="{% url 'management-page' module='tutor-candidates' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="4"></circle><path d="M2 21v-2a6 6 0 0 1 12 0v2M17 8h5M19.5 5.5v5"></path></svg><span>Ứng viên gia sư</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'tutor-approvals' %} is-active{% endif %}" href="{% url 'management-page' module='tutor-approvals' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 1 1-4 4 4 4 0 0 1 4-4Z"></path><path d="M4 21a8 8 0 0 1 16 0"></path><path d="m16 11 2 2 3-3"></path></svg><span>Duyệt hồ sơ</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'tutor-interviews' %} is-active{% endif %}" href="{% url 'management-page' module='tutor-interviews' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M8 2v4M16 2v4M3 10h18M8 15l2 2 5-5"></path></svg><span>Phỏng vấn &amp; Dạy thử</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'tutor-onboarding' %} is-active{% endif %}" href="{% url 'management-page' module='tutor-onboarding' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM8 9h8M8 13h5"></path><path d="m15 17 2 2 4-4"></path></svg><span>Tiếp nhận gia sư</span></a>
             </nav>
         </section>
 
         <section class="admin-sidebar__group">
             <h2>Manage</h2>
             <nav class="admin-sidebar__nav" aria-label="Quản lý gia sư và lớp học">
-                <a class="admin-sidebar__link" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a4 4 0 1 1-4 4 4 4 0 0 1 4-4Z"></path><path d="M4 21a8 8 0 0 1 16 0"></path><path d="m16 11 2 2 3-3"></path></svg><span>Quản lý &amp; Duyệt gia sư</span></a>
-                <a class="admin-sidebar__link" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"></circle><path d="M3 21v-2a6 6 0 0 1 12 0v2"></path><path d="M16 5h5M18.5 2.5v5"></path></svg><span>Giáo viên theo khu vực</span></a>
-                <a class="admin-sidebar__link" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"></path><path d="M4 10h16M9 5v14"></path></svg><span>Quản lý lớp học</span></a>
-                <a class="admin-sidebar__link" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M8 2v4M16 2v4M3 10h18"></path></svg><span>Lịch học &amp; Lịch biểu</span></a>
+                <a class="admin-sidebar__link{% if request.path == '/admin/students/' %} is-active{% endif %}" href="{% url 'students' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="4"></circle><path d="M2 21v-2a6 6 0 0 1 12 0v2M17 11a3 3 0 1 0 0-6M22 21v-2a5 5 0 0 0-4-4.9"></path></svg><span>Học viên</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'tutors-by-area' %} is-active{% endif %}" href="{% url 'management-page' module='tutors-by-area' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"></circle><path d="M3 21v-2a6 6 0 0 1 12 0v2"></path><path d="M16 5h5M18.5 2.5v5"></path></svg><span>Quản lý gia sư</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'classes' %} is-active{% endif %}" href="{% url 'management-page' module='classes' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"></path><path d="M4 10h16M9 5v14"></path></svg><span>Quản lý lớp học</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'schedules' %} is-active{% endif %}" href="{% url 'management-page' module='schedules' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M8 2v4M16 2v4M3 10h18"></path></svg><span>Lịch học &amp; Lịch biểu</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'subjects' %} is-active{% endif %}" href="{% url 'management-page' module='subjects' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11a3 3 0 0 1 3 3v15a3 3 0 0 0-3-3H4Z"></path><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H14v18a3 3 0 0 1 3-3h3Z"></path></svg><span>Môn học &amp; Chuyên môn</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'tutor-requests' %} is-active{% endif %}" href="{% url 'management-page' module='tutor-requests' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4M8 11h6M11 8v6"></path></svg><span>Yêu cầu tìm gia sư</span></a>
+            </nav>
+        </section>
+
+        <section class="admin-sidebar__group">
+            <h2>Operations</h2>
+            <nav class="admin-sidebar__nav" aria-label="Vận hành hệ thống">
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'payments' %} is-active{% endif %}" href="{% url 'management-page' module='payments' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20M6 15h4"></path></svg><span>Thanh toán &amp; Hoa hồng</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'reviews-complaints' %} is-active{% endif %}" href="{% url 'management-page' module='reviews-complaints' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9Z"></path></svg><span>Đánh giá &amp; Khiếu nại</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'notifications' %} is-active{% endif %}" href="{% url 'management-page' module='notifications' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg><span>Thông báo</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'activity-logs' %} is-active{% endif %}" href="{% url 'management-page' module='activity-logs' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span>Nhật ký hoạt động</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'administrators' %} is-active{% endif %}" href="{% url 'management-page' module='administrators' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><path d="M2 20v-2a6 6 0 0 1 12 0v2M16 4h6v6h-6zM19 10v4M16 17h6"></path></svg><span>Quản lý Admin</span></a>
+                <a class="admin-sidebar__link{% if request.resolver_match.kwargs.module == 'roles-permissions' %} is-active{% endif %}" href="{% url 'management-page' module='roles-permissions' %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><path d="M2 20v-2a6 6 0 0 1 12 0v2M16 11l2 2 4-4M17 20h5"></path></svg><span>Vai trò &amp; Phân quyền</span></a>
             </nav>
         </section>
 
@@ -53,19 +81,18 @@
                     <li><a href="{% url 'profile' %}" class="admin-sidebar__sub-link{% if request.path == '/admin/profile/' %} is-active{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="4"></circle><path d="M2 21v-2a4 4 0 0 1 4-4h3"></path><circle cx="18" cy="15" r="3"></circle></svg><span>Profile</span></a></li>
                     <li><a href="{% url 'account-settings' %}" class="admin-sidebar__sub-link{% if request.path == '/admin/setting/account/' %} is-active{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.7 6.3 1.6 1.6 3.1-3.1a6 6 0 0 1-7.1 8.3l-7.9 7.9a2.1 2.1 0 0 1-3-3l7.9-7.9a6 6 0 0 1 8.3-7.1Z"></path></svg><span>Account</span></a></li>
                     <li><a href="{% url 'appearance-settings' %}" class="admin-sidebar__sub-link{% if request.path == '/admin/setting/appearance/' %} is-active{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 9 0 1 1 10-9 5 5 0 0 1-5 5h-2.3a1.7 1.7 0 0 0-1.4 2.8l.3.4A1.7 1.7 0 0 1 12 22Z"></path><circle cx="13.5" cy="6.5" r=".5"></circle><circle cx="17.5" cy="10.5" r=".5"></circle></svg><span>Appearance</span></a></li>
-                    <li><a href="{% url 'notification-settings' %}" class="admin-sidebar__sub-link{% if request.path == '/admin/setting/notifications/' %} is-active{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 21a2 2 0 0 0 3.4 0"></path><path d="M4 17h16a1 1 0 0 0 .7-1.7C19.4 14 18 12.5 18 8a6 6 0 0 0-12 0c0 4.5-1.4 6-2.7 7.3A1 1 0 0 0 4 17Z"></path></svg><span>Notifications</span></a></li>
+                    <li><a href="{% url 'security-settings' %}" class="admin-sidebar__sub-link{% if request.path == '/admin/setting/security/' %} is-active{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4M12 15v2"></path></svg><span>Security</span></a></li>
                     <li><a href="{% url 'display-settings' %}" class="admin-sidebar__sub-link{% if request.path == '/admin/setting/display/' %} is-active{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg><span>Display</span></a></li>
                     </ul>
                 </details>
-                <a class="admin-sidebar__link" href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg><span>Help Center</span></a>
             </nav>
         </section>
     </div>
 
     <div class="admin-sidebar__footer">
         <button class="admin-sidebar__user" type="button">
-            <span class="admin-sidebar__avatar">GU</span>
-            <span><strong>Guest User</strong><small>admin@edututor.local</small></span>
+            <span class="admin-sidebar__avatar">{{ request.admin_account.initials }}</span>
+            <span><strong>{{ request.admin_account.name }}</strong><small>{{ request.admin_account.email }}</small></span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg>
         </button>
     </div>

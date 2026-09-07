@@ -1,0 +1,16 @@
+{% if auth_error %}
+<div class="sign-in-form__message sign-in-form__message--error" role="alert" data-auth-message>
+  <span>{{ auth_error }}</span>
+  <button type="button" class="sign-in-form__message-close" data-auth-message-close aria-label="Đóng thông báo">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+  </button>
+</div>
+{% endif %}
+{% if auth_success %}
+<div class="sign-in-form__message sign-in-form__message--success" role="status" data-auth-message>
+  <span>{{ auth_success }}</span>
+  <button type="button" class="sign-in-form__message-close" data-auth-message-close aria-label="Đóng thông báo">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+  </button>
+</div>
+{% endif %}

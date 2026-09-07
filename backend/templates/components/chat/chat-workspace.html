@@ -1,0 +1,20 @@
+<section class="chat-workspace" aria-label="Quản lý trò chuyện">
+  {% include "chat/conversation-list.html" %}
+
+  <div class="chat-main">
+    <div class="chat-empty-state" data-chat-empty-state>
+      <span class="chat-empty-state__icon">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 10a2 2 0 0 1-2 2H7l-4 3V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6ZM20 9a2 2 0 0 1 2 2v10l-4-3h-7a2 2 0 0 1-2-2v-1"></path></svg>
+      </span>
+      <h1>Your messages</h1>
+      <p>Send a message to start a chat.</p>
+      <button type="button" data-new-message-open>Send message</button>
+    </div>
+
+    <div class="chat-panel-view" data-chat-view hidden>
+      {% include "chat/conversation-panel.html" %}
+    </div>
+  </div>
+</section>
+
+{% include "chat/new-message-modal.html" %}
