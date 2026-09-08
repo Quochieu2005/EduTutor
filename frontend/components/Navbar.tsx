@@ -42,6 +42,13 @@ export function Navbar() {
             >
               Đăng ký làm gia sư
             </Link>
+            <Link
+              href="/tutor-dashboard"
+              className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition font-bold text-xs flex items-center gap-1 shadow-2xs"
+            >
+              <span>👨‍🏫</span>
+              <span>Kênh Giáo Viên</span>
+            </Link>
             {user && (
               <Link
                 href="/lessons"
@@ -138,6 +145,13 @@ export function Navbar() {
               onClick={() => setMobileOpen(false)}
             >
               Đăng ký làm gia sư
+            </Link>
+            <Link
+              href="/tutor-dashboard"
+              className="block py-2 text-blue-700 font-bold"
+              onClick={() => setMobileOpen(false)}
+            >
+              👨‍🏫 Kênh Giáo Viên (Portal)
             </Link>
             {user && (
               <Link

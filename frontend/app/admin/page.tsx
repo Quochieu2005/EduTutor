@@ -46,6 +46,14 @@ export default function AdminPage() {
   const [tutors, setTutors] = useState<TutorProfile[]>([]);
   const [lessons, setLessons] = useState<LessonRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSessionAdmin, setIsSessionAdmin] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      localStorage.getItem(ADMIN_AUTH_KEY) === "true" &&
+      localStorage.getItem(ADMIN_AUTH_VERSION_KEY) === ADMIN_AUTH_VERSION
+    );
+  });
+  const [isClientReady, setIsClientReady] = useState(false);
 
   // Admin Access Gate State
   const [passcode, setPasscode] = useState("");
@@ -54,13 +62,6 @@ export default function AdminPage() {
   const [newPasscode, setNewPasscode] = useState("");
   const [confirmPasscode, setConfirmPasscode] = useState("");
   const [passcodeMessage, setPasscodeMessage] = useState("");
-  const [isSessionAdmin, setIsSessionAdmin] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return (
-      localStorage.getItem(ADMIN_AUTH_KEY) === "true" &&
-      localStorage.getItem(ADMIN_AUTH_VERSION_KEY) === ADMIN_AUTH_VERSION
-    );
-  });
 
   const isClerkAdmin =
     isLoaded &&
@@ -105,6 +106,10 @@ export default function AdminPage() {
     status: "accepted" as LessonStatus,
     notes: "",
   });
+
+  useEffect(() => {
+    setIsClientReady(true);
+  }, []);
 
   useEffect(() => {
     if (!isAuthorized) {
@@ -406,6 +411,19 @@ export default function AdminPage() {
       status: lesson.status,
       notes: lesson.notes || "",
     });
+  }
+
+  if (!isClientReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-gray-600 font-medium text-sm">
+            Đang tải dữ liệu Admin Portal...
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (!isAuthorized) {

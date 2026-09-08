@@ -1,17 +1,26 @@
 import axios from "axios";
 import type {
   AuthTokens,
+  ChatMessage,
   CreateLessonPayload,
   LessonRequest,
   LoginPayload,
   RegisterPayload,
   RegisterTutorPayload,
+  ScheduleSession,
+  TutorIncomingRequest,
   TutorProfile,
   TutorSearchParams,
   UpdateTutorProfilePayload,
   User,
 } from "./types";
-import { MOCK_LESSONS, MOCK_TUTORS } from "./mock-data";
+import {
+  MOCK_ADMIN_CHATS,
+  MOCK_LESSONS,
+  MOCK_TUTORS,
+  MOCK_TUTOR_REQUESTS,
+  MOCK_TUTOR_SCHEDULE,
+} from "./mock-data";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
@@ -458,6 +467,198 @@ export async function adminDeleteLesson(id: string): Promise<void> {
     return;
   }
   await api.delete(`/admin/lessons/${id}/`);
+}
+
+// -------------------------------------------------------------
+// TUTOR PORTAL APIS (Thời khóa biểu, Yêu cầu, Chat Admin)
+// -------------------------------------------------------------
+
+function getPersistedSchedule(): ScheduleSession[] {
+  if (typeof window === "undefined") return MOCK_TUTOR_SCHEDULE;
+  try {
+    const saved = localStorage.getItem("edututor_tutor_schedule");
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // Ignore error
+  }
+  return MOCK_TUTOR_SCHEDULE;
+}
+
+function savePersistedSchedule(schedule: ScheduleSession[]) {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("edututor_tutor_schedule", JSON.stringify(schedule));
+    } catch {
+      // Ignore error
+    }
+  }
+}
+
+export async function getTutorSchedule(): Promise<ScheduleSession[]> {
+  if (isMockEnabled()) {
+    await delay(200);
+    return getPersistedSchedule();
+  }
+  const { data } = await api.get("/tutors/me/schedule/");
+  return data;
+}
+
+export async function updateScheduleSessionStatus(
+  id: string,
+  status: ScheduleSession["status"],
+): Promise<ScheduleSession> {
+  if (isMockEnabled()) {
+    await delay(200);
+    const list = getPersistedSchedule();
+    let updated: ScheduleSession | null = null;
+    const newList = list.map((s) => {
+      if (s.id === id) {
+        updated = { ...s, status };
+        return updated;
+      }
+      return s;
+    });
+    savePersistedSchedule(newList);
+    if (!updated) throw new Error("Không tìm thấy ca học");
+    return updated;
+  }
+  const { data } = await api.patch(`/tutors/me/schedule/${id}/`, { status });
+  return data;
+}
+
+function getPersistedRequests(): TutorIncomingRequest[] {
+  if (typeof window === "undefined") return MOCK_TUTOR_REQUESTS;
+  try {
+    const saved = localStorage.getItem("edututor_tutor_requests");
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // Ignore error
+  }
+  return MOCK_TUTOR_REQUESTS;
+}
+
+function savePersistedRequests(requests: TutorIncomingRequest[]) {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("edututor_tutor_requests", JSON.stringify(requests));
+    } catch {
+      // Ignore error
+    }
+  }
+}
+
+export async function getTutorIncomingRequests(): Promise<
+  TutorIncomingRequest[]
+> {
+  if (isMockEnabled()) {
+    await delay(200);
+    return getPersistedRequests();
+  }
+  const { data } = await api.get("/tutors/me/requests/");
+  return data;
+}
+
+export async function respondToIncomingRequest(
+  id: string,
+  status: "accepted" | "declined",
+): Promise<TutorIncomingRequest> {
+  if (isMockEnabled()) {
+    await delay(250);
+    const list = getPersistedRequests();
+    let updated: TutorIncomingRequest | null = null;
+    const newList = list.map((r) => {
+      if (r.id === id) {
+        updated = { ...r, status };
+        return updated;
+      }
+      return r;
+    });
+    savePersistedRequests(newList);
+
+    // If accepted and has schedule details, automatically append to schedule!
+    if (status === "accepted" && updated) {
+      const schedule = getPersistedSchedule();
+      const newSession: ScheduleSession = {
+        id: `sch-${Date.now()}`,
+        studentName: (updated as TutorIncomingRequest).senderName,
+        studentPhone: (updated as TutorIncomingRequest).senderContact,
+        studentAvatar: (updated as TutorIncomingRequest).avatar || "👨‍🎓",
+        subject: (updated as TutorIncomingRequest).subject || "Toán",
+        gradeLevel: (updated as TutorIncomingRequest).gradeLevel,
+        date: new Date(Date.now() + 86400000).toISOString().split("T")[0],
+        dayOfWeek: "Ngày mai",
+        time:
+          (updated as TutorIncomingRequest).preferredTime || "19:00 - 21:00",
+        duration: "120 phút",
+        location: (updated as TutorIncomingRequest).location || "Google Meet",
+        mode: ((updated as TutorIncomingRequest).location || "")
+          .toLowerCase()
+          .includes("nhà")
+          ? "offline"
+          : "online",
+        meetingLink: "https://meet.google.com/edu-tutor-new",
+        hourlyRate: (updated as TutorIncomingRequest).offeredRate || 250000,
+        status: "upcoming",
+        notes: (updated as TutorIncomingRequest).content,
+      };
+      savePersistedSchedule([newSession, ...schedule]);
+    }
+
+    if (!updated) throw new Error("Không tìm thấy yêu cầu");
+    return updated;
+  }
+  const { data } = await api.patch(`/tutors/me/requests/${id}/`, { status });
+  return data;
+}
+
+function getPersistedChats(): ChatMessage[] {
+  if (typeof window === "undefined") return MOCK_ADMIN_CHATS;
+  try {
+    const saved = localStorage.getItem("edututor_tutor_admin_chats");
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // Ignore error
+  }
+  return MOCK_ADMIN_CHATS;
+}
+
+function savePersistedChats(chats: ChatMessage[]) {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("edututor_tutor_admin_chats", JSON.stringify(chats));
+    } catch {
+      // Ignore error
+    }
+  }
+}
+
+export async function getAdminChatMessages(): Promise<ChatMessage[]> {
+  if (isMockEnabled()) {
+    await delay(150);
+    return getPersistedChats();
+  }
+  const { data } = await api.get("/tutors/me/chat-admin/");
+  return data;
+}
+
+export async function sendAdminChatMessage(text: string): Promise<ChatMessage> {
+  if (isMockEnabled()) {
+    await delay(200);
+    const chats = getPersistedChats();
+    const newMsg: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      sender: "tutor",
+      senderName: "Thầy Nguyễn Văn An",
+      text,
+      timestamp: new Date().toISOString(),
+      isRead: true,
+    };
+    const updatedChats = [...chats, newMsg];
+    savePersistedChats(updatedChats);
+    return newMsg;
+  }
+  const { data } = await api.post("/tutors/me/chat-admin/", { text });
+  return data;
 }
 
 function delay(ms: number) {

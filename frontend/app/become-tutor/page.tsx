@@ -129,8 +129,16 @@ export default function BecomeTutorPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link href="/tutor-dashboard">
+              <Button
+                fullWidth
+                className="sm:w-auto bg-gradient-to-r from-blue-600 to-purple-600 font-bold"
+              >
+                👨‍🏫 Vào Không Gian Giáo Viên (Portal) →
+              </Button>
+            </Link>
             <Link href="/tutors">
-              <Button fullWidth className="sm:w-auto">
+              <Button variant="outline" fullWidth className="sm:w-auto">
                 Khám phá gia sư khác
               </Button>
             </Link>
