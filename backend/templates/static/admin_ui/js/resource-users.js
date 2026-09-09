@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const form = document.querySelector('[data-resource-form]');
   const formTitle = document.querySelector('[data-resource-form-title]');
   const entity = document.body.dataset.entityLabel || 'mục';
+  const resourceKey = document.body.dataset.resourceKey || '';
+  const serverSubmit = form?.dataset.serverSubmit === 'true';
   let page = 1;
   let sortDirection = 1;
   let sortField = '';
@@ -153,13 +155,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!modal || !form) return;
     form.reset();
     form.elements.record_id.value = row?.dataset.recordId || '';
-    if (formTitle) formTitle.textContent = `${row ? 'Edit' : 'Add'} ${entity}`;
+    form.action = row?.dataset.editUrl || form.dataset.createUrl || form.action;
+    if (formTitle) formTitle.textContent = resourceKey === 'administrators'
+      ? `${row ? 'Sửa' : 'Thêm'} quản trị viên`
+      : `${row ? 'Edit' : 'Add'} ${entity}`;
     if (row) {
       [...form.elements].forEach((field) => {
         if (!field.name || field.name === 'record_id') return;
         const cell = row.querySelector(`[data-field="${CSS.escape(field.name)}"]`);
         if (cell) field.value = cell.dataset.value || cell.textContent.trim();
       });
+    }
+    if (resourceKey === 'administrators') {
+      form.elements.role.value = row?.dataset.role || 'admin';
+      form.elements.permissions.value = row?.dataset.permissions || '';
+      form.elements.managed_by.value = row?.dataset.managedBy || '';
+      form.elements.status.value = row?.dataset.statusCode || '1';
+      form.elements.password.required = !row;
+      form.elements.password_confirmation.required = !row;
+      form.dataset.editing = row ? 'true' : 'false';
+      form.dispatchEvent(new CustomEvent('administrator:form-opened', { detail: { row } }));
     }
     modal.hidden = false;
     document.body.classList.add('has-resource-modal');
@@ -174,7 +189,27 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(overlay);
     const [cancel, remove] = overlay.querySelectorAll('footer button');
     cancel.addEventListener('click', () => overlay.remove());
-    remove.addEventListener('click', () => {
+    remove.addEventListener('click', async () => {
+      const persistedTargets = targets.filter((row) => row.dataset.deleteUrl);
+      if (persistedTargets.length) {
+        remove.disabled = true;
+        const csrfToken = form?.querySelector('[name="csrfmiddlewaretoken"]')?.value || '';
+        for (const row of persistedTargets) {
+          const response = await fetch(row.dataset.deleteUrl, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            remove.disabled = false;
+            window.alert(result.message || 'Không thể xóa quản trị viên.');
+            return;
+          }
+        }
+        window.location.reload();
+        return;
+      }
       targets.forEach((row) => row.remove());
       overlay.remove();
       updateStatusCounts();
@@ -217,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', () => document.querySelectorAll('.users-row-actions').forEach((menu) => { menu.hidden = true; }));
 
   form?.addEventListener('submit', (event) => {
+    if (serverSubmit) return;
     event.preventDefault();
     const data = new FormData(form);
     let row = data.get('record_id') ? body.querySelector(`tr[data-record-id="${CSS.escape(data.get('record_id'))}"]`) : null;

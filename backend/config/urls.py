@@ -21,6 +21,10 @@ from django.urls import include, path
 
 from templates.views import (
     account_settings,
+    administrator_avatar,
+    administrator_create,
+    administrator_delete,
+    administrator_edit,
     appearance_settings,
     chats,
     dashboard,
@@ -48,6 +52,10 @@ urlpatterns = [
     path('admin/chats/', chats, name='chats'),
     path('admin/students/', students, name='students'),
     path('admin/users/', users, name='users'),
+    path('admin/management/administrators/create/', administrator_create, name='administrator-create'),
+    path('admin/management/administrators/<slug:slug>/edit/', administrator_edit, name='administrator-edit'),
+    path('admin/management/administrators/<slug:slug>/delete/', administrator_delete, name='administrator-delete'),
+    path('admin/management/administrators/<slug:slug>/avatar/', administrator_avatar, name='administrator-avatar'),
     path('admin/management/<slug:module>/', management_page, name='management-page'),
     path('admin/profile/', profile, name='profile'),
     path('admin/setting/account/', account_settings, name='account-settings'),

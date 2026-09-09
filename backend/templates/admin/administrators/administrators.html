@@ -1,5 +1,23 @@
 {% extends "admin/management/base.html" %}
+{% load static %}
+
+{% block extra_styles %}
+  <link rel="stylesheet" href="{% static 'admin_ui/css/profile-upload.css' %}?v=1" />
+  <link rel="stylesheet" href="{% static 'admin_ui/css/administrators.css' %}?v=1" />
+{% endblock %}
+
 {% block resource_content %}
+  {% include "administrators/administrators-messages.html" %}
   {% include "administrators/administrators-heading.html" %}
   {% include "administrators/administrators-list.html" %}
+{% endblock %}
+
+{% block resource_modal %}
+  {% if page.can_manage %}
+    {% include "administrators/administrators-form-modal.html" %}
+  {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'admin_ui/js/administrators.js' %}?v=1"></script>
 {% endblock %}

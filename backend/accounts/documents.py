@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 import bcrypt
 from bson.int64 import Int64
 from django.contrib.auth.hashers import check_password as check_legacy_password
+from django.utils.text import slugify
 from mongoengine import (
+    BinaryField,
     CASCADE,
     NULLIFY,
     DateTimeField,
@@ -82,8 +84,12 @@ class Admin(Document):
         value_decorator=Int64,
     )
     name = StringField(required=True, max_length=150)
+    slug = StringField(required=True, unique=True, max_length=180)
     email = EmailField(required=True, unique=True, max_length=254)
     password_hash = StringField(required=True, db_field='password')
+    profile_image = BinaryField(max_bytes=2 * 1024 * 1024, null=True, default=None)
+    profile_image_name = StringField(max_length=255, default='')
+    profile_image_content_type = StringField(max_length=100, default='')
     bio = StringField(default='', max_length=1000)
     urls = ListField(URLField(max_length=500), default=list)
     role = StringField(
@@ -117,9 +123,24 @@ class Admin(Document):
         'indexes': ['role', 'status', 'managed_by', '-created_at'],
     }
 
+    def _make_unique_slug(self):
+        base = slugify(self.name) or slugify(self.email.split('@', 1)[0]) or 'admin'
+        candidate = base
+        suffix = 2
+        while True:
+            query = self.__class__.objects(slug=candidate)
+            if self.pk is not None:
+                query = query.filter(id__ne=self.pk)
+            if query.first() is None:
+                return candidate
+            candidate = f'{base}-{suffix}'
+            suffix += 1
+
     def clean(self):
         self.name = self.name.strip()
         self.email = self.email.strip().lower()
+        if not self.slug:
+            self.slug = self._make_unique_slug()
         self.bio = self.bio.strip()
         self.urls = list(dict.fromkeys(
             url.strip() for url in self.urls if url and url.strip()
@@ -166,6 +187,7 @@ class Admin(Document):
         return {
             'id': int(self.id) if self.id is not None else None,
             'name': self.name,
+            'slug': self.slug,
             'email': self.email,
             'bio': self.bio,
             'urls': self.urls,
