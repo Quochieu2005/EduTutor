@@ -279,7 +279,6 @@ def _administrator_page_config():
         permissions = 'Toàn quyền hệ thống' if admin.role == Admin.ROLE_SUPER_ADMIN else ', '.join(admin.permissions or [])
         manager = admin.managed_by.name if admin.managed_by else '—'
         rows.append((
-            str(admin.id),
             admin.name,
             admin.email,
             _admin_role_label(admin.role),
@@ -294,7 +293,6 @@ def _administrator_page_config():
         'singular': 'quản trị viên',
         'description': 'Danh sách tài khoản quản trị đang được lưu trong MongoDB.',
         'columns': [
-            ('admin_id', 'ID'),
             ('name', 'Họ và tên'),
             ('email', 'Email'),
             ('role', 'Vai trò'),
