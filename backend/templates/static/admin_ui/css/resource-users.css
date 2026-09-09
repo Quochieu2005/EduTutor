@@ -19,6 +19,14 @@
 .users-status--info { background: #e0f2fe; color: #0369a1; }
 .users-status--neutral { background: #e2e8f0; color: #475569; }
 
+.users-row-actions.resource-row-actions-portal {
+  position: fixed;
+  top: 0;
+  right: auto;
+  left: 0;
+  z-index: 1000;
+}
+
 .resource-form-modal .add-user-dialog textarea {
   min-height: 88px;
   resize: vertical;

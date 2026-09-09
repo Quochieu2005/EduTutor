@@ -132,17 +132,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const attachRowMenu = (row) => {
     const trigger = row.querySelector('.users-row-menu');
-    if (!trigger || row.querySelector('.users-row-actions')) return;
+    if (!trigger || trigger.dataset.rowMenuAttached === 'true') return;
+    trigger.dataset.rowMenuAttached = 'true';
     const menu = document.createElement('div');
-    menu.className = 'users-row-actions';
+    menu.className = 'users-row-actions resource-row-actions-portal';
     menu.hidden = true;
     menu.innerHTML = '<button type="button" data-resource-edit>Edit <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11.5 15H7a4 4 0 0 0-4 4v2"></path><path d="m14.4 17.6 4-4a2 2 0 0 1 3 3l-4 4-4 1z"></path><circle cx="10" cy="7" r="4"></circle></svg></button><hr><button type="button" class="is-delete" data-resource-delete>Delete <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 11v6M14 11v6M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>';
-    trigger.parentElement.style.position = 'relative';
-    trigger.parentElement.appendChild(menu);
+    document.body.appendChild(menu);
+
+    const positionMenu = () => {
+      const triggerRect = trigger.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      const gap = 6;
+      let top = triggerRect.bottom + gap;
+      let left = triggerRect.right - menuRect.width;
+      if (top + menuRect.height > window.innerHeight - 8) {
+        top = triggerRect.top - menuRect.height - gap;
+      }
+      left = Math.max(8, Math.min(left, window.innerWidth - menuRect.width - 8));
+      top = Math.max(8, top);
+      menu.style.left = `${Math.round(left)}px`;
+      menu.style.top = `${Math.round(top)}px`;
+    };
+
     trigger.addEventListener('click', (event) => {
       event.stopPropagation();
       document.querySelectorAll('.users-row-actions').forEach((item) => { if (item !== menu) item.hidden = true; });
-      menu.hidden = !menu.hidden;
+      const willOpen = menu.hidden;
+      menu.hidden = !willOpen;
+      if (willOpen) positionMenu();
+    });
+    menu.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (event.target.closest('[data-resource-edit]')) openModal(row);
+      if (event.target.closest('[data-resource-delete]')) confirmDelete([row]);
+      menu.hidden = true;
     });
   };
 
@@ -250,6 +274,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (event.target.closest('[data-resource-delete]')) confirmDelete([row]);
   });
   document.addEventListener('click', () => document.querySelectorAll('.users-row-actions').forEach((menu) => { menu.hidden = true; }));
+  window.addEventListener('resize', () => document.querySelectorAll('.resource-row-actions-portal').forEach((menu) => { menu.hidden = true; }));
+  window.addEventListener('scroll', () => document.querySelectorAll('.resource-row-actions-portal').forEach((menu) => { menu.hidden = true; }), { passive: true });
+  document.querySelector('.users-table-scroll')?.addEventListener('scroll', () => document.querySelectorAll('.resource-row-actions-portal').forEach((menu) => { menu.hidden = true; }), { passive: true });
 
   form?.addEventListener('submit', (event) => {
     if (serverSubmit) return;
