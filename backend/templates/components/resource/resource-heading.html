@@ -8,9 +8,11 @@
       <span>Xuất CSV</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"></path><path d="M4 17v3h16v-3"></path></svg>
     </button>
-    <button class="users-button users-button--primary" type="button" data-resource-add>
-      <span>{{ page.action_label }}</span>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-    </button>
+    {% if page.can_manage %}
+      <button class="users-button users-button--primary" type="button" data-resource-add>
+        <span>{{ page.action_label }}</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      </button>
+    {% endif %}
   </div>
 </section>

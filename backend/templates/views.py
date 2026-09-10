@@ -1,11 +1,14 @@
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from mongoengine import NotUniqueError, ValidationError
 
 from accounts.documents import Admin, PasswordResetOTP
@@ -271,10 +274,11 @@ def _administrator_page_config():
     )
     rows = []
     for admin in admins:
+        if not admin.slug:
+            admin.save()
         permissions = 'Toàn quyền hệ thống' if admin.role == Admin.ROLE_SUPER_ADMIN else ', '.join(admin.permissions or [])
         manager = admin.managed_by.name if admin.managed_by else '—'
         rows.append((
-            str(admin.id),
             admin.name,
             admin.email,
             _admin_role_label(admin.role),
@@ -289,7 +293,6 @@ def _administrator_page_config():
         'singular': 'quản trị viên',
         'description': 'Danh sách tài khoản quản trị đang được lưu trong MongoDB.',
         'columns': [
-            ('admin_id', 'ID'),
             ('name', 'Họ và tên'),
             ('email', 'Email'),
             ('role', 'Vai trò'),
@@ -299,6 +302,7 @@ def _administrator_page_config():
         ],
         'statuses': ['Active', 'Inactive'],
         'rows': rows,
+        'records': admins,
     }
 
 
@@ -359,7 +363,20 @@ def management_page(request, module):
     if config is None:
         return page_not_found(request)
 
-    page = {**config, 'key': module, 'action_label': f"Thêm {config['singular']}"}
+    page = {
+        **config,
+        'key': module,
+        'action_label': f"Thêm {config['singular']}",
+        'can_manage': True,
+    }
+    if module == 'administrators':
+        page['can_manage'] = request.admin_account.role == Admin.ROLE_SUPER_ADMIN
+        page['create_url'] = reverse('administrator-create')
+        page['manager_options'] = [
+            {'slug': admin.slug, 'name': admin.name}
+            for admin in Admin.objects(role=Admin.ROLE_SUPER_ADMIN)
+            if admin.slug
+        ]
     page['columns'] = [{'key': key, 'label': label} for key, label in config['columns']]
     page['rows'] = []
     for index, values in enumerate(config['rows'], start=1):
@@ -370,7 +387,21 @@ def management_page(request, module):
                 'value': value,
                 'tone': _management_status_tone(value) if field == 'status' else '',
             })
-        page['rows'].append({'id': f'{module}-{index}', 'cells': cells})
+        row = {'id': f'{module}-{index}', 'cells': cells}
+        if module == 'administrators':
+            admin = config['records'][index - 1]
+            row.update({
+                'id': admin.slug,
+                'slug': admin.slug,
+                'edit_url': reverse('administrator-edit', kwargs={'slug': admin.slug}),
+                'delete_url': reverse('administrator-delete', kwargs={'slug': admin.slug}),
+                'avatar_url': reverse('administrator-avatar', kwargs={'slug': admin.slug}) if admin.profile_image else '',
+                'role': admin.role,
+                'permissions': ', '.join(admin.permissions or []),
+                'managed_by_slug': admin.managed_by.slug if admin.managed_by else '',
+                'status_code': str(admin.status),
+            })
+        page['rows'].append(row)
 
     page['form_fields'] = []
     for field, label in config['columns']:
@@ -385,6 +416,228 @@ def management_page(request, module):
 
     template_key = module.replace('-', '_')
     return render(request, f'admin/{template_key}/{template_key}.html', {'page': page})
+
+
+ADMIN_IMAGE_TYPES = {
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+}
+ADMIN_IMAGE_MAX_SIZE = 2 * 1024 * 1024
+
+
+def _admin_management_redirect(request, message, *, error=False):
+    (messages.error if error else messages.success)(request, message)
+    return redirect('management-page', module='administrators')
+
+
+def _require_super_admin(request):
+    return (
+        request.admin_account is not None
+        and request.admin_account.role == Admin.ROLE_SUPER_ADMIN
+    )
+
+
+def _admin_form_values(request):
+    name = request.POST.get('name', '').strip()
+    email = request.POST.get('email', '').strip().lower()
+    role = request.POST.get('role', Admin.ROLE_ADMIN)
+    status_raw = request.POST.get('status', str(Admin.STATUS_ACTIVE))
+    permissions = list(dict.fromkeys(
+        item.strip()
+        for item in re.split(r'[,\n]+', request.POST.get('permissions', ''))
+        if item.strip()
+    ))
+
+    if not name or not email:
+        raise ValueError('Họ tên và email không được để trống.')
+    if role not in Admin.ROLE_CHOICES:
+        raise ValueError('Vai trò quản trị không hợp lệ.')
+    try:
+        status = int(status_raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('Trạng thái quản trị không hợp lệ.') from exc
+    if status not in Admin.STATUS_CHOICES:
+        raise ValueError('Trạng thái quản trị không hợp lệ.')
+
+    manager = None
+    if role == Admin.ROLE_ADMIN:
+        manager_slug = request.POST.get('managed_by', '').strip()
+        manager = (
+            Admin.objects(slug=manager_slug, role=Admin.ROLE_SUPER_ADMIN).first()
+            if manager_slug
+            else request.admin_account
+        )
+        if manager is None:
+            raise ValueError('Admin thường phải được quản lý bởi một Super Admin.')
+
+    upload = request.FILES.get('profile_image')
+    image = None
+    if upload:
+        if upload.content_type not in ADMIN_IMAGE_TYPES:
+            raise ValueError('Ảnh đại diện phải là JPEG, PNG, WEBP hoặc GIF.')
+        if upload.size > ADMIN_IMAGE_MAX_SIZE:
+            raise ValueError('Ảnh đại diện không được vượt quá 2 MB.')
+        image = {
+            'data': upload.read(),
+            'name': upload.name[:255],
+            'content_type': upload.content_type,
+        }
+
+    return {
+        'name': name,
+        'email': email,
+        'role': role,
+        'status': status,
+        'permissions': None if role == Admin.ROLE_SUPER_ADMIN else permissions,
+        'managed_by': manager,
+        'image': image,
+    }
+
+
+def administrator_create(request):
+    if request.method != 'POST':
+        return redirect('management-page', module='administrators')
+    if not _require_super_admin(request):
+        return _admin_management_redirect(request, 'Bạn không có quyền thêm quản trị viên.', error=True)
+
+    password = request.POST.get('password', '')
+    password_confirmation = request.POST.get('password_confirmation', '')
+    try:
+        values = _admin_form_values(request)
+        if Admin.objects(email=values['email']).first():
+            raise ValueError('Email này đã được sử dụng bởi quản trị viên khác.')
+        if len(password) < 8:
+            raise ValueError('Mật khẩu phải có ít nhất 8 ký tự.')
+        if password != password_confirmation:
+            raise ValueError('Mật khẩu xác nhận không khớp.')
+
+        admin = Admin(
+            name=values['name'],
+            email=values['email'],
+            role=values['role'],
+            permissions=values['permissions'],
+            managed_by=values['managed_by'],
+            status=values['status'],
+        )
+        admin.set_password(password)
+        if values['image']:
+            admin.profile_image = values['image']['data']
+            admin.profile_image_name = values['image']['name']
+            admin.profile_image_content_type = values['image']['content_type']
+        admin.save(force_insert=True)
+    except (ValueError, ValidationError, NotUniqueError) as exc:
+        message = str(exc) if isinstance(exc, ValueError) else 'Thông tin quản trị viên không hợp lệ hoặc bị trùng.'
+        return _admin_management_redirect(request, message, error=True)
+
+    return _admin_management_redirect(request, f'Đã thêm quản trị viên {admin.name}.')
+
+
+def administrator_edit(request, slug):
+    if request.method != 'POST':
+        return redirect('management-page', module='administrators')
+    if not _require_super_admin(request):
+        return _admin_management_redirect(request, 'Bạn không có quyền sửa quản trị viên.', error=True)
+
+    admin = Admin.objects(slug=slug).first()
+    if admin is None:
+        return _admin_management_redirect(request, 'Không tìm thấy quản trị viên.', error=True)
+
+    try:
+        values = _admin_form_values(request)
+        duplicate = Admin.objects(email=values['email'], id__ne=admin.id).first()
+        if duplicate:
+            raise ValueError('Email này đã được sử dụng bởi quản trị viên khác.')
+        if admin.id == request.admin_account.id and (
+            values['role'] != Admin.ROLE_SUPER_ADMIN
+            or values['status'] != Admin.STATUS_ACTIVE
+        ):
+            raise ValueError('Bạn không thể hạ vai trò hoặc vô hiệu hóa chính tài khoản đang đăng nhập.')
+        if (
+            admin.role == Admin.ROLE_SUPER_ADMIN
+            and admin.status == Admin.STATUS_ACTIVE
+            and (values['role'] != Admin.ROLE_SUPER_ADMIN or values['status'] != Admin.STATUS_ACTIVE)
+            and Admin.objects(role=Admin.ROLE_SUPER_ADMIN, status=Admin.STATUS_ACTIVE).count() <= 1
+        ):
+            raise ValueError('Hệ thống phải còn ít nhất một Super Admin đang hoạt động.')
+
+        password = request.POST.get('password', '')
+        password_confirmation = request.POST.get('password_confirmation', '')
+        if password:
+            if len(password) < 8:
+                raise ValueError('Mật khẩu mới phải có ít nhất 8 ký tự.')
+            if password != password_confirmation:
+                raise ValueError('Mật khẩu xác nhận không khớp.')
+
+        access_changed = (
+            admin.role != values['role']
+            or admin.status != values['status']
+            or admin.permissions != values['permissions']
+        )
+        admin.name = values['name']
+        admin.email = values['email']
+        admin.role = values['role']
+        admin.status = values['status']
+        admin.permissions = values['permissions']
+        admin.managed_by = values['managed_by']
+        if request.POST.get('remove_profile_image') == '1':
+            admin.profile_image = None
+            admin.profile_image_name = ''
+            admin.profile_image_content_type = ''
+        if values['image']:
+            admin.profile_image = values['image']['data']
+            admin.profile_image_name = values['image']['name']
+            admin.profile_image_content_type = values['image']['content_type']
+        if password:
+            admin.set_password(password)
+        if password or access_changed:
+            admin.session_version += 1
+        admin.save()
+    except (ValueError, ValidationError, NotUniqueError) as exc:
+        message = str(exc) if isinstance(exc, ValueError) else 'Thông tin quản trị viên không hợp lệ hoặc bị trùng.'
+        return _admin_management_redirect(request, message, error=True)
+
+    return _admin_management_redirect(request, f'Đã cập nhật quản trị viên {admin.name}.')
+
+
+def administrator_delete(request, slug):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
+    if not _require_super_admin(request):
+        return JsonResponse({'ok': False, 'message': 'Bạn không có quyền xóa quản trị viên.'}, status=403)
+
+    admin = Admin.objects(slug=slug).first()
+    if admin is None:
+        return JsonResponse({'ok': False, 'message': 'Không tìm thấy quản trị viên.'}, status=404)
+    if admin.id == request.admin_account.id:
+        return JsonResponse({'ok': False, 'message': 'Bạn không thể xóa chính tài khoản đang đăng nhập.'}, status=400)
+    if (
+        admin.role == Admin.ROLE_SUPER_ADMIN
+        and admin.status == Admin.STATUS_ACTIVE
+        and Admin.objects(role=Admin.ROLE_SUPER_ADMIN, status=Admin.STATUS_ACTIVE).count() <= 1
+    ):
+        return JsonResponse({'ok': False, 'message': 'Hệ thống phải còn ít nhất một Super Admin đang hoạt động.'}, status=400)
+
+    name = admin.name
+    admin.delete()
+    messages.success(request, f'Đã xóa quản trị viên {name}.')
+    return JsonResponse({'ok': True})
+
+
+def administrator_avatar(request, slug):
+    admin = Admin.objects(slug=slug).only(
+        'profile_image',
+        'profile_image_content_type',
+    ).first()
+    if admin is None or not admin.profile_image:
+        return HttpResponse(status=404)
+    response = HttpResponse(
+        bytes(admin.profile_image),
+        content_type=admin.profile_image_content_type or 'application/octet-stream',
+    )
+    response['Cache-Control'] = 'private, max-age=3600'
+    return response
 
 
 def dashboard(request):

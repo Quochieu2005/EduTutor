@@ -1,0 +1,118 @@
+.administrator-message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 11px 14px;
+  border: 1px solid #86efac;
+  border-radius: 9px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 14px;
+}
+
+.administrator-message--error {
+  border-color: #fca5a5;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.administrator-message button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.administrator-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.administrator-name-cell img,
+.administrator-name-cell i {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  object-fit: cover;
+  color: var(--foreground);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.administrators-modal .add-user-dialog {
+  width: min(620px, calc(100% - 32px));
+}
+
+.administrator-form-label {
+  font-weight: 500;
+}
+
+.administrator-upload-wrap {
+  min-width: 0;
+}
+
+.administrator-remove-image {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+  margin-top: 7px;
+  color: var(--muted-foreground);
+  font-size: 12px !important;
+}
+
+.administrator-remove-image input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.administrator-password-help {
+  grid-column: 2;
+  margin: -4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.administrators-modal .password-field {
+  min-width: 0;
+}
+
+.administrators-modal .password-field input {
+  width: 100%;
+}
+
+.administrators-modal select:disabled,
+.administrators-modal input:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+html[data-theme="dark"] .administrator-message {
+  border-color: rgb(34 197 94 / 45%);
+  background: rgb(22 101 52 / 28%);
+  color: #86efac;
+}
+
+html[data-theme="dark"] .administrator-message--error {
+  border-color: rgb(239 68 68 / 48%);
+  background: rgb(127 29 29 / 30%);
+  color: #fca5a5;
+}
+
+@media (max-width: 600px) {
+  .administrator-form-label,
+  .administrator-upload-wrap,
+  .administrator-password-help {
+    grid-column: 1;
+  }
+}

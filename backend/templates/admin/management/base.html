@@ -17,7 +17,8 @@
     <link rel="stylesheet" href="{% static 'admin_ui/css/delete-user-compact.css' %}?v=3" />
     <link rel="stylesheet" href="{% static 'admin_ui/css/pagination-layout.css' %}?v=1" />
     <link rel="stylesheet" href="{% static 'admin_ui/css/pagination-compact.css' %}?v=1" />
-    <link rel="stylesheet" href="{% static 'admin_ui/css/resource-users.css' %}?v=1" />
+    <link rel="stylesheet" href="{% static 'admin_ui/css/resource-users.css' %}?v=3" />
+    {% block extra_styles %}{% endblock %}
   </head>
   <body data-resource-key="{{ page.key }}" data-entity-label="{{ page.singular }}" data-entity-plural="{{ page.title|lower }}">
     <div class="admin-shell">
@@ -30,11 +31,14 @@
       </div>
     </div>
 
-    {% include "resource/resource-form-modal.html" %}
+    {% block resource_modal %}
+      {% include "resource/resource-form-modal.html" %}
+    {% endblock %}
 
     <script src="{% static 'admin_ui/js/collapsible.js' %}?v=3"></script>
     <script src="{% static 'admin_ui/js/dashboard.js' %}?v=14"></script>
     <script src="{% static 'admin_ui/js/user.js' %}?v=4"></script>
-    <script src="{% static 'admin_ui/js/resource-users.js' %}?v=4"></script>
+    <script src="{% static 'admin_ui/js/resource-users.js' %}?v=6"></script>
+    {% block extra_scripts %}{% endblock %}
   </body>
 </html>
