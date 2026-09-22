@@ -12,6 +12,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.text import slugify
 from mongoengine import NotUniqueError, ValidationError
+from mongoengine.connection import ConnectionFailure
 from pymongo.errors import PyMongoError
 
 from accounts.documents import Admin, AuthToken, Student, User
@@ -2270,13 +2271,13 @@ def sign_in(request):
             # successful login after the credential record was updated.
             try:
                 record_admin_activity(request, 'login', admin, actor=admin)
-            except PyMongoError:
+            except (ConnectionFailure, PyMongoError):
                 logger.exception('Could not record admin login activity: admin_id=%s', admin.id)
             next_url = request.POST.get('next', '')
             if next_url.startswith('/admin/'):
                 return redirect(next_url)
             return redirect('dashboard-slash')
-    except PyMongoError:
+    except (ConnectionFailure, PyMongoError):
         clear_admin_session(request.session)
         logger.exception('MongoDB is unavailable during admin sign-in.')
         return render(request, 'auth/sign-in.html', {
