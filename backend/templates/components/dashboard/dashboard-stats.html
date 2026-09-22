@@ -1,45 +1,45 @@
 <section class="dashboard-tab-panel dashboard-stats" role="tabpanel" data-panel="overview" aria-label="Dashboard statistics">
     <article class="dashboard-stat-card">
         <div class="dashboard-stat-card__header">
-            <h2>Total Revenue</h2>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            <h2>Doanh thu đã thanh toán</h2>
+            <span aria-label="Đơn vị tiền tệ: Việt Nam đồng">VNĐ</span>
         </div>
         <div class="dashboard-stat-card__content">
-            <strong>$45,231.89</strong>
-            <p>+20.1% from last month</p>
+            <strong>{{ dashboard.stats.3.value }}</strong>
+            <p>{{ dashboard.stats.3.detail }}</p>
         </div>
     </article>
 
     <article class="dashboard-stat-card">
         <div class="dashboard-stat-card__header">
-            <h2>Subscriptions</h2>
+            <h2>Học viên đang hoạt động</h2>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
         </div>
         <div class="dashboard-stat-card__content">
-            <strong>+2350</strong>
-            <p>+180.1% from last month</p>
+            <strong>{{ dashboard.stats.0.value }}</strong>
+            <p>{{ dashboard.stats.0.detail }}</p>
         </div>
     </article>
 
     <article class="dashboard-stat-card">
         <div class="dashboard-stat-card__header">
-            <h2>Sales</h2>
+            <h2>Gia sư đã duyệt</h2>
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2"></rect><path d="M2 10h20"></path></svg>
         </div>
         <div class="dashboard-stat-card__content">
-            <strong>+12,234</strong>
-            <p>+19% from last month</p>
+            <strong>{{ dashboard.stats.1.value }}</strong>
+            <p>{{ dashboard.stats.1.detail }}</p>
         </div>
     </article>
 
     <article class="dashboard-stat-card">
         <div class="dashboard-stat-card__header">
-            <h2>Active Now</h2>
+            <h2>Lớp học 7 ngày tới</h2>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
         </div>
         <div class="dashboard-stat-card__content">
-            <strong>+573</strong>
-            <p>+201 since last hour</p>
+            <strong>{{ dashboard.stats.2.value }}</strong>
+            <p>{{ dashboard.stats.2.detail }}</p>
         </div>
     </article>
 </section>

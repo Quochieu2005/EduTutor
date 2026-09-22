@@ -1,3 +1,5 @@
+{% load static %}
+{% include "layouts/global-notifications.html" %}
 <header class="admin-header" data-header>
     <div class="admin-header__inner">
 
@@ -21,7 +23,7 @@
 
         <button class="admin-search" id="search-button" type="button" aria-label="Mo tim kiem" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
-            <span>Search</span><kbd>Ctrl K</kbd>
+            <span>Tìm kiếm</span><kbd>Ctrl K</kbd>
         </button>
 
         <div class="admin-header__actions">
@@ -31,7 +33,7 @@
             </button>
             {% include "layouts/notification-menu.html" %}
             <details class="admin-user-menu">
-                <summary class="admin-avatar" id="user-menu-button" aria-label="Mo tai khoan">{{ request.admin_account.initials }}</summary>
+                <summary class="admin-avatar" id="user-menu-button" aria-label="Mo tai khoan">{% if request.admin_account.profile_image_url %}<img src="{{ request.admin_account.profile_image_url }}" alt="" />{% else %}{{ request.admin_account.initials }}{% endif %}</summary>
                 <div class="admin-user-menu__content" role="menu">
                     <div class="admin-user-menu__identity"><strong>{{ request.admin_account.name }}</strong><small>{{ request.admin_account.email }}</small></div>
                     <div class="admin-user-menu__separator"></div>
@@ -53,18 +55,18 @@
         <div class="command-dialog" role="dialog" aria-modal="true" aria-label="Tim kiem dashboard">
             <div class="command-input-wrap">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
-                <input id="command-input" type="search" placeholder="Type a command or search..." autocomplete="off" aria-label="Type a command or search">
+                <input id="command-input" type="search" placeholder="Nhập để tìm kiếm..." autocomplete="off" aria-label="Tìm kiếm">
                 <kbd>ESC</kbd>
             </div>
 
             <div class="command-list" id="command-list">
                 <section class="command-group" data-group>
-                    <h2>General</h2>
-                    <button class="command-item" type="button" data-command="Dashboard"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Dashboard</button>
+                    <h2>Điều hướng</h2>
+                    <button class="command-item" type="button" data-command="Bảng điều khiển" data-route="{% url 'dashboard-slash' %}" data-search="dashboard tong quan"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Bảng điều khiển</button>
                     <button class="command-item" type="button" data-command="Tasks"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Tasks</button>
                     <button class="command-item" type="button" data-command="Apps"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Apps</button>
-                    <button class="command-item" type="button" data-command="Chats"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Chats</button>
-                    <button class="command-item" type="button" data-command="Users"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Users</button>
+                    <button class="command-item" type="button" data-command="Tin nhắn" data-route="{% url 'chats' %}" data-search="chat"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Tin nhắn</button>
+                    <button class="command-item" type="button" data-command="Người dùng" data-route="{% url 'users' %}" data-search="users user"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Người dùng</button>
                 </section>
 
                 <section class="command-group" data-group>
@@ -76,20 +78,21 @@
                 </section>
 
                 <section class="command-group" data-group>
-                    <h2>Other</h2>
-                    <button class="command-item" type="button" data-command="Profile" data-route="{% url 'profile' %}"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Profile</button>
-                    <button class="command-item" type="button" data-command="Account"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Account</button>
+                    <h2>Cài đặt</h2>
+                    <button class="command-item" type="button" data-command="Hồ sơ" data-route="{% url 'profile' %}" data-search="profile"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Hồ sơ</button>
+                    <button class="command-item" type="button" data-command="Tài khoản" data-route="{% url 'account-settings' %}" data-search="account"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Tài khoản</button>
                     <button class="command-item" type="button" data-command="Notifications"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Notifications</button>
                     <button class="command-item" type="button" data-command="Help Center"><span class="command-item__arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>Help Center</button>
                 </section>
 
                 <section class="command-group" data-group>
-                    <h2>Theme</h2>
-                    <button class="command-item" type="button" data-theme-command="light"><span class="command-item__icon">&#9728;</span>Light</button>
-                    <button class="command-item" type="button" data-theme-command="dark"><span class="command-item__icon">&#9790;</span>Dark</button>
-                    <button class="command-item" type="button" data-theme-command="system"><span class="command-item__icon">&#9638;</span>System</button>
+                    <h2>Giao diện</h2>
+                    <button class="command-item" type="button" data-theme-command="light"><span class="command-item__icon">&#9728;</span>Sáng</button>
+                    <button class="command-item" type="button" data-theme-command="dark"><span class="command-item__icon">&#9790;</span>Tối</button>
+                    <button class="command-item" type="button" data-theme-command="system"><span class="command-item__icon">&#9638;</span>Theo hệ thống</button>
                 </section>
             </div>
         </div>
     </div>
 </header>
+<script src="{% static 'admin_ui/js/notification-toast.js' %}?v=2"></script>

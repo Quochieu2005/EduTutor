@@ -1,0 +1,10 @@
+<form method="get" class="users-toolbar__filters" style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 0;" aria-label="Lọc nhật ký theo ngày">
+  {% if filters.q %}<input type="hidden" name="q" value="{{ filters.q }}" />{% endif %}
+  {% if filters.action %}<input type="hidden" name="action" value="{{ filters.action }}" />{% endif %}
+  <label for="activity-start">Từ ngày</label>
+  <label class="users-search"><input id="activity-start" type="date" name="start" value="{{ filters.start }}" /></label>
+  <label for="activity-end">Đến ngày</label>
+  <label class="users-search"><input id="activity-end" type="date" name="end" value="{{ filters.end }}" /></label>
+  <button type="submit" class="users-button users-button--primary">Lọc</button>
+  <a href="{% url 'management-page' module='activity-logs' %}" class="users-button users-button--secondary">Đặt lại</a>
+</form>

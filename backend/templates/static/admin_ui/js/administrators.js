@@ -82,4 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[data-administrator-message-close]').forEach((button) => {
     button.addEventListener('click', () => button.closest('[data-administrator-message]')?.remove());
   });
+  document.querySelectorAll('[data-administrator-message]').forEach((message) => {
+    window.setTimeout(() => message.remove(), 5000);
+  });
 });

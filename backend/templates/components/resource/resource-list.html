@@ -1,10 +1,11 @@
-<section class="users-list resource-list" aria-label="{{ page.title }}">
-  <div class="users-toolbar">
-    <div class="users-toolbar__filters">
+<section class="users-list resource-list resource-list--{{ page.key }}" aria-label="{{ page.title }}">
+  <div class="users-toolbar"{% if page.key == 'activity-logs' %} style="margin-top: 16px; flex-wrap: wrap; gap: 12px;"{% endif %}>
+    <div class="users-toolbar__filters"{% if page.key == 'activity-logs' %} style="flex-wrap: wrap; gap: 12px;"{% endif %}>
       <label class="users-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
         <input type="search" placeholder="Tìm kiếm {{ page.singular|lower }}..." aria-label="Tìm kiếm" data-resource-search />
       </label>
+      {% if page.key == 'activity-logs' %}{% include "activity_logs/activity_logs-date-filter.html" %}{% endif %}
       {% if page.statuses %}
         <div class="users-toolbar__filter-options">
           <button class="users-filter-button" type="button" data-status-filter aria-expanded="false" aria-controls="status-filter-menu">
@@ -38,13 +39,21 @@
   <div class="users-table-wrap">
     <div class="users-table-scroll">
       <table class="users-table resource-table">
+        {% if page.key == 'tutors' %}
+          <colgroup class="tutors-table-columns">
+            <col class="tutors-table-columns__select" /><col class="tutors-table-columns__name" />
+            <col class="tutors-table-columns__email" /><col class="tutors-table-columns__subject" />
+            <col class="tutors-table-columns__area" /><col class="tutors-table-columns__mode" />
+            <col class="tutors-table-columns__status" /><col class="tutors-table-columns__actions" />
+          </colgroup>
+        {% endif %}
         <thead><tr><th><input type="checkbox" aria-label="Chọn tất cả" data-resource-select-all /></th>{% for column in page.columns %}<th data-field="{{ column.key }}" data-resource-sort>{{ column.label }}</th>{% endfor %}{% if page.can_manage %}<th>Actions</th>{% endif %}</tr></thead>
         <tbody data-resource-body>
           {% for row in page.rows %}
-            <tr data-record-id="{{ row.id }}"{% if row.slug %} data-record-slug="{{ row.slug }}" data-edit-url="{{ row.edit_url }}" data-delete-url="{{ row.delete_url }}" data-role="{{ row.role }}" data-permissions="{{ row.permissions }}" data-managed-by="{{ row.managed_by_slug }}" data-status-code="{{ row.status_code }}" data-avatar-url="{{ row.avatar_url }}"{% endif %}>
+            <tr data-record-id="{{ row.id }}"{% if row.slug %} data-record-slug="{{ row.slug }}" data-edit-url="{{ row.edit_url }}" data-delete-url="{{ row.delete_url }}" data-form-values="{{ row.form_values|escape }}" data-status-toggle-url="{{ row.status_toggle_url }}" data-role="{{ row.role }}" data-permissions="{{ row.permissions }}" data-managed-by="{{ row.managed_by_slug }}" data-status-code="{{ row.status_code }}" data-avatar-url="{{ row.avatar_url }}" data-is-current="{{ row.is_current|yesno:'true,false' }}" data-can-edit="{{ row.can_edit|yesno:'true,false' }}" data-can-delete="{{ row.can_delete|yesno:'true,false' }}"{% endif %}>
               <td><input type="checkbox" aria-label="Chọn {{ page.singular|lower }}" data-resource-select /></td>
-              {% for cell in row.cells %}<td data-field="{{ cell.field }}" data-value="{{ cell.value }}">{% if cell.tone %}<span class="users-status users-status--{{ cell.tone }}">{{ cell.value }}</span>{% elif page.key == 'administrators' and cell.field == 'name' %}<span class="administrator-name-cell">{% if row.avatar_url %}<img src="{{ row.avatar_url }}" alt="" />{% else %}<i>{{ cell.value|slice:":1"|upper }}</i>{% endif %}<span>{{ cell.value }}</span></span>{% else %}{{ cell.value }}{% endif %}</td>{% endfor %}
-              {% if page.can_manage %}<td><button class="users-row-menu" type="button" aria-label="Thao tác">&hellip;</button></td>{% endif %}
+              {% for cell in row.cells %}<td data-field="{{ cell.field }}" data-value="{{ cell.value }}" title="{{ cell.value }}">{% if page.key == 'slides' and cell.field == 'image' %}<img src="{{ row.image_url }}" alt="{{ row.cells.1.value }}" class="resource-banner-thumbnail" />{% elif page.key == 'slides' and cell.field == 'status' %}<button type="button" class="users-status users-status--{{ cell.tone }} banner-status-toggle" data-banner-status-toggle aria-label="Đổi trạng thái {{ cell.value }}">{{ cell.value }}</button>{% elif page.key == 'tutor-jobs' and cell.field == 'status' %}<button type="button" class="users-status users-status--{{ cell.tone }} tutor-job-status-toggle" data-tutor-job-status-toggle aria-label="Đổi trạng thái {{ cell.value }}" title="Nhấn để mở hoặc đóng tin tuyển dụng">{{ cell.value }}</button>{% elif page.key == 'blog' and cell.field == 'status' and page.tab == 'posts' %}<button type="button" class="users-status users-status--{{ cell.tone }} blog-status-toggle" data-blog-status-toggle aria-label="Đổi trạng thái {{ cell.value }}" title="Nhấn để đổi trạng thái">{{ cell.value }}</button>{% elif page.key == 'blog' and cell.field == 'status' and page.tab == 'categories' %}<button type="button" class="users-status users-status--{{ cell.tone }} blog-category-status-toggle" data-blog-category-status-toggle aria-label="Đổi trạng thái {{ cell.value }}" title="Nhấn để bật hoặc tắt">{{ cell.value }}</button>{% elif page.key == 'administrators' and cell.field == 'status' and page.can_toggle_status and not row.is_current %}<form method="post" action="{{ row.status_toggle_url }}" class="administrator-status-form">{% csrf_token %}<button type="submit" class="users-status users-status--{{ cell.tone }} administrator-status-toggle" aria-label="Đổi trạng thái {{ cell.value }}">{{ cell.value }}</button></form>{% elif page.key == 'contacts' and cell.field == 'status' %}{% include "contacts/contact-status.html" %}{% elif cell.tone %}<span class="users-status users-status--{{ cell.tone }}">{{ cell.value }}</span>{% elif page.key == 'administrators' and cell.field == 'name' %}<span class="administrator-name-cell">{% if row.avatar_url %}<img src="{{ row.avatar_url }}" alt="" />{% else %}<i>{{ cell.value|slice:":1"|upper }}</i>{% endif %}<span>{{ cell.value }}</span></span>{% elif page.key == 'tutors' and cell.field == 'name' %}<span class="tutor-name-cell">{% if row.avatar_url %}<img src="{{ row.avatar_url }}" alt="" />{% else %}<i>{{ cell.value|slice:":1"|upper }}</i>{% endif %}<span>{{ cell.value }}</span></span>{% else %}{{ cell.value }}{% endif %}</td>{% endfor %}
+              {% if page.can_manage %}<td>{% if page.key != 'administrators' or row.can_edit or row.can_delete %}<button class="users-row-menu" type="button" aria-label="Thao tác">&hellip;</button>{% else %}&mdash;{% endif %}</td>{% endif %}
             </tr>
           {% endfor %}
         </tbody>
@@ -59,6 +68,6 @@
   </footer>
 
   <div class="users-bulk-actions" role="toolbar" aria-label="Bulk actions" data-resource-bulk hidden>
-    <button type="button" data-resource-clear aria-label="Clear selection">&times;</button><i></i><span><b data-resource-selected-count>0</b> mục đã chọn</span>{% if page.can_manage %}<i></i><button class="users-bulk-actions__delete" type="button" data-resource-delete-selected aria-label="Delete selected">&#9003;</button>{% endif %}
+    <button type="button" data-resource-clear aria-label="Clear selection">&times;</button><i></i><span><b data-resource-selected-count>0</b> mục đã chọn</span>{% if page.key != 'activity-logs' and page.key != 'contacts' %}{% if page.key != 'administrators' or page.can_delete %}<i></i><button class="users-bulk-actions__delete" type="button" data-resource-delete-selected aria-label="Delete selected">&#9003;</button>{% endif %}{% endif %}
   </div>
 </section>

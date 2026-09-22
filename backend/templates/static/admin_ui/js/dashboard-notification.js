@@ -22,5 +22,5 @@
         window.setTimeout(() => {
             notification.hidden = true;
         }, 200);
-    }, 8000);
+    }, 5000);
 })();

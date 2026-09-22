@@ -6,15 +6,24 @@ from pathlib import Path
 from mongoengine import connect
 
 try:
-    from dotenv import load_dotenv
+    from dotenv import dotenv_values, load_dotenv
 except ImportError:
     load_dotenv = None
+    dotenv_values = None
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 if load_dotenv:
     load_dotenv(BASE_DIR / '.env')
+
+# ``load_dotenv`` intentionally does not overwrite process variables.  A blank
+# variable injected by a shell or IDE must not hide the non-blank local setting.
+_env_file_values = dotenv_values(BASE_DIR / '.env') if dotenv_values else {}
+
+
+def _configured_value(name, default=''):
+    return os.getenv(name) or _env_file_values.get(name) or default
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-local-development-key')
 ALLOWED_HOSTS = [host for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if host]
@@ -23,12 +32,27 @@ if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 MONGO_URI = (
-    os.getenv('MONGODB_URI')
-    or os.getenv('MONGO_URI')
+    _configured_value('MONGODB_URI')
+    or _configured_value('MONGO_URI')
     or 'mongodb://localhost:27017'
 )
-MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'edututor')
+MONGO_DB_NAME = _configured_value('MONGO_DB_NAME', 'edututor')
 connect(db=MONGO_DB_NAME, host=MONGO_URI, serverSelectionTimeoutMS=5000)
+
+# Admin accounts must authenticate again after one hour by default.
+ADMIN_SESSION_MAX_AGE = int(os.getenv('ADMIN_SESSION_MAX_AGE', '3600'))
+
+CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME', '')
+CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY', '')
+CLOUDINARY_API_SECRET = os.getenv('CLOUDINARY_API_SECRET', '')
+# Every Cloudinary upload is placed under this one root folder. Keep it as
+# ``Edututor`` so Cloudinary never creates feature folders at its top level.
+CLOUDINARY_ROOT_FOLDER = os.getenv('CLOUDINARY_ROOT_FOLDER', 'Edututor').strip('/') or 'Edututor'
+CLOUDINARY_ENABLED = all((
+    CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET,
+))
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -38,6 +62,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'core.apps.CoreConfig',
     'accounts',
     'lessons',
     'tutors',
@@ -65,6 +90,7 @@ TEMPLATES = [{
         'django.template.context_processors.request',
         'django.contrib.auth.context_processors.auth',
         'django.contrib.messages.context_processors.messages',
+        'core.admin_contacts.contact_notifications',
     ]},
 }]
 WSGI_APPLICATION = 'config.wsgi.application'

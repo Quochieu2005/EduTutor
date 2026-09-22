@@ -109,6 +109,40 @@ html[data-theme="dark"] .administrator-message--error {
   color: #fca5a5;
 }
 
+/* Giữ nhãn trạng thái có thể bấm nhìn giống hệt nhãn trạng thái cũ. */
+.administrator-status-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 999px;
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: normal;
+  cursor: pointer;
+}
+
+.administrator-status-toggle.users-status--success {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.administrator-status-toggle.users-status--danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.administrator-status-toggle:disabled {
+  cursor: wait;
+}
+
+.administrator-status-form {
+  display: inline;
+}
+
 @media (max-width: 600px) {
   .administrator-form-label,
   .administrator-upload-wrap,

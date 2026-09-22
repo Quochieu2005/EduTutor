@@ -1,57 +1,33 @@
-<section class="users-list" aria-label="User list">
+<section class="users-list users-login-list" aria-label="Danh sách tài khoản đăng nhập">
   <div class="users-toolbar">
     <div class="users-toolbar__filters">
       <label class="users-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
-        <input type="search" placeholder="Filter users..." aria-label="Filter users" />
+        <input type="search" placeholder="Tìm username hoặc email..." aria-label="Tìm người dùng" data-login-user-search />
       </label>
-      <div class="users-toolbar__filter-options">
-        <button class="users-filter-button" type="button" data-status-filter aria-expanded="false" aria-controls="status-filter-menu">
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7.49991 0.876892C3.84222 0.876892 0.877075 3.84204 0.877075 7.49972C0.877075 11.1574 3.84222 14.1226 7.49991 14.1226C11.1576 14.1226 14.1227 11.1574 14.1227 7.49972C14.1227 3.84204 11.1576 0.876892 7.49991 0.876892ZM1.82707 7.49972C1.82707 4.36671 4.36689 1.82689 7.49991 1.82689C10.6329 1.82689 13.1727 4.36671 13.1727 7.49972C13.1727 10.6327 10.6329 13.1726 7.49991 13.1726C4.36689 13.1726 1.82707 10.6327 1.82707 7.49972ZM7.50003 4C7.77617 4 8.00003 4.22386 8.00003 4.5V7H10.5C10.7762 7 11 7.22386 11 7.5C11 7.77614 10.7762 8 10.5 8H8.00003V10.5C8.00003 10.7761 7.77617 11 7.50003 11C7.22389 11 7.00003 10.7761 7.00003 10.5V8H4.50003C4.22389 8 4.00003 7.77614 4.00003 7.5C4.00003 7.22386 4.22389 7 4.50003 7H7.00003V4.5C7.00003 4.22389 7.22389 4 7.50003 4Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
-          Status
-        </button>
-      </div>
-      <div class="users-status-popover" id="status-filter-menu" hidden>
-        <label class="users-status-search">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
-          <input type="search" placeholder="Status" aria-label="Search status" />
-        </label>
-        <div class="users-status-options">
-          <label><input type="checkbox" value="active" /><span>Active</span><b>127</b></label>
-          <label><input type="checkbox" value="inactive" /><span>Inactive</span><b>113</b></label>
-        </div>
-      </div>
     </div>
-    <button class="users-filter-button users-view-button" type="button">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path><circle cx="8" cy="7" r="2"></circle><circle cx="16" cy="12" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>
-      View
-    </button>
-    <div class="users-view-popover" hidden>
-      <p>Toggle columns</p>
-      <label><span class="users-view-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>Email</label>
-      <label><span class="users-view-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>PhoneNumber</label>
-    </div>
+    <p class="users-login-list__count" data-login-user-count>{{ login_users|length }} tài khoản</p>
   </div>
 
   <div class="users-table-wrap">
     <div class="users-table-scroll">
       <table class="users-table">
-        <thead><tr><th><input type="checkbox" aria-label="Select all users" /></th><th>Username</th><th>Name</th><th>Email</th><th>Phone Number</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>
-          <tr><td><input type="checkbox" aria-label="Select Citlalli Spinka" /></td><td>citlalli.spinka45</td><td>Citlalli Spinka</td><td>citlalli_marks79@hotmail.com</td><td>+1 759 340 7614</td><td><span class="users-status users-status--inactive">Inactive</span></td><td><button class="users-row-menu" type="button" aria-label="Actions for Citlalli Spinka">&hellip;</button></td></tr>
-          <tr><td><input type="checkbox" aria-label="Select Aimee Lynch" /></td><td>aimee.lynch12</td><td>Aimee Lynch</td><td>aimee.lynch@example.com</td><td>+1 415 806 2391</td><td><span class="users-status users-status--active">Active</span></td><td><button class="users-row-menu" type="button" aria-label="Actions for Aimee Lynch">&hellip;</button></td></tr>
-          <tr><td><input type="checkbox" aria-label="Select Darlene Robertson" /></td><td>darlene.robertson</td><td>Darlene Robertson</td><td>darlene.robertson@example.com</td><td>+1 202 555 0192</td><td><span class="users-status users-status--inactive">Inactive</span></td><td><button class="users-row-menu" type="button" aria-label="Actions for Darlene Robertson">&hellip;</button></td></tr>
+        <thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Phone Number</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody data-login-user-body>
+          {% for account in login_users %}
+            <tr data-login-user-row>
+              <td title="{{ account.username }}">{{ account.username }}</td>
+              <td>—</td>
+              <td title="{{ account.email }}">{{ account.email }}</td>
+              <td>—</td>
+              <td>—</td>
+              <td>—</td>
+            </tr>
+          {% empty %}
+            <tr class="users-no-results"><td colspan="6">Chưa có tài khoản người dùng.</td></tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>
-  </div>
-
-  <footer class="users-pagination">
-    <p>Page 1 of 50</p>
-    <label>Rows per page <select aria-label="Rows per page"><option>10</option><option>20</option><option>50</option></select></label>
-    <nav aria-label="User list pagination"><button type="button" disabled aria-label="Previous page">&lsaquo;</button><button class="is-active" type="button">1</button><button type="button">2</button><button type="button">3</button><span>&hellip;</span><button type="button">50</button><button type="button" aria-label="Next page">&rsaquo;</button></nav>
-  </footer>
-  <div class="users-bulk-actions" role="toolbar" aria-label="Bulk actions" hidden>
-    <button type="button" data-clear-selection aria-label="Clear selection">&times;</button><i></i><span><b data-selected-count>0</b> users selected</span><i></i><button type="button" title="Invite selected users">&#9993;</button><button type="button" title="Activate selected users">&#10003;</button><button type="button" title="Deactivate selected users">&#8722;</button><button class="users-bulk-actions__delete" type="button" title="Delete selected users">&#9003;</button>
   </div>
 </section>
