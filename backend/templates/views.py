@@ -12,6 +12,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.text import slugify
 from mongoengine import NotUniqueError, ValidationError
+from pymongo.errors import PyMongoError
 
 from accounts.documents import Admin, AuthToken, Student, User
 from accounts.cloudinary_media import (
@@ -2223,51 +2224,65 @@ def display_settings(request):
 
 
 def sign_in(request):
-    if request.session.get('admin_id') is not None:
-        admin = Admin.objects(
-            id=request.session['admin_id'],
-            status=Admin.STATUS_ACTIVE,
-        ).first()
-        if (
-            admin is not None
-            and admin_session_is_valid(request.session)
-            and request.session.get('admin_session_version') == admin.session_version
-        ):
+    entered_email = ''
+    try:
+        if request.session.get('admin_id') is not None:
+            admin = Admin.objects(
+                id=request.session['admin_id'],
+                status=Admin.STATUS_ACTIVE,
+            ).first()
+            if (
+                admin is not None
+                and admin_session_is_valid(request.session)
+                and request.session.get('admin_session_version') == admin.session_version
+            ):
+                return redirect('dashboard-slash')
+            clear_admin_session(request.session)
+
+        if request.method == 'POST':
+            entered_email = request.POST.get('email', '').strip().lower()
+            password = request.POST.get('password', '')
+            admin = Admin.objects(email=entered_email).first()
+
+            if admin is None or not admin.check_password(password):
+                return render(request, 'auth/sign-in.html', {
+                    'auth_error': 'Email hoặc mật khẩu không chính xác.',
+                    'entered_email': entered_email,
+                }, status=401)
+
+            if admin.status != Admin.STATUS_ACTIVE:
+                return render(request, 'auth/sign-in.html', {
+                    'auth_error': 'Tài khoản quản trị này đã ngừng hoạt động.',
+                    'entered_email': entered_email,
+                }, status=403)
+
+            logged_in_at = datetime.now(timezone.utc)
+            request.session.cycle_key()
+            request.session.set_expiry(settings.ADMIN_SESSION_MAX_AGE)
+            request.session['admin_id'] = int(admin.id)
+            request.session['admin_session_version'] = admin.session_version
+            request.session['admin_logged_in_at'] = logged_in_at.timestamp()
+            request.session['dashboard_welcome_email'] = admin.email
+            admin.last_login = logged_in_at
+            Admin.objects(id=admin.id).update_one(set__last_login=admin.last_login)
+
+            # Auditing is useful, but an audit-write problem must not block a
+            # successful login after the credential record was updated.
+            try:
+                record_admin_activity(request, 'login', admin, actor=admin)
+            except PyMongoError:
+                logger.exception('Could not record admin login activity: admin_id=%s', admin.id)
+            next_url = request.POST.get('next', '')
+            if next_url.startswith('/admin/'):
+                return redirect(next_url)
             return redirect('dashboard-slash')
+    except PyMongoError:
         clear_admin_session(request.session)
-
-    if request.method == 'POST':
-        email = request.POST.get('email', '').strip().lower()
-        password = request.POST.get('password', '')
-        admin = Admin.objects(email=email).first()
-
-        if admin is None or not admin.check_password(password):
-            return render(request, 'auth/sign-in.html', {
-                'auth_error': 'Email hoặc mật khẩu không chính xác.',
-                'entered_email': email,
-            }, status=401)
-
-        if admin.status != Admin.STATUS_ACTIVE:
-            return render(request, 'auth/sign-in.html', {
-                'auth_error': 'Tài khoản quản trị này đã ngừng hoạt động.',
-                'entered_email': email,
-            }, status=403)
-
-        logged_in_at = datetime.now(timezone.utc)
-        request.session.cycle_key()
-        request.session.set_expiry(settings.ADMIN_SESSION_MAX_AGE)
-        request.session['admin_id'] = int(admin.id)
-        request.session['admin_session_version'] = admin.session_version
-        request.session['admin_logged_in_at'] = logged_in_at.timestamp()
-        request.session['dashboard_welcome_email'] = admin.email
-        admin.last_login = logged_in_at
-        Admin.objects(id=admin.id).update_one(set__last_login=admin.last_login)
-
-        record_admin_activity(request, 'login', admin, actor=admin)
-        next_url = request.POST.get('next', '')
-        if next_url.startswith('/admin/'):
-            return redirect(next_url)
-        return redirect('dashboard-slash')
+        logger.exception('MongoDB is unavailable during admin sign-in.')
+        return render(request, 'auth/sign-in.html', {
+            'auth_error': 'Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau ít phút.',
+            'entered_email': entered_email,
+        }, status=503)
 
     return render(request, 'auth/sign-in.html', {
         'next': request.GET.get('next', ''),
