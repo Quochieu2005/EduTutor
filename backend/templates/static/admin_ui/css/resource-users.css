@@ -27,6 +27,93 @@
   z-index: 1000;
 }
 
+/* The tutor listing is a compact operational table. Keep every column in the
+   available admin canvas instead of exposing a horizontal browser scrollbar. */
+.resource-list--tutors .users-table-scroll {
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.resource-list--tutors .users-table-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Keep the wide recruitment table navigable without permanently showing a bar. */
+.resource-list--tutor-jobs .users-table-scroll {
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.resource-list--tutor-jobs .users-table-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* A clickable status must remain visually identical to the old status badge. */
+.resource-list--tutor-jobs .tutor-job-status-toggle {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: inherit;
+}
+
+.resource-list--tutor-jobs .tutor-job-status-toggle:focus-visible {
+  outline: 2px solid var(--ring, var(--primary));
+  outline-offset: 2px;
+}
+
+.resource-list--tutors .tutors-table-columns__select { width: 4%; }
+.resource-list--tutors .tutors-table-columns__name { width: 18%; }
+.resource-list--tutors .tutors-table-columns__email { width: 21%; }
+.resource-list--tutors .tutors-table-columns__subject { width: 9%; }
+.resource-list--tutors .tutors-table-columns__area { width: 20%; }
+.resource-list--tutors .tutors-table-columns__mode { width: 14%; }
+.resource-list--tutors .tutors-table-columns__status { width: 9%; }
+.resource-list--tutors .tutors-table-columns__actions { width: 5%; }
+
+.resource-list--tutors .users-table th,
+.resource-list--tutors .users-table td {
+  padding-inline: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tutor-name-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.tutor-name-cell img,
+.tutor-name-cell i {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.tutor-name-cell i {
+  display: grid;
+  place-items: center;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.tutor-name-cell > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .resource-form-modal .add-user-dialog textarea {
   min-height: 88px;
   resize: vertical;
@@ -39,6 +126,104 @@
   font: inherit;
 }
 
+/* Resource forms may contain long Cloudinary file names. Keep every control
+   inside the modal grid instead of allowing its intrinsic width to overflow. */
+.resource-form-modal .add-user-dialog {
+  overflow-x: hidden;
+}
+
+.resource-form-modal .add-user-dialog form {
+  grid-template-columns: 130px minmax(0, 1fr);
+}
+
+.resource-form-modal .add-user-dialog input,
+.resource-form-modal .add-user-dialog select,
+.resource-form-modal .add-user-dialog textarea,
+.resource-form-modal .administrator-upload-wrap,
+.resource-form-modal .profile-image-upload {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+
+.resource-form-modal .profile-image-upload em {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* CV extraction uses the original two-column resource form layout, rather
+   than the image-upload component which has a different flex layout. */
+.resource-cv-extract-label {
+  font-weight: 500;
+}
+
+.resource-cv-extract {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.resource-form-modal .resource-cv-extract input[type="file"] {
+  height: auto;
+  padding: 8px 10px;
+}
+
+.resource-cv-extract small,
+.resource-cv-extract > span,
+.resource-cv-extract p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.resource-cv-extract > span {
+  color: var(--foreground);
+}
+
+.resource-cv-extract p {
+  color: #2563eb;
+}
+
+html[data-theme="dark"] .resource-cv-extract p {
+  color: #93c5fd;
+}
+
+.resource-form-modal .banner-image-upload {
+  min-height: 82px;
+  height: auto;
+  padding: 10px !important;
+  gap: 10px;
+  border-style: dashed;
+  background: #fafcff;
+}
+
+.resource-form-modal .banner-image-upload .profile-image-preview {
+  width: 78px;
+  height: 52px;
+  flex: 0 0 78px;
+  border-radius: 7px;
+  background-color: #eaf0f8;
+}
+
+.banner-image-upload-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.banner-image-upload-copy b { white-space: nowrap; }
+.banner-image-upload-copy small { color: var(--muted-foreground); font-size: 11px; white-space: nowrap; }
+
+.resource-form-modal .banner-image-upload em {
+  margin-left: auto;
+  max-width: 92px;
+  text-align: right;
+}
+
+html[data-theme="dark"] .resource-form-modal .banner-image-upload { background: rgb(15 23 42 / .45); }
+
 .resource-form-modal .add-user-dialog input,
 .resource-form-modal .add-user-dialog select,
 .resource-form-modal .add-user-dialog textarea {
@@ -50,6 +235,49 @@
 .resource-form-modal .add-user-dialog textarea:focus {
   border-color: var(--ring);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.resource-password-field {
+  position: relative;
+  display: block;
+}
+
+.resource-form-modal .resource-password-field input {
+  padding-right: 46px;
+}
+
+.resource-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.resource-password-toggle:hover,
+.resource-password-toggle:focus-visible {
+  background: var(--muted);
+  color: var(--foreground);
+  outline: none;
+}
+
+.resource-password-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.resource-password-toggle.is-visible svg circle,
+.resource-password-toggle.is-visible svg path:first-child {
+  opacity: .45;
 }
 
 .resource-list .users-view-popover label.is-hidden .users-view-check {
@@ -72,6 +300,70 @@
   text-align: center;
 }
 
+.resource-notices {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.resource-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #86efac;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.resource-notice--error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.resource-notice button {
+  border: 0;
+  padding: 0 3px;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+html[data-theme="dark"] .resource-notice {
+  border-color: rgb(34 197 94 / 45%);
+  background: rgb(22 101 52 / 28%);
+  color: #86efac;
+}
+
+html[data-theme="dark"] .resource-notice--error {
+  border-color: rgb(239 68 68 / 48%);
+  background: rgb(127 29 29 / 30%);
+  color: #fca5a5;
+}
+
+/* Keep AJAX notices identical to the global application toast. */
+.resource-notices {
+  position: fixed;
+  z-index: 10000;
+  top: 20px;
+  right: 20px;
+  width: min(390px, calc(100vw - 32px));
+  margin: 0;
+}
+
+.resource-notice {
+  border-radius: 12px;
+  padding: 13px 14px;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 14%);
+}
+
 html[data-theme="dark"] .users-status--success { background: rgb(21 128 61 / 24%); color: #86efac; }
 html[data-theme="dark"] .users-status--warning { background: rgb(180 83 9 / 24%); color: #fcd34d; }
 html[data-theme="dark"] .users-status--danger { background: rgb(185 28 28 / 24%); color: #fca5a5; }
@@ -79,7 +371,46 @@ html[data-theme="dark"] .users-status--info { background: rgb(3 105 161 / 24%); 
 html[data-theme="dark"] .users-status--neutral { background: rgb(71 85 105 / 32%); color: #cbd5e1; }
 
 @media (max-width: 600px) {
+  .resource-form-modal .add-user-dialog form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .resource-form-modal .add-user-dialog textarea {
     width: 100%;
   }
+
+  .resource-form-modal .banner-image-upload em { max-width: 120px; }
 }
+.resource-banner-thumbnail {
+  display: block;
+  width: 116px;
+  height: 58px;
+  object-fit: cover;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #f5f7fb;
+}
+
+.banner-status-toggle {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.banner-status-toggle:disabled { cursor: wait; opacity: .65; }
+
+.blog-status-toggle {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.blog-status-toggle:disabled { cursor: wait; opacity: .65; }
+
+.blog-category-status-toggle {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.blog-category-status-toggle:disabled { cursor: wait; opacity: .65; }

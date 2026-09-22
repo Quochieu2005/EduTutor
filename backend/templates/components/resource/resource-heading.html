@@ -4,11 +4,18 @@
     <p>{{ page.description }}</p>
   </div>
   <div class="users-heading__actions">
-    <button class="users-button users-button--secondary" type="button" data-resource-export>
-      <span>Xuất CSV</span>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"></path><path d="M4 17v3h16v-3"></path></svg>
-    </button>
-    {% if page.can_manage %}
+    {% if page.key == 'tutors' %}
+      <button class="users-button users-button--secondary" type="button" data-tutor-send-credentials data-send-credentials-url="{% url 'tutor-send-credentials' %}">
+        <span>Gửi thông tin đăng nhập</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></svg>
+      </button>
+    {% else %}
+      <button class="users-button users-button--secondary" type="button" data-resource-export>
+        <span>Xuất CSV</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"></path><path d="M4 17v3h16v-3"></path></svg>
+      </button>
+    {% endif %}
+    {% if page.can_create %}
       <button class="users-button users-button--primary" type="button" data-resource-add>
         <span>{{ page.action_label }}</span>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>

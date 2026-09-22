@@ -9,7 +9,16 @@
 	const searchButton = document.querySelector('#search-button');
 	const searchPanel = document.querySelector('#search-panel');
 	const searchInput = document.querySelector('#command-input');
-	const commandItems = [...document.querySelectorAll('.command-item')];
+        const allCommandItems = [...document.querySelectorAll('.command-item')];
+        const commandItems = allCommandItems.filter(
+                (item) => item.dataset.route || item.dataset.themeCommand,
+        );
+        allCommandItems
+                .filter((item) => !commandItems.includes(item))
+                .forEach((item) => { item.hidden = true; });
+        searchPanel?.querySelectorAll('[data-group]').forEach((group) => {
+                group.classList.toggle('is-hidden', !group.querySelector('.command-item:not([hidden])'));
+        });
 	const themeToggle = document.querySelector('#theme-toggle');
 	const userMenu = document.querySelector('.admin-user-menu');
 	const notificationMenu = document.querySelector('[data-notification-menu]');
@@ -166,7 +175,9 @@
 			item.hidden = false;
 			item.classList.remove('is-selected');
 		});
-		searchPanel?.querySelectorAll('[data-group]').forEach((group) => group.classList.remove('is-hidden'));
+                searchPanel?.querySelectorAll('[data-group]').forEach((group) => {
+                        group.classList.toggle('is-hidden', !group.querySelector('.command-item:not([hidden])'));
+                });
 		trafficPoints.forEach((point) => point.classList.remove('is-hovered'));
 		userMenu?.removeAttribute('open');
 		notificationMenu?.removeAttribute('open');
@@ -227,10 +238,16 @@
 		viewAllNotifications.textContent = willShow ? 'Thu gọn thông báo' : 'Xem tất cả thông báo';
 	});
 
-	searchInput?.addEventListener('input', () => {
-		const query = searchInput.value.trim().toLowerCase();
-		commandItems.forEach((item) => {
-			item.hidden = query !== '' && !item.textContent.toLowerCase().includes(query);
+		const normalizeSearchText = (value) => value
+			.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.toLocaleLowerCase('vi');
+
+		searchInput?.addEventListener('input', () => {
+			const query = normalizeSearchText(searchInput.value.trim());
+			commandItems.forEach((item) => {
+				const searchableText = `${item.textContent} ${item.dataset.search || ''}`;
+				item.hidden = query !== '' && !normalizeSearchText(searchableText).includes(query);
 		});
 		searchPanel.querySelectorAll('[data-group]').forEach((group) => {
 			group.classList.toggle('is-hidden', !group.querySelector('.command-item:not([hidden])'));

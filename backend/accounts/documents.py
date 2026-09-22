@@ -6,13 +6,14 @@ from django.contrib.auth.hashers import check_password as check_legacy_password
 from django.utils.text import slugify
 from mongoengine import (
     BinaryField,
-    CASCADE,
+    BooleanField,
     NULLIFY,
     DateTimeField,
     Document,
     EmailField,
     IntField,
     ListField,
+    LongField,
     ReferenceField,
     SequenceField,
     StringField,
@@ -67,6 +68,94 @@ class User(Document):
         return False
 
 
+class AccountDocument(Document):
+    """Shared fields for the separate student and parent collections."""
+
+    meta = {'abstract': True}
+
+    id = SequenceField(primary_key=True, value_decorator=Int64)
+    slug = StringField(required=True, unique=True, max_length=180)
+    name = StringField(required=True, max_length=150)
+    email = EmailField(null=True, unique=True, sparse=True, max_length=254)
+    password_hash = StringField(null=True, db_field='password')
+    phone = StringField(max_length=20, null=True)
+    avatar = StringField(max_length=1000, null=True)
+    oauth_provider = StringField(choices=('local', 'google', 'facebook'), null=True)
+    oauth_uid = StringField(max_length=255, null=True)
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now(timezone.utc)
+        return super().save(*args, **kwargs)
+
+    def set_password(self, raw_password):
+        self.password_hash = _make_bcrypt_password(raw_password)
+
+    def check_password(self, raw_password):
+        if not self.password_hash:
+            return False
+        if self.password_hash.startswith(('$2a$', '$2b$', '$2y$')):
+            return _check_bcrypt_password(raw_password, self.password_hash)
+        if check_legacy_password(raw_password, self.password_hash):
+            self.set_password(raw_password)
+            self.save()
+            return True
+        return False
+
+
+class Parent(AccountDocument):
+    email = EmailField(required=True, unique=True, max_length=254)
+    meta = {
+        'collection': 'parents',
+        'indexes': [
+            {'fields': ['oauth_provider', 'oauth_uid'], 'unique': True, 'sparse': True},
+            '-created_at',
+        ],
+    }
+
+
+class Student(AccountDocument):
+    parent = ReferenceField('Parent', null=True, db_field='parent_id')
+    status = StringField(choices=('active', 'inactive', 'banned'), default='active', required=True)
+
+    meta = {
+        'collection': 'students',
+        'indexes': [
+            {'fields': ['oauth_provider', 'oauth_uid'], 'unique': True, 'sparse': True},
+            'parent', 'status', '-created_at',
+        ],
+    }
+
+
+class AuthToken(Document):
+    id = SequenceField(primary_key=True, value_decorator=Int64)
+    user_type = StringField(required=True, choices=('student', 'parent', 'tutor', 'admin'))
+    user_id = LongField(required=True, min_value=1)
+    token = StringField(required=True, unique=True, max_length=64)
+    purpose = StringField(required=True, choices=('password_reset', 'access'))
+    is_used = BooleanField(default=False)
+    expires_at = DateTimeField(null=True)
+    last_used_at = DateTimeField(null=True)
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    meta = {
+        'collection': 'tokens',
+        'indexes': [
+            'user_type', 'user_id', 'purpose',
+            {'fields': ['expires_at'], 'expireAfterSeconds': 0},
+        ],
+    }
+
+    def is_expired(self, now=None):
+        if self.expires_at is None:
+            return False
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return (now or datetime.now(timezone.utc)) >= expires_at
+
+
 class Admin(Document):
     """Administrative account stored in the MongoDB ``admins`` collection."""
 
@@ -74,9 +163,9 @@ class Admin(Document):
     ROLE_ADMIN = 'admin'
     ROLE_CHOICES = (ROLE_SUPER_ADMIN, ROLE_ADMIN)
 
-    STATUS_ACTIVE = 1
-    STATUS_INACTIVE = 0
-    STATUS_CHOICES = (STATUS_INACTIVE, STATUS_ACTIVE)
+    STATUS_ACTIVE = 'active'
+    STATUS_INACTIVE = 'inactive'
+    STATUS_CHOICES = (STATUS_ACTIVE, STATUS_INACTIVE)
 
     id = SequenceField(
         primary_key=True,
@@ -90,6 +179,9 @@ class Admin(Document):
     profile_image = BinaryField(max_bytes=2 * 1024 * 1024, null=True, default=None)
     profile_image_name = StringField(max_length=255, default='')
     profile_image_content_type = StringField(max_length=100, default='')
+    # Empty is valid for existing accounts that do not have an avatar yet.
+    profile_image_url = StringField(max_length=1000, default='')
+    profile_image_public_id = StringField(max_length=500, default='')
     bio = StringField(default='', max_length=1000)
     urls = ListField(URLField(max_length=500), default=list)
     role = StringField(
@@ -108,7 +200,7 @@ class Admin(Document):
         default=None,
         reverse_delete_rule=NULLIFY,
     )
-    status = IntField(
+    status = StringField(
         required=True,
         choices=STATUS_CHOICES,
         default=STATUS_ACTIVE,
@@ -199,33 +291,3 @@ class Admin(Document):
             'created_at': self.created_at,
             'updated_at': self.updated_at,
         }
-
-
-class PasswordResetOTP(Document):
-    admin = ReferenceField(Admin, required=True, reverse_delete_rule=CASCADE)
-    code_hash = StringField(required=True)
-    attempts = IntField(default=0, min_value=0)
-    expires_at = DateTimeField(required=True)
-    used_at = DateTimeField(null=True, default=None)
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-
-    meta = {
-        'collection': 'admin_password_reset_otps',
-        'indexes': [
-            'admin',
-            {'fields': ['expires_at'], 'expireAfterSeconds': 0},
-            '-created_at',
-        ],
-    }
-
-    def set_code(self, raw_code):
-        self.code_hash = _make_bcrypt_password(raw_code)
-
-    def check_code(self, raw_code):
-        return _check_bcrypt_password(raw_code, self.code_hash)
-
-    def is_expired(self):
-        expires_at = self.expires_at
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        return datetime.now(timezone.utc) >= expires_at

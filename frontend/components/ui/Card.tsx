@@ -49,7 +49,10 @@ export function formatCurrency(amount: number) {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
-  }).format(amount);
+  })
+    .formatToParts(amount)
+    .map((part) => (part.type === "currency" ? "VNĐ" : part.value))
+    .join("");
 }
 
 export const statusLabels: Record<string, string> = {

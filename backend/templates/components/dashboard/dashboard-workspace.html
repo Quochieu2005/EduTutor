@@ -1,0 +1,17 @@
+<section class="edututor-dashboard" aria-label="Tổng quan vận hành EduTutor">
+  <header class="edututor-dashboard__hero">
+    <div><p>Vận hành EduTutor · {{ dashboard.today_label }}</p><h1>Chào {{ request.admin_account.name }}, đây là việc cần theo dõi hôm nay.</h1></div>
+    <a href="{% url 'management-page' module='tutor-jobs' %}" class="edututor-dashboard__primary-action">Tạo tin tuyển dụng</a>
+  </header>
+
+  <section class="edututor-dashboard__stats" aria-label="Chỉ số chính">
+    {% for stat in dashboard.stats %}<a class="edututor-stat-card" href="{{ stat.url }}"><span class="edututor-stat-card__icon edututor-stat-card__icon--{{ stat.icon }}" aria-hidden="true">{% if stat.icon == 'students' %}<svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3.5"></circle><path d="M2.5 21v-1.5a6.5 6.5 0 0 1 13 0V21M16 4.5a3.5 3.5 0 0 1 0 6.8M21.5 21v-1.5a6.5 6.5 0 0 0-3.3-5.7"></path></svg>{% elif stat.icon == 'tutors' %}<svg viewBox="0 0 24 24"><path d="M4 20v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2"></path><circle cx="12" cy="7" r="4"></circle><path d="m17 11 1.5 1.5L21 9.5"></path></svg>{% elif stat.icon == 'calendar' %}<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg>{% else %}<svg viewBox="0 0 24 24"><path d="M4 7h16v11H4z"></path><path d="M4 10h16M8 15h4"></path></svg>{% endif %}</span><span><small>{{ stat.label }}</small><strong>{{ stat.value }}</strong><em>{{ stat.detail }}</em></span></a>{% endfor %}
+  </section>
+
+  <section class="edututor-dashboard__content-grid">
+    <article class="edututor-dashboard__panel edututor-dashboard__tasks"><header><div><h2>Việc cần xử lý</h2><p>Ưu tiên các mục đang chờ.</p></div></header><div class="edututor-task-list">{% for task in dashboard.tasks %}<a href="{{ task.url }}" class="edututor-task edututor-task--{{ task.tone }}"><span><b>{{ task.count }}</b><i>{{ task.title }}</i></span><small>{{ task.description }}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></a>{% endfor %}</div></article>
+    <article class="edututor-dashboard__panel edututor-dashboard__lessons"><header><div><h2>Lịch học sắp tới</h2><p>Trong 7 ngày tới.</p></div><a href="{% url 'management-page' module='schedules' %}">Xem lịch</a></header>{% if dashboard.lessons %}<div class="edututor-lesson-list">{% for lesson in dashboard.lessons %}<div class="edututor-lesson"><time>{{ lesson.time }}</time><div><strong>{{ lesson.subject }}</strong><span>{{ lesson.student }} · {{ lesson.tutor }}</span></div><b>{{ lesson.mode }}</b></div>{% endfor %}</div>{% else %}<div class="edututor-empty-state">Chưa có lịch học nào trong 7 ngày tới.</div>{% endif %}</article>
+  </section>
+
+  <section class="edututor-dashboard__panel edututor-dashboard__applications"><header><div><h2>Hồ sơ gia sư mới</h2><p>Cập nhật gần nhất từ quy trình tuyển dụng.</p></div><a href="{% url 'management-page' module='tutor-candidates' %}">Xem tất cả</a></header>{% if dashboard.applications %}<div class="edututor-application-list">{% for application in dashboard.applications %}<div><span class="edututor-initials">{{ application.name|slice:':1'|upper }}</span><strong>{{ application.name }}<small>{{ application.email }}</small></strong><time>{{ application.created }}</time><b>{{ application.status }}</b></div>{% endfor %}</div>{% else %}<div class="edututor-empty-state">Chưa có hồ sơ gia sư mới. Hồ sơ sẽ xuất hiện ở đây khi ứng viên đăng ký.</div>{% endif %}</section>
+</section>
