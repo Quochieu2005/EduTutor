@@ -121,3 +121,57 @@ export interface UpdateTutorProfilePayload {
   education?: string;
   teachingMode?: "online" | "offline" | "both";
 }
+
+// -------------------------------------------------------------
+// TYPES DÀNH CHO TRANG GIÁO VIÊN / GIA SƯ (TUTOR PORTAL)
+// -------------------------------------------------------------
+export type RequestSenderType = "student" | "admin" | "tutor";
+
+export interface TutorIncomingRequest {
+  id: string;
+  senderType: RequestSenderType;
+  senderName: string;
+  senderContact?: string;
+  senderRoleTitle: string; // "Học sinh lớp 12", "Admin Điều Phối", "Gia sư môn Toán"
+  avatar?: string;
+  title: string;
+  content: string;
+  subject?: string;
+  gradeLevel?: string;
+  preferredDate?: string;
+  preferredTime?: string;
+  location?: string;
+  offeredRate?: number;
+  status: "pending" | "accepted" | "declined";
+  createdAt: string;
+  urgent?: boolean;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: "tutor" | "admin";
+  senderName: string;
+  text: string;
+  timestamp: string;
+  isRead: boolean;
+}
+
+export interface ScheduleSession {
+  id: string;
+  studentName: string;
+  studentPhone?: string;
+  studentAvatar?: string;
+  subject: string;
+  gradeLevel?: string;
+  date: string;
+  dayOfWeek: string;
+  time: string;
+  duration: string;
+  location: string;
+  mode: "online" | "offline";
+  meetingLink?: string;
+  address?: string;
+  hourlyRate: number;
+  status: "upcoming" | "in_progress" | "completed" | "cancelled";
+  notes?: string;
+}
