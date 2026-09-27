@@ -18,3 +18,179 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* 15 seconds flowing + 2 seconds resting at the completed state. */
+@keyframes timelineProgressFill {
+  0% { transform: scaleY(0); }
+  88.235%, 100% { transform: scaleY(1); }
+}
+
+.timeline-progress-fill {
+  animation: timelineProgressFill 17s linear infinite;
+  background: linear-gradient(
+    to bottom,
+    #1877f2 0%,
+    #1877f2 8%,
+    #f59e0b 33%,
+    #f24444 66%,
+    #22c55e 100%
+  );
+  transform-origin: top center;
+  will-change: transform;
+}
+
+/* Glowing flowing head moving down the timeline line */
+@keyframes timelineGlowHead {
+  0% {
+    top: 0%;
+    opacity: 0.9;
+  }
+  88.235%, 99.9% {
+    top: 100%;
+    opacity: 1;
+  }
+  100% {
+    top: 0%;
+    opacity: 0;
+  }
+}
+
+.timeline-glow-head {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background-color: #ffffff;
+  border: 2px solid #2563eb;
+  box-shadow: 0 0 10px 2.5px rgba(37, 99, 235, 0.85), 0 0 4px #ffffff;
+  animation: timelineGlowHead 17s linear infinite;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 5;
+  will-change: top;
+}
+
+/* Each marker pulses once, exactly when the flowing head passes it. */
+@keyframes dotStep1 {
+  0% {
+    transform: scale(1.35);
+    box-shadow: 0 0 12px 3px rgba(24, 119, 242, 0.35);
+  }
+  4%, 100% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+}
+
+@keyframes dotStep2 {
+  0%, 27.4%, 31.4%, 100% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+  29.4% {
+    transform: scale(1.35);
+    box-shadow: 0 0 12px 3px rgba(245, 158, 11, 0.35);
+  }
+}
+
+@keyframes dotStep3 {
+  0%, 56.8%, 60.8%, 100% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+  58.8% {
+    transform: scale(1.35);
+    box-shadow: 0 0 12px 3px rgba(242, 68, 68, 0.35);
+  }
+}
+
+@keyframes dotStep4 {
+  0%, 86.2%, 90.2%, 100% {
+    transform: scale(1);
+    box-shadow: none;
+  }
+  88.2% {
+    transform: scale(1.35);
+    box-shadow: 0 0 12px 3px rgba(34, 197, 94, 0.35);
+  }
+}
+
+.timeline-dot-1 { animation: dotStep1 17s linear infinite; }
+.timeline-dot-2 { animation: dotStep2 17s linear infinite; }
+.timeline-dot-3 { animation: dotStep3 17s linear infinite; }
+.timeline-dot-4 { animation: dotStep4 17s linear infinite; }
+
+/* Icon phóng nhẹ và nghiêng khi dòng chảy đi tới */
+@keyframes iconSequence1 {
+  0%, 100% { transform: scale(1) rotate(0); }
+  1.3% { transform: scale(1.18) rotate(-6deg); }
+  2.7% { transform: scale(1.08) rotate(4deg); }
+  4% { transform: scale(1) rotate(0); }
+}
+
+@keyframes iconSequence2 {
+  0%, 27.4%, 31.4%, 100% { transform: scale(1) rotate(0); }
+  29.1% { transform: scale(1.18) rotate(-6deg); }
+  30.2% { transform: scale(1.08) rotate(4deg); }
+}
+
+@keyframes iconSequence3 {
+  0%, 56.8%, 60.8%, 100% { transform: scale(1) rotate(0); }
+  58.5% { transform: scale(1.18) rotate(-6deg); }
+  59.6% { transform: scale(1.08) rotate(4deg); }
+}
+
+@keyframes iconSequence4 {
+  0%, 86.2%, 90.2%, 100% { transform: scale(1) rotate(0); }
+  87.9% { transform: scale(1.18) rotate(-6deg); }
+  89% { transform: scale(1.08) rotate(4deg); }
+}
+
+.timeline-icon-step-1 { animation: iconSequence1 17s ease infinite; }
+.timeline-icon-step-2 { animation: iconSequence2 17s ease infinite; }
+.timeline-icon-step-3 { animation: iconSequence3 17s ease infinite; }
+.timeline-icon-step-4 { animation: iconSequence4 17s ease infinite; }
+
+.process-card {
+  transition: transform 300ms ease, box-shadow 300ms ease;
+}
+
+.process-card:hover,
+.process-card:focus-visible {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+}
+
+.tutor-carousel-shell::before,
+.tutor-carousel-shell::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  z-index: 10;
+  width: 90px;
+  pointer-events: none;
+}
+
+.tutor-carousel-shell::before {
+  left: 0;
+  background: linear-gradient(to right, rgb(248 250 252 / 96%) 0%, rgb(248 250 252 / 70%) 35%, transparent 100%);
+}
+
+.tutor-carousel-shell::after {
+  right: 0;
+  background: linear-gradient(to left, rgb(248 250 252 / 96%) 0%, rgb(248 250 252 / 70%) 35%, transparent 100%);
+}
+
+.tutor-category-card:hover,
+.tutor-category-card:focus-visible {
+  transform: translateY(-6px);
+  border-color: #bfdbfe;
+  box-shadow: 0 14px 30px rgb(0 0 0 / 8%);
+}
+
+@media (max-width: 767px) {
+  .tutor-carousel-shell::before,
+  .tutor-carousel-shell::after {
+    width: 36px;
+  }
+}
+

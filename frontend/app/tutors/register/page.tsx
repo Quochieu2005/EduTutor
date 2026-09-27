@@ -79,7 +79,7 @@ export default function TutorRegisterPage() {
         <nav aria-label="Breadcrumb" className="text-xs text-gray-500">
           <ol className="flex items-center gap-1.5">
             <li>
-              <Link href="/Home" className="hover:text-blue-600 transition-colors">
+              <Link href="/" className="hover:text-blue-600 transition-colors">
                 Trang chủ
               </Link>
             </li>
@@ -104,15 +104,13 @@ export default function TutorRegisterPage() {
             </p>
           </div>
 
-          {existingApplication && !isSubmitted && (
+          {existingApplication && !isSubmitted && existingApplication.status !== "rejected" && (
             <div className={`p-4 rounded-xl border text-xs ${
               existingApplication.status === "approved"
                 ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : existingApplication.status === "rejected"
-                  ? "bg-rose-50 border-rose-200 text-rose-800"
-                  : "bg-amber-50 border-amber-200 text-amber-800"
+                : "bg-amber-50 border-amber-200 text-amber-800"
             }`}>
-              Hồ sơ hiện tại: <strong>{existingApplication.status === "approved" ? "Đã duyệt" : existingApplication.status === "rejected" ? "Từ chối" : "Đang chờ Admin duyệt"}</strong>.
+              Hồ sơ hiện tại: <strong>{existingApplication.status === "approved" ? "Đã duyệt" : "Đang chờ Admin duyệt"}</strong>.
               {existingApplication.status === "approved" && " Bạn đã có thể đăng ký nhận lớp."}
             </div>
           )}

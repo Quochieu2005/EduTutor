@@ -36,7 +36,6 @@ const enrollmentStatusLabel: Record<string, string> = {
 const tutorStatusLabel: Record<string, string> = {
   pending: "Chờ duyệt",
   approved: "Đã duyệt",
-  rejected: "Từ chối",
 };
 
 export default function ProfilePage() {
@@ -84,7 +83,7 @@ export default function ProfilePage() {
     try {
       await user.delete();
       await signOut();
-      router.replace("/Home");
+      router.replace("/");
     } catch {
       setDeleteError("Không thể xóa tài khoản lúc này. Vui lòng thử lại hoặc kiểm tra cấu hình Clerk.");
     }
@@ -111,14 +110,12 @@ export default function ProfilePage() {
             <p className="text-sm text-gray-500 break-all">{user?.primaryEmailAddress?.emailAddress}</p>
             <div className="flex flex-wrap gap-2 mt-3 text-xs">
               <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">Học viên</span>
-              {application && (
+              {application && application.status !== "rejected" && (
                 <span
                   className={`px-2.5 py-1 rounded-full border ${
                     application.status === "approved"
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : application.status === "rejected"
-                        ? "bg-rose-50 text-rose-700 border-rose-200"
-                        : "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200"
                   }`}
                 >
                   Hồ sơ gia sư: {tutorStatusLabel[application.status]}
