@@ -24,6 +24,11 @@ class MongoUserPrincipal:
     def id(self):
         return str(self.user.id)
 
+    @property
+    def pk(self):
+        """DRF throttles identify authenticated callers through ``user.pk``."""
+        return self.id
+
 
 class MongoJWTAuthentication(authentication.BaseAuthentication):
     keyword = 'Bearer'
