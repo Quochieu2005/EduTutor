@@ -15,9 +15,14 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.conf import settings
+from django.http import HttpResponseNotFound
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.views.generic import RedirectView
 from django.urls import include, path
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+
+from accounts.documents import Admin
+from accounts.session import admin_session_is_valid
 
 from templates.views import (
     account_settings,
@@ -44,6 +49,11 @@ from templates.views import (
     display_settings,
     request_password_reset,
     management_page,
+    mark_admin_notifications_read,
+    review_complaint_update,
+    notification_create,
+    notification_delete,
+    notification_edit,
     otp,
     security_settings,
     page_not_found,
@@ -52,28 +62,75 @@ from templates.views import (
     sign_in,
     sign_out,
     students,
+    student_delete,
+    student_edit,
+    student_toggle_status,
     tutor_job_create,
     tutor_job_delete,
     tutor_job_edit,
     tutor_job_toggle_status,
+    tutor_request_create,
+    tutor_request_delete,
+    tutor_request_edit,
     tutor_create,
     tutor_extract_cv,
     tutor_edit,
     tutor_delete,
+    tutor_toggle_status,
     tutor_send_credentials,
+    subject_create,
+    subject_delete,
+    subject_edit,
+    subject_toggle_status,
+    schedule_create,
+    schedule_edit,
+    schedule_delete,
+    payment_generate,
+    payment_mark_paid,
+    payment_mark_tutor_paid,
 
     users,
 )
 
 handler404 = page_not_found
 
+
+def _active_admin_for_docs(request):
+    """Read the Admin session without making every ``/api/`` request a login route."""
+    admin_id = request.session.get('admin_id')
+    if admin_id is None or not admin_session_is_valid(request.session):
+        return None
+    admin = Admin.objects(id=admin_id, status=Admin.STATUS_ACTIVE).first()
+    if admin is None or request.session.get('admin_session_version') != admin.session_version:
+        return None
+    return admin
+
+
+def private_api_docs(view):
+    """Swagger/schema are convenient locally but must not be public on Render."""
+    def wrapped(request, *args, **kwargs):
+        if not settings.DEBUG and _active_admin_for_docs(request) is None:
+            # A 404 avoids advertising internal API documentation to anonymous
+            # visitors in production.
+            return HttpResponseNotFound('Không tìm thấy trang này.')
+        return view(request, *args, **kwargs)
+    return wrapped
+
 urlpatterns = [
     path('', RedirectView.as_view(pattern_name='login', permanent=False)),
+    path('api/schema/', private_api_docs(SpectacularAPIView.as_view()), name='api-schema'),
+    path('api/docs/', private_api_docs(SpectacularSwaggerView.as_view(url_name='api-schema')), name='api-docs'),
+    path('api/redoc/', private_api_docs(SpectacularRedocView.as_view(url_name='api-schema')), name='api-redoc'),
     path('api/', include('api.urls')),
     path('admin/dashboard', dashboard, name='dashboard'),
     path('admin/dashboard/', dashboard, name='dashboard-slash'),
     path('admin/chats/', chats, name='chats'),
+    path('admin/notifications/mark-read/', mark_admin_notifications_read, name='admin-notifications-mark-read'),
+    path('admin/management/reviews-complaints/<str:record_key>/update/', review_complaint_update, name='review-complaint-update'),
     path('admin/students/', students, name='students'),
+    path('admin/students/<slug:slug>/edit/', student_edit, name='student-edit'),
+    path('admin/students/<slug:slug>/delete/', student_delete, name='student-delete'),
+    path('admin/students/<slug:slug>/toggle-status/', student_toggle_status, name='student-toggle-status'),
     path('admin/users/', users, name='users'),
     path('admin/management/administrators/create/', administrator_create, name='administrator-create'),
     path('admin/management/administrators/<slug:slug>/edit/', administrator_edit, name='administrator-edit'),
@@ -92,14 +149,31 @@ urlpatterns = [
     path('admin/management/slides/<int:banner_id>/edit/', banner_edit, name='banner-edit'),
     path('admin/management/slides/<int:banner_id>/delete/', banner_delete, name='banner-delete'),
     path('admin/management/slides/<int:banner_id>/toggle-status/', banner_toggle_status, name='banner-toggle-status'),
+    path('admin/management/notifications/create/', notification_create, name='notification-create'),
+    path('admin/management/notifications/<int:notification_id>/edit/', notification_edit, name='notification-edit'),
+    path('admin/management/notifications/<int:notification_id>/delete/', notification_delete, name='notification-delete'),
+    path('admin/management/subjects/create/', subject_create, name='subject-create'),
+    path('admin/management/subjects/<slug:slug>/edit/', subject_edit, name='subject-edit'),
+    path('admin/management/subjects/<slug:slug>/delete/', subject_delete, name='subject-delete'),
+    path('admin/management/subjects/<slug:slug>/toggle-status/', subject_toggle_status, name='subject-toggle-status'),
+    path('admin/management/schedules/create/', schedule_create, name='schedule-create'),
+    path('admin/management/schedules/<int:lesson_id>/edit/', schedule_edit, name='schedule-edit'),
+    path('admin/management/schedules/<int:lesson_id>/delete/', schedule_delete, name='schedule-delete'),
+    path('admin/management/payments/generate/', payment_generate, name='payment-generate'),
+    path('admin/management/payments/<int:payment_id>/mark-paid/', payment_mark_paid, name='payment-mark-paid'),
+    path('admin/management/payments/<int:payment_id>/mark-tutor-paid/', payment_mark_tutor_paid, name='payment-mark-tutor-paid'),
     path('admin/management/tutor-jobs/create/', tutor_job_create, name='tutor-job-create'),
     path('admin/management/tutor-jobs/<slug:slug>/edit/', tutor_job_edit, name='tutor-job-edit'),
     path('admin/management/tutor-jobs/<slug:slug>/delete/', tutor_job_delete, name='tutor-job-delete'),
     path('admin/management/tutor-jobs/<slug:slug>/toggle-status/', tutor_job_toggle_status, name='tutor-job-toggle-status'),
+    path('admin/management/tutor-requests/create/', tutor_request_create, name='tutor-request-create'),
+    path('admin/management/tutor-requests/<int:request_id>/edit/', tutor_request_edit, name='tutor-request-edit'),
+    path('admin/management/tutor-requests/<int:request_id>/delete/', tutor_request_delete, name='tutor-request-delete'),
     path('admin/management/tutors/extract-cv/', tutor_extract_cv, name='tutor-extract-cv'),
     path('admin/management/tutors/create/', tutor_create, name='tutor-create'),
     path('admin/management/tutors/<slug:slug>/edit/', tutor_edit, name='tutor-edit'),
     path('admin/management/tutors/<slug:slug>/delete/', tutor_delete, name='tutor-delete'),
+    path('admin/management/tutors/<slug:slug>/toggle-status/', tutor_toggle_status, name='tutor-toggle-status'),
     path('admin/management/tutors/send-credentials/', tutor_send_credentials, name='tutor-send-credentials'),
     path('admin/management/<slug:module>/', management_page, name='management-page'),
     path('admin/profile/', profile, name='profile'),

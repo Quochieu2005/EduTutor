@@ -1,0 +1,24 @@
+<section class="users-list resource-list resource-list--students" aria-label="{{ page.title }}">
+  {% if messages %}<div class="resource-notices" aria-live="polite">{% for message in messages %}<div class="resource-notice{% if 'error' in message.tags %} resource-notice--error{% endif %}"><span>{{ message }}</span><button type="button" aria-label="Đóng thông báo" data-resource-notice-close>&times;</button></div>{% endfor %}</div>{% endif %}
+  <div class="users-toolbar">
+    <div class="users-toolbar__filters">
+      <label class="users-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><input type="search" placeholder="Tìm kiếm học viên..." aria-label="Tìm kiếm học viên" data-resource-search /></label>
+      <div class="users-toolbar__filter-options"><button class="users-filter-button" type="button" data-status-filter aria-expanded="false" aria-controls="status-filter-menu"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true"><path d="M7.5.88a6.62 6.62 0 1 0 0 13.24A6.62 6.62 0 0 0 7.5.88Zm0 .95a5.67 5.67 0 1 1 0 11.34 5.67 5.67 0 0 1 0-11.34ZM7 4.5V7H4.5a.5.5 0 0 0 0 1H7v2.5a.5.5 0 0 0 1 0V8h2.5a.5.5 0 0 0 0-1H8V4.5a.5.5 0 0 0-1 0Z" fill="currentColor"></path></svg>Status</button></div>
+      <div class="users-status-popover" id="status-filter-menu" hidden><div class="users-status-options">{% for status in page.statuses %}<label><input type="checkbox" value="{{ status|lower }}" /><span>{{ status }}</span><b data-status-count>0</b></label>{% endfor %}</div></div>
+    </div>
+    <button class="users-filter-button users-view-button" type="button" data-resource-view>☷ View</button>
+    <div class="users-view-popover" hidden><p>Ẩn/hiện cột</p>{% for column in page.columns %}<label data-column-toggle="{{ column.key }}"><span class="users-view-check">✓</span>{{ column.label }}</label>{% endfor %}</div>
+  </div>
+  <div class="users-table-wrap"><div class="users-table-scroll"><table class="users-table resource-table">
+    <thead><tr><th><input type="checkbox" aria-label="Chọn tất cả" data-resource-select-all /></th>{% for column in page.columns %}<th data-field="{{ column.key }}" data-resource-sort>{{ column.label }}</th>{% endfor %}<th>Actions</th></tr></thead>
+    <tbody data-resource-body>{% for row in page.rows %}
+      <tr data-record-id="{{ row.id }}" data-record-slug="{{ row.slug }}" data-edit-url="{{ row.edit_url }}" data-delete-url="{{ row.delete_url }}" data-form-values="{{ row.form_values|escape }}" data-status-toggle-url="{{ row.status_toggle_url }}" data-status-code="{{ row.status_code }}" data-avatar-url="{{ row.avatar_url }}" data-can-edit="true" data-can-delete="true">
+        <td><input type="checkbox" aria-label="Chọn học viên" data-resource-select /></td>
+        {% for cell in row.cells %}<td data-field="{{ cell.field }}" data-value="{{ cell.value }}" title="{{ cell.value }}">{% if cell.field == 'avatar' %}<span class="student-avatar-cell">{% if row.avatar_url %}<img src="{{ row.avatar_url }}" alt="Ảnh đại diện {{ row.cells.1.value }}" />{% else %}<i>{{ row.cells.1.value|slice:":1"|upper }}</i>{% endif %}</span>{% elif cell.field == 'status' %}<button type="button" class="users-status users-status--{{ cell.tone }} student-status-toggle" data-student-status-toggle aria-label="Đổi trạng thái {{ cell.value }}">{{ cell.value }}</button>{% else %}{{ cell.value }}{% endif %}</td>{% endfor %}
+        <td><button class="users-row-menu" type="button" aria-label="Thao tác">&hellip;</button></td>
+      </tr>{% endfor %}
+    </tbody>
+  </table></div></div>
+  <footer class="users-pagination"><p data-resource-page-summary>Page 1 of 1</p><label>Rows per page <select aria-label="Rows per page" data-resource-page-size><option>5</option><option selected>10</option><option>20</option><option>50</option></select></label><nav aria-label="Phân trang"><button type="button" data-resource-prev aria-label="Trang trước">&lsaquo;</button><button class="is-active" type="button" data-resource-current>1</button><button type="button" data-resource-next aria-label="Trang sau">&rsaquo;</button></nav></footer>
+  <div class="users-bulk-actions" role="toolbar" aria-label="Thao tác hàng loạt" data-resource-bulk hidden><button type="button" data-resource-clear aria-label="Bỏ chọn">&times;</button><i></i><span><b data-resource-selected-count>0</b> học viên đã chọn</span><i></i><button class="users-bulk-actions__delete" type="button" data-resource-delete-selected aria-label="Xóa học viên đã chọn">&#9003;</button></div>
+</section>

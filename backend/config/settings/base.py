@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'drf_spectacular',
     'core.apps.CoreConfig',
     'accounts',
     'lessons',
@@ -91,6 +92,7 @@ TEMPLATES = [{
         'django.contrib.auth.context_processors.auth',
         'django.contrib.messages.context_processors.messages',
         'core.admin_contacts.contact_notifications',
+        'core.admin_header_notifications.admin_header_notifications',
     ]},
 }]
 WSGI_APPLICATION = 'config.wsgi.application'
@@ -142,4 +144,34 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'api.exception_handlers.api_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # APIs are private by default.  Login/registration endpoints must opt in
+    # explicitly with AllowAny; every other endpoint requires a valid JWT.
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'EduTutor API',
+    'DESCRIPTION': (
+        'Tài liệu API chính thức cho nền tảng kết nối học viên, phụ huynh, gia sư và quản trị viên. '
+        'Mỗi endpoint mới có serializer và schema sẽ tự xuất hiện tại đây.'
+    ),
+    'VERSION': 'v1',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'displayOperationId': False,
+    },
+    'TAGS': [
+        {'name': 'Tài khoản', 'description': 'Đăng ký, đăng nhập và hồ sơ tài khoản.'},
+        {'name': 'Gia sư', 'description': 'Hồ sơ, chuyên môn và trạng thái gia sư.'},
+        {'name': 'Buổi học', 'description': 'Lịch học, xác nhận giảng dạy và tiến độ.'},
+    ],
 }

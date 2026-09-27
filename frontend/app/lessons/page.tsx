@@ -24,7 +24,7 @@ export default function LessonsPage() {
       return;
     }
 
-    getLessons()
+    getLessons(user)
       .then((data) => {
         if (!ignore) setLessons(data);
       })
@@ -44,8 +44,17 @@ export default function LessonsPage() {
     id: string,
     status: LessonRequest["status"],
   ) {
+    if (status === "completed" && user?.role !== "tutor") {
+      return;
+    }
+    if (
+      status === "completed" &&
+      !window.confirm("Xác nhận bạn đã hoàn thành buổi dạy này?")
+    ) {
+      return;
+    }
     try {
-      await updateLessonStatus(id, status);
+      await updateLessonStatus(id, status, user);
       setLessons((prev) =>
         prev.map((l) => (l.id === id ? { ...l, status } : l)),
       );

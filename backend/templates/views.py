@@ -23,6 +23,58 @@ from accounts.cloudinary_media import (
 from accounts.session import admin_session_is_valid, clear_admin_session
 from core.documents import Banner, BlogCategory, BlogPost, Payment
 from core.admin_audit import activity_logs, record_admin_activity
+from core.admin_classes import classes_page_config
+from core.admin_students import (
+    student_delete,
+    student_edit,
+    student_page,
+    student_toggle_status,
+)
+from core.admin_notifications import (
+    notification_create,
+    notification_delete,
+    notification_edit,
+    notification_page_config,
+)
+from core.admin_header_notifications import mark_admin_notifications_read
+from core.admin_reviews_complaints import (
+    COMPLAINT_STATUS_LABELS,
+    REVIEW_STATUS_LABELS,
+    review_complaint_update,
+    reviews_complaints_page_config,
+)
+from core.admin_payments import (
+    payment_generate,
+    payment_mark_paid,
+    payment_mark_tutor_paid,
+    payment_page_config,
+)
+from core.admin_subjects import (
+    subject_create,
+    subject_delete,
+    subject_edit,
+    subject_is_active,
+    subject_page_config,
+    subject_toggle_status,
+)
+from core.admin_schedules import (
+    LESSON_STATUS_LABELS,
+    MODE_LABELS,
+    PAYMENT_STATUS_LABELS,
+    schedule_create,
+    schedule_delete,
+    schedule_edit,
+    schedule_form_choices,
+    schedule_page_config,
+)
+from core.admin_tutor_requests import (
+    REQUEST_STATUS_LABELS,
+    tutor_request_create,
+    tutor_request_delete,
+    tutor_request_edit,
+    tutor_request_form_choices,
+    tutor_request_page_config,
+)
 from lessons.documents import LearningRequest, Lesson
 from tutors.documents import (
     JobApplication, JobPosting, Province, Subject, Tutor, TutorApplication, TutorSubject,
@@ -268,13 +320,13 @@ MANAGEMENT_PAGES = {
 
 def _management_status_tone(status):
     value = str(status).lower()
-    if any(item in value for item in ('inactive', 'rejected', 'cancelled', 'failed', 'locked')):
+    if any(item in value for item in ('inactive', 'rejected', 'cancelled', 'failed', 'locked', 'đã hủy', 'vắng mặt', 'từ chối')):
         return 'danger'
-    if any(item in value for item in ('active', 'approved', 'completed', 'published', 'sent', 'paid', 'passed', 'resolved', 'matched', 'available')):
+    if any(item in value for item in ('active', 'approved', 'completed', 'published', 'sent', 'paid', 'passed', 'resolved', 'matched', 'available', 'đã hoàn thành', 'đã ghép', 'đã giải quyết', 'hiển thị')):
         return 'success'
-    if any(item in value for item in ('pending', 'processing', 'scheduled', 'draft', 'review', 'screening', 'interview')):
+    if any(item in value for item in ('pending', 'processing', 'scheduled', 'draft', 'review', 'screening', 'interview', 'đã lên lịch', 'chờ phản hồi')):
         return 'warning'
-    if any(item in value for item in ('new', 'refunded')):
+    if any(item in value for item in ('new', 'refunded', 'mới')):
         return 'info'
     return 'neutral'
 
@@ -988,18 +1040,51 @@ def blog_category_toggle_status(request, slug):
     })
 
 
+def _active_subject_choices():
+    """Return only centrally managed subjects that are currently available."""
+    subjects = [
+        subject
+        for subject in Subject.objects.order_by('category', 'name')
+        if subject_is_active(subject)
+    ]
+    return [
+        {
+            'value': str(subject.id),
+            'label': (
+                f'{subject.name} — {subject.category}'
+                if subject.category else subject.name
+            ),
+        }
+        for subject in subjects
+    ]
+
+
+def _required_active_subject(request):
+    """Resolve an official subject without permitting ad-hoc catalogue entries."""
+    raw_subject_id = request.POST.get('subject_id', '').strip()
+    if not raw_subject_id:
+        raise ValueError('Vui lòng chọn môn học từ Môn học & Chuyên môn.')
+    try:
+        subject_id = int(raw_subject_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('Môn học được chọn không hợp lệ.') from exc
+
+    subject = Subject.objects(id=subject_id).first()
+    if subject is None:
+        raise ValueError('Môn học không tồn tại trong Môn học & Chuyên môn.')
+    if not subject_is_active(subject):
+        raise ValueError('Môn học này đang Inactive. Hãy bật lại trong Môn học & Chuyên môn trước.')
+    return subject
+
+
 def _job_catalogue_values(request):
-    """Resolve a job location against the official 2026 location catalogue."""
-    subject_name = request.POST.get('subject_name', '').strip()
+    """Resolve a job against the centrally managed subject and location catalogues."""
     province_id = request.POST.get('province_id', '').strip()
     ward_id = request.POST.get('ward_id', '').strip()
-    if not subject_name or not province_id or not ward_id:
-        raise ValueError('Vui lòng chọn môn học, tỉnh/thành phố và xã/phường/đặc khu.')
+    if not province_id or not ward_id:
+        raise ValueError('Vui lòng chọn tỉnh/thành phố và xã/phường/đặc khu.')
 
-    subject = Subject.objects(name__iexact=subject_name).first()
-    if subject is None:
-        subject = Subject(slug=_catalogue_slug(Subject, subject_name, 'subject'), name=subject_name)
-        subject.save()
+    subject = _required_active_subject(request)
 
     province = Province.objects(id=province_id).first()
     if province is None:
@@ -1250,7 +1335,7 @@ def _tutor_redirect(request, message, *, error=False):
 def _tutor_form_values(request, tutor=None):
     name = request.POST.get('name', '').strip()
     email = request.POST.get('email', '').strip().lower()
-    subject_name = request.POST.get('subject_name', '').strip()
+    subject_id = request.POST.get('subject_id', '').strip()
     province_id = request.POST.get('province_id', '').strip()
     ward_id = request.POST.get('ward_id', '').strip()
     teaching_mode = request.POST.get('teaching_mode', '').strip().lower()
@@ -1258,7 +1343,7 @@ def _tutor_form_values(request, tutor=None):
     # Accounts created from the admin form receive the requested initial
     # password even if a client submits the form without its prefilled value.
     password = request.POST.get('password', '') or ('123456789' if tutor is None else '')
-    if not all((name, email, subject_name, province_id, ward_id)):
+    if not all((name, email, subject_id, province_id, ward_id)):
         raise ValueError('Họ tên, email, môn dạy và khu vực dạy không được để trống.')
     if teaching_mode not in ('online', 'offline', 'both'):
         raise ValueError('Hình thức dạy không hợp lệ.')
@@ -1275,9 +1360,7 @@ def _tutor_form_values(request, tutor=None):
         email_query = email_query.filter(id__ne=tutor.id)
     if email_query.first():
         raise ValueError('Email này đã được sử dụng bởi gia sư khác.')
-    subject = Subject.objects(name__iexact=subject_name).first()
-    if subject is None:
-        subject = Subject(slug=_catalogue_slug(Subject, subject_name, 'subject'), name=subject_name).save()
+    subject = _required_active_subject(request)
     province = Province.objects(id=province_id).first()
     ward = Ward.objects(id=ward_id, province=province).first() if province else None
     if ward is None:
@@ -1435,6 +1518,33 @@ def tutor_delete(request, slug):
     return JsonResponse({'ok': True, 'message': 'Xóa gia sư thành công.'})
 
 
+def tutor_toggle_status(request, slug):
+    """Activate/deactivate a tutor without exposing a free-form status API."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
+    tutor = Tutor.objects(slug=slug).first()
+    if tutor is None:
+        return JsonResponse({'ok': False, 'message': 'Không tìm thấy gia sư.'}, status=404)
+
+    tutor.status = (
+        Tutor.STATUS_INACTIVE
+        if tutor.status == Tutor.STATUS_ACTIVE else Tutor.STATUS_ACTIVE
+    )
+    tutor.save()
+    record_admin_activity(request, 'toggle_status', tutor)
+    label = 'Active' if tutor.status == Tutor.STATUS_ACTIVE else 'Inactive'
+    return JsonResponse({
+        'ok': True,
+        'status': label,
+        'status_code': tutor.status,
+        'message': (
+            'Đã mở lại quyền hoạt động cho gia sư.'
+            if tutor.status == Tutor.STATUS_ACTIVE
+            else 'Đã tạm ngưng gia sư. Gia sư không thể được chọn cho các buổi học mới.'
+        ),
+    })
+
+
 def management_page(request, module):
     if module == 'contacts':
         from core.admin_contacts import contacts
@@ -1453,6 +1563,20 @@ def management_page(request, module):
         config = _location_page_config(request.GET.get('tab', 'provinces'))
     elif module == 'tutors':
         config = _tutors_page_config()
+    elif module == 'notifications':
+        config = notification_page_config()
+    elif module == 'subjects':
+        config = subject_page_config()
+    elif module == 'schedules':
+        config = schedule_page_config()
+    elif module == 'classes':
+        config = classes_page_config()
+    elif module == 'payments':
+        config = payment_page_config()
+    elif module == 'tutor-requests':
+        config = tutor_request_page_config()
+    elif module == 'reviews-complaints':
+        config = reviews_complaints_page_config()
     else:
         config = _recruitment_page_config(module) or MANAGEMENT_PAGES.get(module)
     if config is None:
@@ -1465,9 +1589,14 @@ def management_page(request, module):
         'can_manage': True,
         'can_create': True,
     }
-    if module.startswith('tutor-'):
+    if module.startswith('tutor-') and module != 'tutor-requests':
         # These pages are database-backed listings.  Do not expose the old
         # front-end-only add/delete controls until their write workflow exists.
+        page['can_manage'] = False
+        page['can_create'] = False
+    if module == 'classes':
+        # Classes are derived from lesson schedules.  Add/edit/delete is done
+        # on the schedule page so there is only one source of truth.
         page['can_manage'] = False
         page['can_create'] = False
     if module == 'locations':
@@ -1481,11 +1610,24 @@ def management_page(request, module):
         page['can_manage'] = True
         page['can_create'] = True
         page['create_url'] = reverse('tutor-job-create')
+    if module == 'tutor-requests':
+        page['create_url'] = reverse('tutor-request-create')
+    if module == 'reviews-complaints':
+        page['can_create'] = False
     if module == 'tutors':
         page['can_create'] = True
         page['create_url'] = reverse('tutor-create')
     if module == 'slides':
         page['create_url'] = reverse('banner-create')
+    if module == 'notifications':
+        page['create_url'] = reverse('notification-create')
+    if module == 'subjects':
+        page['create_url'] = reverse('subject-create')
+    if module == 'schedules':
+        page['create_url'] = reverse('schedule-create')
+    if module == 'payments':
+        page['create_url'] = reverse('payment-generate')
+        page['action_label'] = 'Lập hóa đơn tháng'
     if module == 'blog':
         page['tabs'] = [
             {'label': 'Bài viết', 'url': reverse('management-page', kwargs={'module': 'blog'}), 'active': config['tab'] == 'posts'},
@@ -1511,10 +1653,14 @@ def management_page(request, module):
     for index, values in enumerate(config['rows'], start=1):
         cells = []
         for (field, _), value in zip(config['columns'], values):
+            tone = _management_status_tone(value) if field == 'status' else ''
+            if module == 'notifications' and field == 'status':
+                notification_status = config['records'][index - 1].status
+                tone = 'success' if notification_status == 'sent' else 'warning'
             cells.append({
                 'field': field,
                 'value': value,
-                'tone': _management_status_tone(value) if field == 'status' else '',
+                'tone': tone,
             })
         row = {'id': f'{module}-{index}', 'cells': cells}
         if module == 'administrators':
@@ -1547,7 +1693,7 @@ def management_page(request, module):
                 'status_toggle_url': reverse('tutor-job-toggle-status', kwargs={'slug': job.slug}),
                 'form_values': json.dumps({
                     'title': job.title,
-                    'subject_name': _recruitment_reference_name(job.subject),
+                    'subject_id': _recruitment_reference_id(job.subject),
                     'province_id': _recruitment_reference_id(job.province),
                     'ward_id': _recruitment_reference_id(job.ward),
                     'grade': job.grade or '',
@@ -1557,6 +1703,44 @@ def management_page(request, module):
                     'description': job.description,
                     'status': job.status,
                 }),
+            })
+        elif module == 'tutor-requests':
+            tutor_request = config['records'][index - 1]
+            row.update({
+                'id': str(tutor_request.id),
+                'slug': str(tutor_request.id),
+                'edit_url': reverse('tutor-request-edit', kwargs={'request_id': tutor_request.id}),
+                'delete_url': reverse('tutor-request-delete', kwargs={'request_id': tutor_request.id}),
+                'form_values': json.dumps({
+                    'student_id': _recruitment_reference_id(tutor_request.student),
+                    'tutor_id': _recruitment_reference_id(tutor_request.tutor),
+                    'subject_id': _recruitment_reference_id(tutor_request.subject),
+                    'expected_schedule': tutor_request.expected_schedule or '',
+                    'message': tutor_request.message or '',
+                    'status': tutor_request.status,
+                }),
+                'can_edit': True,
+                'can_delete': True,
+            })
+        elif module == 'reviews-complaints':
+            feedback = config['records'][index - 1]
+            row.update({
+                'id': feedback['key'],
+                'slug': feedback['key'],
+                'role': feedback['kind'],
+                'edit_url': reverse('review-complaint-update', kwargs={'record_key': feedback['key']}),
+                'form_values': json.dumps({
+                    'status': (
+                        getattr(feedback['record'], 'status', 'visible')
+                        if feedback['kind'] == 'review' else feedback['record'].status
+                    ),
+                    'response_message': (
+                        getattr(feedback['record'], 'admin_reply', '') or ''
+                        if feedback['kind'] == 'review' else feedback['record'].response_message or ''
+                    ),
+                }),
+                'can_edit': True,
+                'can_delete': False,
             })
         elif module == 'tutors':
             tutor = config['records'][index - 1]
@@ -1569,6 +1753,12 @@ def management_page(request, module):
                 'avatar_url': tutor.avatar or '',
                 'edit_url': reverse('tutor-edit', kwargs={'slug': tutor.slug}),
                 'delete_url': reverse('tutor-delete', kwargs={'slug': tutor.slug}),
+                'status_toggle_url': reverse('tutor-toggle-status', kwargs={'slug': tutor.slug}),
+                # The generic row-menu reads these explicit flags.  Without
+                # them Django renders both values as false, so the menu opens
+                # as an empty popup even though the edit/delete URLs exist.
+                'can_edit': True,
+                'can_delete': True,
                 'form_values': json.dumps({
                     'name': tutor.name, 'email': tutor.email, 'phone': tutor.phone or '',
                     'headline': tutor.headline or '', 'bio': tutor.bio or '',
@@ -1576,7 +1766,7 @@ def management_page(request, module):
                     'experience_years': tutor.experience_years, 'hourly_rate_min': tutor.hourly_rate_min or '',
                     'hourly_rate_max': tutor.hourly_rate_max or '', 'teaching_mode': tutor.teaching_mode,
                     'video_url': tutor.video_url or '', 'status': tutor.status,
-                    'subject_name': subject_link.subject.name if subject_link else '',
+                    'subject_id': _recruitment_reference_id(subject_link.subject) if subject_link else '',
                     'subject_level': subject_link.level if subject_link and subject_link.level else '',
                     'subject_price': subject_link.price_per_hour if subject_link and subject_link.price_per_hour else '',
                     'province_id': str(area_link.province.id) if area_link else '',
@@ -1625,6 +1815,79 @@ def management_page(request, module):
                     'status': banner.status,
                 }),
             })
+        elif module == 'notifications':
+            notification = config['records'][index - 1]
+            row.update({
+                'id': str(notification.id),
+                'slug': str(notification.id),
+                'edit_url': reverse('notification-edit', kwargs={'notification_id': notification.id}),
+                'delete_url': reverse('notification-delete', kwargs={'notification_id': notification.id}),
+                'form_values': json.dumps({
+                    'title': notification.title,
+                    'message': notification.message,
+                    'audience': notification.audience,
+                    'status': notification.status,
+                }),
+                'can_edit': notification.status == 'draft',
+                'can_delete': True,
+            })
+        elif module == 'subjects':
+            subject = config['records'][index - 1]
+            row.update({
+                'id': subject.slug,
+                'slug': subject.slug,
+                'edit_url': reverse('subject-edit', kwargs={'slug': subject.slug}),
+                'delete_url': reverse('subject-delete', kwargs={'slug': subject.slug}),
+                'status_toggle_url': reverse('subject-toggle-status', kwargs={'slug': subject.slug}),
+                'status_code': str(getattr(subject, 'status', 1)),
+                'form_values': json.dumps({
+                    'name': subject.name,
+                    'category': subject.category or '',
+                    'level': subject.level or '',
+                    'status': str(getattr(subject, 'status', 1)),
+                }),
+                'can_edit': True,
+                'can_delete': True,
+            })
+        elif module == 'schedules':
+            lesson = config['records'][index - 1]
+            row.update({
+                'id': str(lesson.id),
+                'slug': str(lesson.id),
+                'edit_url': reverse('schedule-edit', kwargs={'lesson_id': lesson.id}),
+                'delete_url': reverse('schedule-delete', kwargs={'lesson_id': lesson.id}),
+                'form_values': json.dumps({
+                    'student_id': _recruitment_reference_id(lesson.student),
+                    'tutor_id': _recruitment_reference_id(lesson.tutor),
+                    'subject_id': _recruitment_reference_id(lesson.subject),
+                    'session_date': lesson.session_date.isoformat(),
+                    'start_time': lesson.start_time,
+                    'end_time': lesson.end_time,
+                    'series_id': lesson.series_id or '',
+                    'mode': lesson.mode,
+                    'province_id': _recruitment_reference_id(lesson.province),
+                    'ward_id': _recruitment_reference_id(lesson.ward),
+                    'meeting_url': lesson.meeting_url or '',
+                    'price': lesson.price if lesson.price is not None else '',
+                    'payment_status': lesson.payment_status,
+                    'status': lesson.status,
+                    'note': lesson.note or '',
+                }),
+                'can_edit': True,
+                'can_delete': True,
+            })
+        elif module == 'payments':
+            payment = config['records'][index - 1]
+            row.update({
+                'id': str(payment.id),
+                'payment_id': str(payment.id),
+                'mark_paid_url': reverse('payment-mark-paid', kwargs={'payment_id': payment.id}),
+                'mark_tutor_paid_url': reverse('payment-mark-tutor-paid', kwargs={'payment_id': payment.id}),
+                'can_mark_paid': payment.status == 'pending',
+                'can_mark_tutor_paid': (
+                    payment.status == 'paid' and payment.tutor_payout_status != 'paid'
+                ),
+            })
         page['rows'].append(row)
 
     page['form_fields'] = []
@@ -1639,6 +1902,7 @@ def management_page(request, module):
         page['form_fields'].append(form_field)
 
     if module == 'tutor-jobs':
+        subject_choices = _active_subject_choices()
         province_choices = [
             {'value': str(province.id), 'label': province.name}
             for province in Province.objects.order_by('name')
@@ -1653,7 +1917,11 @@ def management_page(request, module):
         ]
         page['form_fields'] = [
             {'name': 'title', 'label': 'Tiêu đề', 'type': 'text', 'placeholder': 'Ví dụ: Gia sư Toán lớp 12'},
-            {'name': 'subject_name', 'label': 'Môn học', 'type': 'text', 'placeholder': 'Ví dụ: Toán học'},
+            {
+                'name': 'subject_id', 'label': 'Môn học', 'type': 'select',
+                'select_choices': True, 'choices': subject_choices,
+                'empty_label': 'Chọn môn học đang Active',
+            },
             {'name': 'province_id', 'label': 'Tỉnh/thành phố', 'type': 'select', 'select_choices': True, 'choices': province_choices, 'empty_label': 'Chọn tỉnh/thành phố'},
             {'name': 'ward_id', 'label': 'Xã/Phường/Đặc khu', 'type': 'select', 'select_choices': True, 'choices': ward_choices, 'empty_label': 'Chọn tỉnh/thành phố trước'},
             {'name': 'grade', 'label': 'Khối/lớp (không bắt buộc)', 'type': 'text', 'placeholder': 'Ví dụ: Lớp 12', 'required': False},
@@ -1663,7 +1931,58 @@ def management_page(request, module):
             {'name': 'description', 'label': 'Mô tả', 'type': 'textarea', 'placeholder': 'Mô tả yêu cầu công việc'},
             {'name': 'status', 'label': 'Trạng thái', 'type': 'select', 'options': ['open', 'closed']},
         ]
+    if module == 'tutor-requests':
+        request_choices = tutor_request_form_choices()
+        page['form_fields'] = [
+            {
+                'name': 'student_id', 'label': 'Học viên', 'type': 'select',
+                'select_choices': True, 'choices': request_choices['students'],
+                'empty_label': 'Chọn học viên đang Active',
+            },
+            {
+                'name': 'subject_id', 'label': 'Môn học cần học', 'type': 'select',
+                'select_choices': True, 'choices': request_choices['subjects'],
+                'empty_label': 'Chọn môn học đang Active',
+            },
+            {
+                'name': 'tutor_id', 'label': 'Gia sư phù hợp', 'type': 'select',
+                'select_choices': True, 'choices': request_choices['tutors'],
+                'empty_label': 'Chọn gia sư đang Active',
+            },
+            {
+                'name': 'expected_schedule', 'label': 'Lịch mong muốn', 'type': 'text',
+                'placeholder': 'Ví dụ: Tối thứ 2, 4, 6', 'required': False,
+            },
+            {
+                'name': 'message', 'label': 'Lời nhắn của học viên', 'type': 'textarea',
+                'placeholder': 'Nhu cầu học, mục tiêu hoặc lưu ý cần trao đổi', 'required': False,
+            },
+            {
+                'name': 'status', 'label': 'Trạng thái', 'type': 'select',
+                'select_choices': True,
+                'choices': [
+                    {'value': value, 'label': label}
+                    for value, label in REQUEST_STATUS_LABELS.items()
+                ],
+            },
+        ]
+    if module == 'reviews-complaints':
+        page['form_fields'] = [
+            {
+                'name': 'status', 'label': 'Trạng thái xử lý', 'type': 'select',
+                'select_choices': True,
+                'choices': [
+                    {'value': value, 'label': label}
+                    for value, label in {**COMPLAINT_STATUS_LABELS, **REVIEW_STATUS_LABELS}.items()
+                ],
+            },
+            {
+                'name': 'response_message', 'label': 'Phản hồi qua email', 'type': 'textarea',
+                'placeholder': 'Nhập phản hồi để gửi trực tiếp đến email của người gửi', 'required': False,
+            },
+        ]
     if module == 'tutors':
+        subject_choices = _active_subject_choices()
         province_choices = [{'value': str(item.id), 'label': item.name} for item in Province.objects.order_by('name')]
         ward_choices = [
             {'value': str(item.id), 'label': f'{item.name} — {item.province.name}', 'province_id': str(item.province.id)}
@@ -1683,7 +2002,11 @@ def management_page(request, module):
             {'name': 'headline', 'label': 'Tiêu đề CV', 'type': 'text', 'placeholder': 'Ví dụ: Gia sư Toán THPT · 5 năm kinh nghiệm', 'required': False},
             {'name': 'education_level', 'label': 'Học vấn', 'type': 'text', 'placeholder': 'Ví dụ: Cử nhân Sư phạm Toán', 'required': False},
             {'name': 'experience_years', 'label': 'Kinh nghiệm (năm)', 'type': 'number', 'placeholder': '0', 'required': False},
-            {'name': 'subject_name', 'label': 'Môn dạy chính', 'type': 'text', 'placeholder': 'Ví dụ: Toán học'},
+            {
+                'name': 'subject_id', 'label': 'Môn dạy chính', 'type': 'select',
+                'select_choices': True, 'choices': subject_choices,
+                'empty_label': 'Chọn môn học đang Active',
+            },
             {'name': 'subject_level', 'label': 'Cấp độ/lớp dạy', 'type': 'text', 'placeholder': 'Ví dụ: THCS, THPT', 'required': False},
             {'name': 'subject_price', 'label': 'Giá môn dạy (đ/giờ)', 'type': 'number', 'placeholder': 'Không bắt buộc', 'required': False},
             {'name': 'hourly_rate_min', 'label': 'Học phí từ (đ/giờ)', 'type': 'number', 'placeholder': 'Ví dụ: 150000', 'required': False},
@@ -1722,6 +2045,76 @@ def management_page(request, module):
                 'name': 'status', 'label': 'Trạng thái', 'type': 'select', 'select_choices': True,
                 'choices': [{'value': '1', 'label': 'Active'}, {'value': '0', 'label': 'Inactive'}],
             },
+        ]
+    if module == 'notifications':
+        page['form_fields'] = [
+            {'name': 'title', 'label': 'Tiêu đề', 'type': 'text', 'placeholder': 'Ví dụ: Nhắc lịch học tuần này'},
+            {'name': 'message', 'label': 'Nội dung', 'type': 'textarea', 'placeholder': 'Nhập nội dung thông báo'},
+            {'name': 'audience', 'label': 'Nhóm người nhận', 'type': 'select'},
+            {'name': 'status', 'label': 'Thao tác khi lưu', 'type': 'select'},
+        ]
+    if module == 'subjects':
+        page['form_fields'] = [
+            {'name': 'name', 'label': 'Môn học', 'type': 'text', 'placeholder': 'Ví dụ: Toán học'},
+            {'name': 'category', 'label': 'Nhóm chuyên môn', 'type': 'text', 'placeholder': 'Ví dụ: Khoa học tự nhiên'},
+            {'name': 'level', 'label': 'Cấp độ', 'type': 'text', 'placeholder': 'Ví dụ: Tiểu học, THCS, THPT', 'required': False},
+            {'name': 'status', 'label': 'Trạng thái', 'type': 'select', 'select_choices': True, 'choices': [
+                {'value': '1', 'label': 'Active'}, {'value': '0', 'label': 'Inactive'},
+            ]},
+        ]
+    if module == 'schedules':
+        schedule_choices = schedule_form_choices()
+        page['schedule_choices'] = schedule_choices
+        page['schedule_weekdays'] = [
+            {'value': '0', 'label': 'T2'}, {'value': '1', 'label': 'T3'},
+            {'value': '2', 'label': 'T4'}, {'value': '3', 'label': 'T5'},
+            {'value': '4', 'label': 'T6'}, {'value': '5', 'label': 'T7'},
+            {'value': '6', 'label': 'CN'},
+        ]
+        page['schedule_mode_choices'] = [
+            {'value': value, 'label': label} for value, label in MODE_LABELS.items()
+        ]
+        page['schedule_payment_choices'] = [
+            {'value': value, 'label': label}
+            for value, label in PAYMENT_STATUS_LABELS.items()
+        ]
+        page['schedule_status_choices'] = [
+            {'value': value, 'label': label}
+            for value, label in LESSON_STATUS_LABELS.items()
+            if value != 'completed'
+        ]
+        page['form_fields'] = [
+            {
+                'name': 'student_id', 'label': 'Học viên', 'type': 'select',
+                'select_choices': True, 'choices': schedule_choices['students'],
+                'empty_label': 'Chọn học viên đang Active',
+            },
+            {
+                'name': 'tutor_id', 'label': 'Gia sư', 'type': 'select',
+                'select_choices': True, 'choices': schedule_choices['tutors'],
+                'empty_label': 'Chọn gia sư đang Active',
+            },
+            {
+                'name': 'subject_id', 'label': 'Môn học', 'type': 'select',
+                'select_choices': True, 'choices': schedule_choices['subjects'],
+                'empty_label': 'Chọn môn học đang Active',
+            },
+            {'name': 'session_date', 'label': 'Ngày học', 'type': 'date'},
+            {'name': 'start_time', 'label': 'Giờ bắt đầu', 'type': 'time'},
+            {'name': 'end_time', 'label': 'Giờ kết thúc', 'type': 'time'},
+            {'name': 'mode', 'label': 'Hình thức học', 'type': 'select', 'select_choices': True, 'choices': [
+                {'value': value, 'label': label} for value, label in MODE_LABELS.items()
+            ]},
+            {'name': 'meeting_url', 'label': 'Liên kết lớp trực tuyến', 'type': 'url', 'placeholder': 'https://meet.google.com/...', 'required': False},
+            {'name': 'location', 'label': 'Địa điểm học trực tiếp', 'type': 'text', 'placeholder': 'Ví dụ: Tân Đông Hiệp, Dĩ An', 'required': False},
+            {'name': 'price', 'label': 'Học phí (VNĐ)', 'type': 'number', 'placeholder': 'Ví dụ: 200000', 'required': False},
+            {'name': 'payment_status', 'label': 'Thanh toán', 'type': 'select', 'select_choices': True, 'choices': [
+                {'value': value, 'label': label} for value, label in PAYMENT_STATUS_LABELS.items()
+            ]},
+            {'name': 'status', 'label': 'Trạng thái buổi học', 'type': 'select', 'select_choices': True, 'choices': [
+                {'value': value, 'label': label} for value, label in LESSON_STATUS_LABELS.items()
+            ]},
+            {'name': 'note', 'label': 'Ghi chú', 'type': 'textarea', 'placeholder': 'Ghi chú dành cho quản trị viên', 'required': False},
         ]
 
     template_key = module.replace('-', '_')
@@ -2055,7 +2448,7 @@ def chats(request):
 
 
 def students(request):
-    return render(request, 'admin/student/students.html')
+    return render(request, 'admin/students/students.html', {'page': student_page()})
 
 
 def profile(request):

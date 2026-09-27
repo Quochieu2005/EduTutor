@@ -52,12 +52,12 @@ export function LessonCard({
               <Button size="sm" variant="danger" onClick={() => onReject?.(lesson.id)}>Từ chối</Button>
             </>
           )}
-          {lesson.status === "accepted" && (
+          {isTutor && lesson.status === "accepted" && (
             <Button size="sm" variant="secondary" onClick={() => onComplete?.(lesson.id)}>
-              Hoàn thành
+              Xác nhận đã dạy
             </Button>
           )}
-          {(lesson.status === "pending" || lesson.status === "accepted") && (
+          {isTutor && (lesson.status === "pending" || lesson.status === "accepted") && (
             <Button size="sm" variant="outline" onClick={() => onCancel?.(lesson.id)}>
               Hủy
             </Button>
