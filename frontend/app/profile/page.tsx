@@ -99,7 +99,6 @@ export default function ProfilePage() {
         <div>
           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Tài khoản EduTutor</p>
           <h1 className="text-3xl font-bold mt-1">Profile của bạn</h1>
-          <p className="text-sm text-gray-500 mt-1">Quản lý lớp học, lịch dạy và trạng thái yêu cầu.</p>
         </div>
 
         <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 flex flex-col sm:flex-row gap-4 items-start">
