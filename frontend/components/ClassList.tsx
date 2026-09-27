@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useUser, useClerk } from "@/lib/auth-context";
 import type { ClassListing } from "@/lib/home-mock-data";
 import { isApprovedTutor } from "@/lib/portal-store";
 

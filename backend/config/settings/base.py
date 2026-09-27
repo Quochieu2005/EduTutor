@@ -140,6 +140,14 @@ DEFAULT_FROM_EMAIL = os.getenv(
 )
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '15'))
 
+# Social login credentials are server-side only. Configure them in ``.env``
+# locally and as environment variables on Render; never commit their values.
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
+FACEBOOK_APP_ID = os.getenv('FACEBOOK_APP_ID', '')
+FACEBOOK_APP_SECRET = os.getenv('FACEBOOK_APP_SECRET', '')
+API_JWT_ACCESS_TTL_MINUTES = int(os.getenv('API_JWT_ACCESS_TTL_MINUTES', '15'))
+API_JWT_REFRESH_TTL_DAYS = int(os.getenv('API_JWT_REFRESH_TTL_DAYS', '30'))
+
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'api.exception_handlers.api_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
