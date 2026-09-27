@@ -1,0 +1,8 @@
+<form method="post" action="{% url 'management-page' module='contacts' %}" class="administrator-status-form">
+  {% csrf_token %}
+  <input type="hidden" name="contact_id" value="{{ row.id }}" />
+  <select name="status" class="users-status users-status--{{ cell.tone }}" aria-label="Trạng thái liên hệ {{ row.id }}">
+    {% for code, label in contact_status_choices %}<option value="{{ code }}"{% if code == row.status_code %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="users-filter-button">Lưu</button>
+</form>

@@ -3,10 +3,31 @@
     <button class="add-user-close" type="button" data-resource-modal-close aria-label="Close">&times;</button>
     <h2 id="resource-form-title" data-resource-form-title>{{ page.action_label }}</h2>
     <p>Nhập thông tin và lưu khi hoàn tất.</p>
-    <form data-resource-form>
+    <form data-resource-form enctype="multipart/form-data"{% if page.create_url %} action="{{ page.create_url }}" method="post" data-server-submit="true" data-create-url="{{ page.create_url }}"{% endif %}>
+      {% csrf_token %}
       <input type="hidden" name="record_id" />
       {% for field in page.form_fields %}
-        <label>{{ field.label }}{% if field.options %}<select name="{{ field.name }}" required>{% for option in field.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}</select>{% elif field.type == 'textarea' %}<textarea name="{{ field.name }}" rows="3" placeholder="{{ field.placeholder }}" required></textarea>{% else %}<input name="{{ field.name }}" type="{{ field.type|default:'text' }}" placeholder="{{ field.placeholder }}" required />{% endif %}</label>
+        {% if field.type == 'cv_extract' %}
+          <span class="resource-cv-extract-label">{{ field.label }}</span>
+          <div class="resource-cv-extract" data-cv-extract-wrap data-cv-extract-url="{{ field.extract_url }}">
+            <input id="resource-file-{{ field.name }}" name="{{ field.name }}" type="file" accept="{{ field.accept }}" data-cv-extract-input />
+            <small>Chọn PDF hoặc DOCX có thể bôi đen văn bản (tối đa 5 MB).</small>
+            <span data-cv-extract-name>Chưa chọn CV</span>
+            <p data-cv-extract-status aria-live="polite">Dữ liệu gợi ý sẽ được điền vào form để bạn kiểm tra trước khi lưu.</p>
+          </div>
+        {% elif field.type == 'file' %}
+          <span class="administrator-form-label">{{ field.label }}</span>
+          <div class="administrator-upload-wrap{% if field.name == 'image_file' %} banner-image-upload-wrap{% endif %}">
+            <input class="profile-image-input" id="resource-file-{{ field.name }}" name="{{ field.name }}" type="file"{% if field.accept %} accept="{{ field.accept }}"{% endif %} data-resource-image-input />
+            <label class="profile-image-upload{% if field.name == 'image_file' %} banner-image-upload{% endif %}" for="resource-file-{{ field.name }}">
+              <span class="profile-image-preview" data-resource-image-preview>+</span>
+              <span class="banner-image-upload-copy"><b>{% if field.name == 'image_file' %}Tải ảnh banner{% else %}Chọn ảnh{% endif %}</b><small>{% if field.name == 'image_file' %}JPG, PNG, WEBP hoặc GIF · tối đa 8 MB{% endif %}</small></span>
+              <em data-resource-image-name>Chưa chọn ảnh</em>
+            </label>
+          </div>
+        {% else %}
+        <label>{{ field.label }}{% if field.select_choices %}<select name="{{ field.name }}"{% if field.name == 'ward_id' %} data-location-ward{% endif %}{% if field.name == 'province_id' %} data-location-province{% endif %}{% if field.required is not False %} required{% endif %}>{% if field.empty_label %}<option value="">{{ field.empty_label }}</option>{% endif %}{% for choice in field.choices %}<option value="{{ choice.value }}"{% if choice.province_id %} data-province-id="{{ choice.province_id }}"{% endif %}>{{ choice.label }}</option>{% endfor %}</select>{% elif field.options %}<select name="{{ field.name }}"{% if field.required is not False %} required{% endif %}>{% for option in field.options %}<option value="{{ option }}">{{ option|title }}</option>{% endfor %}</select>{% elif field.type == 'textarea' %}<textarea name="{{ field.name }}" rows="3" placeholder="{{ field.placeholder }}"{% if field.required is not False %} required{% endif %}></textarea>{% elif field.type == 'password' %}<span class="resource-password-field"><input name="{{ field.name }}" type="password" value="{{ field.value|default:'' }}" placeholder="{{ field.placeholder }}" autocomplete="new-password"{% if field.required is not False %} required{% endif %} /><button type="button" class="resource-password-toggle" data-resource-password-toggle aria-label="Hiện mật khẩu" title="Hiện mật khẩu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></span>{% else %}<input name="{{ field.name }}" type="{{ field.type|default:'text' }}" value="{{ field.value|default:'' }}" placeholder="{{ field.placeholder }}"{% if field.accept %} accept="{{ field.accept }}"{% endif %}{% if field.required is not False %} required{% endif %} />{% endif %}</label>
+        {% endif %}
       {% endfor %}
       <button class="add-user-save" type="submit">Save changes</button>
     </form>

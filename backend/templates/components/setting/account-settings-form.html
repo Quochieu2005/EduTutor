@@ -14,8 +14,8 @@
         <div><span>Vai trò</span><strong>{{ account.role }}</strong></div>
         <div><span>Trạng thái</span><strong class="account-status account-status--{{ account.status|lower }}">{{ account.status }}</strong></div>
         <div><span>Quản lý bởi</span><strong>{{ account.managed_by }}</strong></div>
-        <div><span>Đăng nhập gần nhất</span><strong>{{ account.last_login|date:'d/m/Y H:i'|default:'Chưa có' }}</strong></div>
-        <div><span>Ngày tạo</span><strong>{{ account.created_at|date:'d/m/Y H:i' }}</strong></div>
+         <div><span>Đăng nhập gần nhất</span><strong>{{ account.last_login|date:'d/m/Y'|default:'Chưa có' }}</strong></div>
+         <div><span>Ngày tạo</span><strong>{{ account.created_at|date:'d/m/Y' }}</strong></div>
       </div>
       <label>Email đăng nhập<input name="email" type="email" value="{{ account.email }}" autocomplete="email" required /></label>
       <p>Email phải là duy nhất và sẽ được dùng cho lần đăng nhập tiếp theo.</p>

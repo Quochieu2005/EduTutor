@@ -1,7 +1,7 @@
 <section class="dashboard-tab-panel dashboard-overview-grid" role="tabpanel" data-panel="overview" aria-label="Dashboard overview">
     <article class="dashboard-panel dashboard-chart-panel">
         <header class="dashboard-panel__header">
-            <h2>Overview</h2>
+            <h2>Xu hướng hoạt động</h2>
         </header>
         <div class="dashboard-chart" aria-label="Monthly revenue chart">
             <div class="dashboard-chart__bars" aria-hidden="true">
@@ -27,15 +27,11 @@
 
     <article class="dashboard-panel dashboard-sales-panel">
         <header class="dashboard-panel__header dashboard-panel__header--stacked">
-            <h2>Recent Sales</h2>
-            <p>You made 265 sales this month.</p>
+            <h2>Hồ sơ gia sư mới</h2>
+            <p>Cập nhật từ quy trình tuyển dụng.</p>
         </header>
         <div class="dashboard-sales-list">
-            <div class="dashboard-sale"><span class="dashboard-sale__avatar">OM</span><div><strong>Olivia Martin</strong><small>olivia.martin@email.com</small></div><b>+$1,999.00</b></div>
-            <div class="dashboard-sale"><span class="dashboard-sale__avatar">JL</span><div><strong>Jackson Lee</strong><small>jackson.lee@email.com</small></div><b>+$39.00</b></div>
-            <div class="dashboard-sale"><span class="dashboard-sale__avatar">IN</span><div><strong>Isabella Nguyen</strong><small>isabella.nguyen@email.com</small></div><b>+$299.00</b></div>
-            <div class="dashboard-sale"><span class="dashboard-sale__avatar">WK</span><div><strong>William Kim</strong><small>will@email.com</small></div><b>+$99.00</b></div>
-            <div class="dashboard-sale"><span class="dashboard-sale__avatar">SD</span><div><strong>Sofia Davis</strong><small>sofia.davis@email.com</small></div><b>+$39.00</b></div>
+            {% for application in dashboard.applications %}<div class="dashboard-sale"><span class="dashboard-sale__avatar">{{ application.name|slice:':1'|upper }}</span><div><strong>{{ application.name }}</strong><small>{{ application.email }}</small></div><b>{{ application.status }}</b></div>{% empty %}<p>Chưa có hồ sơ gia sư mới.</p>{% endfor %}
         </div>
     </article>
 </section>

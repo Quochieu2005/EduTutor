@@ -1,0 +1,10 @@
+{% if messages %}
+  <div class="app-notifications" aria-live="polite">
+    {% for message in messages %}
+      <div class="app-notice{% if message.tags == 'error' %} app-notice--error{% endif %}" role="status">
+        <span>{{ message }}</span>
+        <button type="button" aria-label="Đóng thông báo" data-app-notice-close>&times;</button>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}

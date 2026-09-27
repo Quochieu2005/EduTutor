@@ -1,5 +1,9 @@
 {% extends "admin/management/base.html" %}
+{% load static %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'admin_ui/css/invite-user.css' %}?v=2" />{% endblock %}
 {% block resource_content %}
   {% include "contacts/contacts-heading.html" %}
   {% include "contacts/contacts-list.html" %}
+  {% include "contacts/contact-reply-modal.html" %}
 {% endblock %}
+{% block extra_scripts %}<script src="{% static 'admin_ui/js/contact-reply.js' %}?v=1"></script>{% endblock %}

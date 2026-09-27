@@ -1,5 +1,7 @@
 # EduTutor
 
+> Database schema and collection rules: [README_DATABASE_EDUTUTOR.md](README_DATABASE_EDUTUTOR.md).
+
 **EduTutor** là nền tảng web kết nối **gia sư và người học**, hỗ trợ tìm kiếm gia sư, gửi yêu cầu học tập và quản lý lịch học một cách thuận tiện và hiệu quả.
 
 ---

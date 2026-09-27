@@ -97,9 +97,10 @@ Kết quả thành công có dạng `{'ok': 1.0}`.
 User được lưu trong collection `users` thông qua MongoEngine:
 
 ```python
-from accounts.documents import User
+from accounts.documents import Student, Parent
 
-User.objects.all()
+Student.objects.all()
+Parent.objects.all()
 ```
 
 MongoEngine tự tạo collection khi bản ghi đầu tiên được lưu. Không cần chạy `makemigrations` cho các document MongoDB.

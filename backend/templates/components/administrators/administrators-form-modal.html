@@ -1,0 +1,35 @@
+<div class="add-user-modal administrators-modal" data-resource-modal hidden>
+  <div class="add-user-dialog" role="dialog" aria-modal="true" aria-labelledby="administrator-form-title">
+    <button class="add-user-close" type="button" data-resource-modal-close aria-label="Đóng">&times;</button>
+    <h2 id="administrator-form-title" data-resource-form-title>Thêm quản trị viên</h2>
+    <p>Nhập thông tin và lưu khi hoàn tất.</p>
+    <form method="post" action="{{ page.create_url }}" enctype="multipart/form-data" data-resource-form data-server-submit="true" data-create-url="{{ page.create_url }}">
+      {% csrf_token %}
+      <input type="hidden" name="record_id" />
+
+      <span class="administrator-form-label">Ảnh đại diện</span>
+      <div class="administrator-upload-wrap">
+        <input class="profile-image-input" id="administrator-profile-image" name="profile_image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" />
+        <label class="profile-image-upload" for="administrator-profile-image">
+          <span class="profile-image-preview" data-administrator-image-preview>+</span>
+          <b>Chọn ảnh</b>
+          <em data-administrator-image-name>Chưa chọn ảnh</em>
+        </label>
+        <label class="administrator-remove-image" data-administrator-remove-wrap hidden>
+          <input type="checkbox" name="remove_profile_image" value="1" /> Xóa ảnh hiện tại
+        </label>
+      </div>
+
+      <label>Họ và tên<input name="name" type="text" maxlength="150" placeholder="Nhập họ và tên" required /></label>
+      <label>Email<input name="email" type="email" maxlength="254" placeholder="Nhập email" required /></label>
+      <label>Vai trò<select name="role" required><option value="admin">Admin</option><option value="super_admin">Super Admin</option></select></label>
+      <label>Quyền được cấp<input name="permissions" type="text" placeholder="VD: tutors.approve, blog.publish" /></label>
+      <label>Quản lý bởi<select name="managed_by"><option value="">Tự động chọn Super Admin hiện tại</option>{% for manager in page.manager_options %}<option value="{{ manager.slug }}">{{ manager.name }}</option>{% endfor %}</select></label>
+      <label>Trạng thái<select name="status" required><option value="1">Active</option><option value="0">Inactive</option></select></label>
+      <label>Mật khẩu<span class="password-field"><input name="password" type="password" minlength="8" maxlength="72" placeholder="Tối thiểu 8 ký tự" /><button class="password-toggle" type="button" aria-label="Hiện mật khẩu" data-administrator-password-toggle></button></span></label>
+      <label>Xác nhận mật khẩu<span class="password-field"><input name="password_confirmation" type="password" minlength="8" maxlength="72" placeholder="Nhập lại mật khẩu" /><button class="password-toggle" type="button" aria-label="Hiện mật khẩu" data-administrator-password-toggle></button></span></label>
+      <p class="administrator-password-help" data-administrator-password-help>Mật khẩu là bắt buộc khi tạo quản trị viên.</p>
+      <button class="add-user-save" type="submit">Lưu thay đổi</button>
+    </form>
+  </div>
+</div>

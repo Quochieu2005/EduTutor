@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 from django.shortcuts import redirect
 
 from .documents import Admin
+from .session import admin_session_is_valid, clear_admin_session
 
 
 PUBLIC_ADMIN_PATHS = {
@@ -25,7 +26,7 @@ class AdminSessionMiddleware:
 
         if request.path.startswith('/admin/') and request.path not in PUBLIC_ADMIN_PATHS:
             admin_id = request.session.get('admin_id')
-            if admin_id is not None:
+            if admin_id is not None and admin_session_is_valid(request.session):
                 request.admin_account = Admin.objects(
                     id=admin_id,
                     status=Admin.STATUS_ACTIVE,
@@ -38,8 +39,7 @@ class AdminSessionMiddleware:
                     request.admin_account = None
 
             if request.admin_account is None:
-                request.session.pop('admin_id', None)
-                request.session.pop('admin_session_version', None)
+                clear_admin_session(request.session)
                 query = urlencode({'next': request.get_full_path()})
                 return redirect(f'/admin/login?{query}')
 

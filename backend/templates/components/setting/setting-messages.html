@@ -1,5 +1,7 @@
 {% if form_error %}
-<div class="setting-form__message setting-form__message--error" role="alert" data-setting-message>
+<div class="app-notifications" aria-live="polite">
+{% if form_error %}
+<div class="app-notice app-notice--error" role="alert" data-setting-message>
   <span>{{ form_error }}</span>
   <button type="button" class="setting-form__message-close" data-setting-message-close aria-label="Đóng thông báo">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
@@ -7,10 +9,12 @@
 </div>
 {% endif %}
 {% for message in messages %}
-<div class="setting-form__message setting-form__message--success" role="status" data-setting-message>
+<div class="app-notice" role="status" data-setting-message>
   <span>{{ message }}</span>
   <button type="button" class="setting-form__message-close" data-setting-message-close aria-label="Đóng thông báo">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
   </button>
 </div>
 {% endfor %}
+</div>
+{% endif %}

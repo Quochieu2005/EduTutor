@@ -1,2 +1,2 @@
-{# Component danh sách riêng của phân hệ activity-logs. #}
+{% for error in filter_errors %}<p role="alert">{{ error }}</p>{% endfor %}
 {% include "resource/resource-list.html" %}

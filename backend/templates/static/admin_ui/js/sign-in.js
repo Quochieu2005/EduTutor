@@ -8,6 +8,9 @@
     document.querySelectorAll('[data-auth-message-close]').forEach((button) => {
         button.addEventListener('click', () => button.closest('[data-auth-message]')?.remove());
     });
+    document.querySelectorAll('[data-auth-message]').forEach((message) => {
+        window.setTimeout(() => message.remove(), 5000);
+    });
 
     const resetSignInPage = () => {
         window.clearTimeout(submitTimer);

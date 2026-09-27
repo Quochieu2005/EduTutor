@@ -1,0 +1,6 @@
+{% for message in messages %}
+  <div class="administrator-message administrator-message--{{ message.tags|default:'success' }}" role="status" data-administrator-message>
+    <span>{{ message }}</span>
+    <button type="button" aria-label="Đóng thông báo" data-administrator-message-close>&times;</button>
+  </div>
+{% endfor %}

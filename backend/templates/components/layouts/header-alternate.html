@@ -1,63 +1,31 @@
-{# Header tham chiếu từ đoạn mã bạn cung cấp; component dùng Tailwind CSS. #}
-<header class="z-50 h-16 header-fixed peer/header sticky top-0 w-[inherit] shadow-none">
-    <div class="profile-alternate-header__inner relative flex h-full items-center gap-3 p-4 sm:gap-4">
-        <button
-            data-slot="sidebar-trigger"
-            data-sidebar="trigger"
-            id="sidebar-toggle"
-            class="inline-flex size-7 shrink-0 items-center justify-center rounded-md border bg-background text-sm font-medium shadow-xs transition-all hover:bg-accent hover:text-accent-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 max-md:scale-125"
-            type="button"
-            aria-label="Toggle sidebar">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path></svg>
-            <span class="sr-only">Toggle Sidebar</span>
-        </button>
-
-        <div class="h-6 w-px shrink-0 bg-border" role="separator" aria-orientation="vertical"></div>
-
-        <button
-            data-slot="search-trigger"
-            id="search-button"
-            class="group relative me-auto flex h-8 w-full flex-1 items-center justify-start rounded-md bg-muted/25 px-4 py-2 text-sm font-normal text-muted-foreground shadow-none transition-all hover:bg-accent hover:text-accent-foreground sm:w-40 sm:pe-12 md:flex-none lg:w-52 xl:w-64"
-            type="button"
-            aria-keyshortcuts="Meta+K Control+K">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute start-1.5 top-1/2 -translate-y-1/2" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
-            <span class="ms-4">Search</span>
-            <kbd class="pointer-events-none absolute end-[0.3rem] top-[0.3rem] hidden h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium sm:flex"><span class="text-xs">⌘</span>K</kbd>
-        </button>
-
-        <button data-slot="theme-toggle" id="theme-toggle" class="inline-flex size-9 items-center justify-center rounded-full text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground" type="button" aria-label="Toggle theme">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-[1.2rem]" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
-            <span class="sr-only">Toggle theme</span>
-        </button>
-
-        {% include "layouts/notification-menu.html" %}
-
-        <details class="admin-user-menu">
-            <summary class="admin-avatar" id="user-menu-button" aria-label="Mở tài khoản">{{ request.admin_account.initials }}</summary>
-            <div class="admin-user-menu__content" role="menu">
-                <div class="admin-user-menu__identity"><strong>{{ request.admin_account.name }}</strong><small>{{ request.admin_account.email }}</small></div>
-                <div class="admin-user-menu__separator"></div>
-                <a href="{% url 'profile' %}" role="menuitem">Profile <kbd>⇧⌘P</kbd></a>
-                <a href="#" role="menuitem">Billing <kbd>⌘B</kbd></a>
-                <a href="#" role="menuitem">Settings <kbd>⌘S</kbd></a>
-                <button type="button" role="menuitem">New Team</button>
-                <div class="admin-user-menu__separator"></div>
-                <form class="admin-user-menu__sign-out-form" action="{% url 'logout' %}" method="post">
-                    {% csrf_token %}
-                    <button class="admin-user-menu__sign-out" type="submit" role="menuitem">Sign out <kbd>⇧⌘Q</kbd></button>
-                </form>
-            </div>
-        </details>
+{% load static %}
+{% include "layouts/global-notifications.html" %}
+<header class="admin-header" data-header>
+    <div class="admin-header__inner">
+        <button class="admin-icon-button" id="sidebar-toggle" type="button" aria-label="Thu gọn thanh bên" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M9 3v18"></path></svg></button>
+        <span class="admin-header__separator" aria-hidden="true"></span>
+        <button class="admin-icon-button admin-mobile-trigger" id="mobile-menu" type="button" aria-label="Mở menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16"></path></svg></button>
+        <nav class="admin-nav" id="admin-nav" aria-label="Điều hướng chính">
+            <a class="admin-nav__link{% if request.path == '/admin/dashboard/' or request.path == '/admin/dashboard' %} admin-nav__link--active{% endif %}" href="{% url 'dashboard-slash' %}">Tổng quan</a>
+            <a class="admin-nav__link{% if request.path == '/admin/chats/' %} admin-nav__link--active{% endif %}" href="{% url 'chats' %}">Tin nhắn</a>
+            <a class="admin-nav__link{% if request.path == '/admin/users/' %} admin-nav__link--active{% endif %}" href="{% url 'users' %}">Người dùng</a>
+            <a class="admin-nav__link{% if request.path|slice:':15' == '/admin/setting/' or request.path == '/admin/profile/' %} admin-nav__link--active{% endif %}" href="{% url 'profile' %}">Cài đặt</a>
+        </nav>
+        <button class="admin-search" id="search-button" type="button" aria-label="Mở tìm kiếm" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg><span>Tìm kiếm</span><kbd>Ctrl K</kbd></button>
+        <div class="admin-header__actions">
+            <button class="admin-icon-button" id="theme-toggle" type="button" aria-label="Đổi giao diện" aria-pressed="false"><svg class="admin-icon--sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l1.41-1.41"></path></svg><svg class="admin-icon--moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.7 15.2A8.5 8.5 0 0 1 8.8 3.3 8.5 8.5 0 1 0 20.7 15.2Z"></path></svg></button>
+            {% include "layouts/notification-menu.html" %}
+            <details class="admin-user-menu"><summary class="admin-avatar" id="user-menu-button" aria-label="Mở tài khoản">{% if request.admin_account.profile_image_url %}<img src="{{ request.admin_account.profile_image_url }}" alt="" />{% else %}{{ request.admin_account.initials }}{% endif %}</summary><div class="admin-user-menu__content" role="menu"><div class="admin-user-menu__identity"><strong>{{ request.admin_account.name }}</strong><small>{{ request.admin_account.email }}</small></div><div class="admin-user-menu__separator"></div><a href="{% url 'profile' %}" role="menuitem">Hồ sơ</a><a href="{% url 'account-settings' %}" role="menuitem">Tài khoản</a><a href="{% url 'security-settings' %}" role="menuitem">Bảo mật</a><div class="admin-user-menu__separator"></div><form class="admin-user-menu__sign-out-form" action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="admin-user-menu__sign-out" type="submit" role="menuitem">Đăng xuất</button></form></div></details>
+        </div>
     </div>
-
-    <div class="profile-command-overlay" id="search-panel" hidden>
-        <div class="profile-command-dialog" role="dialog" aria-modal="true" aria-label="Tìm kiếm">
-            <div class="profile-command-input-wrap">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
-                <input id="command-input" type="search" placeholder="Nhập để tìm kiếm..." autocomplete="off" aria-label="Tìm kiếm">
-                <kbd>ESC</kbd>
+    <div class="command-overlay" id="search-panel" hidden>
+        <div class="command-dialog" role="dialog" aria-modal="true" aria-label="Tìm kiếm"><div class="command-input-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg><input id="command-input" type="search" placeholder="Nhập để tìm kiếm..." autocomplete="off" aria-label="Tìm kiếm"><kbd>ESC</kbd></div>
+            <div class="command-list" id="command-list">
+                <section class="command-group" data-group><h2>Điều hướng</h2><button class="command-item" type="button" data-route="{% url 'dashboard-slash' %}" data-search="trang chu tong quan"><span class="command-item__arrow">→</span>Bảng điều khiển</button><button class="command-item" type="button" data-route="{% url 'chats' %}" data-search="chat tin nhan"><span class="command-item__arrow">→</span>Tin nhắn</button><button class="command-item" type="button" data-route="{% url 'users' %}" data-search="nguoi dung user"><span class="command-item__arrow">→</span>Người dùng</button><button class="command-item" type="button" data-route="{% url 'students' %}" data-search="hoc vien student"><span class="command-item__arrow">→</span>Học viên</button></section>
+                <section class="command-group" data-group><h2>Nội dung</h2><button class="command-item" type="button" data-route="{% url 'management-page' module='slides' %}" data-search="slide banner"><span class="command-item__arrow">→</span>Trình chiếu</button><button class="command-item" type="button" data-route="{% url 'management-page' module='contacts' %}" data-search="contact lien he"><span class="command-item__arrow">→</span>Phản hồi liên hệ</button><button class="command-item" type="button" data-route="{% url 'management-page' module='blog' %}" data-search="bai viet"><span class="command-item__arrow">→</span>Blog</button></section>
+                <section class="command-group" data-group><h2>Cài đặt</h2><button class="command-item" type="button" data-route="{% url 'profile' %}" data-search="profile ho so"><span class="command-item__arrow">→</span>Hồ sơ</button><button class="command-item" type="button" data-route="{% url 'account-settings' %}" data-search="account tai khoan"><span class="command-item__arrow">→</span>Tài khoản</button><button class="command-item" type="button" data-route="{% url 'security-settings' %}" data-search="security bao mat"><span class="command-item__arrow">→</span>Bảo mật</button><button class="command-item" type="button" data-route="{% url 'appearance-settings' %}" data-search="appearance giao dien"><span class="command-item__arrow">→</span>Giao diện</button></section>
             </div>
-            <p class="profile-command-empty">Chức năng tìm kiếm đã sẵn sàng.</p>
         </div>
     </div>
 </header>
+<script src="{% static 'admin_ui/js/notification-toast.js' %}?v=2"></script>
