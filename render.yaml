@@ -19,6 +19,10 @@ services:
         sync: false
       - key: MONGO_DB_NAME
         value: edututor
+      # Optional but recommended: a managed Redis/Upstash connection shared by
+      # all workers for cache and API throttling. Leave blank until provisioned.
+      - key: REDIS_URL
+        sync: false
       - key: EMAIL_HOST_USER
         sync: false
       - key: EMAIL_HOST_PASSWORD
