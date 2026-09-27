@@ -15,8 +15,8 @@ class AdminPaymentTests(SimpleTestCase):
         with self.assertRaisesMessage(ValueError, 'Kỳ học phí'):
             _billing_period('2026-13')
 
-    @patch('core.admin_payments.PaymentItem.objects')
-    @patch('core.admin_payments.Payment.objects')
+    @patch('core.admin_payments.PaymentItem')
+    @patch('core.admin_payments.Payment')
     def test_payment_list_shows_tuition_commission_and_tutor_payout(self, payments, items):
         payment = SimpleNamespace(
             id=12, billing_month='2026-10', total_amount=1600000,
@@ -26,10 +26,13 @@ class AdminPaymentTests(SimpleTestCase):
             tutor=SimpleNamespace(name='Gia sư B'),
             created_at=datetime(2026, 10, 31, tzinfo=timezone.utc),
         )
-        payments.order_by.return_value.select_related.return_value = [payment]
-        items.return_value.select_related.return_value = [SimpleNamespace(), SimpleNamespace()]
+        payments.objects.order_by.return_value.select_related.return_value = [payment]
+        items._fields = {'payment': SimpleNamespace(db_field='payment_id')}
+        items.objects.order_by.return_value.aggregate.return_value = [{'_id': 12, 'count': 2}]
 
         page = payment_page_config()
+        items.objects.order_by.return_value.aggregate.assert_called_once()
+        items.objects.assert_not_called()
 
         self.assertEqual(page['rows'][0], (
             'HP-202610-00012', '2026-10', 'Học viên A', 'Gia sư B', '2',

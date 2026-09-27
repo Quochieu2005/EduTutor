@@ -13,16 +13,19 @@ class AdminSubjectTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
 
-    @patch('core.admin_subjects.TutorSubject.objects')
-    @patch('core.admin_subjects.Subject.objects')
+    @patch('core.admin_subjects.TutorSubject')
+    @patch('core.admin_subjects.Subject')
     def test_list_uses_subject_records_and_usage_count(self, subjects, tutor_subjects):
         subject = SimpleNamespace(
-            name='Toán học', level='THCS, THPT', category='Khoa học tự nhiên', status=1,
+            id=7, name='Toán học', level='THCS, THPT', category='Khoa học tự nhiên', status=1,
         )
-        subjects.order_by.return_value = [subject]
-        tutor_subjects.return_value.count.return_value = 3
+        subjects.objects.order_by.return_value = [subject]
+        tutor_subjects._fields = {'subject': SimpleNamespace(db_field='subject_id')}
+        tutor_subjects.objects.order_by.return_value.aggregate.return_value = [{'_id': 7, 'count': 3}]
 
         page = subject_page_config()
+        tutor_subjects.objects.order_by.return_value.aggregate.assert_called_once()
+        tutor_subjects.objects.assert_not_called()
 
         self.assertEqual(page['rows'][0], (
             'Toán học', 'THCS, THPT', '3', 'Khoa học tự nhiên', 'Active',
