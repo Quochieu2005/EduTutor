@@ -145,6 +145,9 @@ class AuthToken(Document):
     token = StringField(required=True, unique=True, max_length=64)
     purpose = StringField(required=True, choices=('password_reset', 'access'))
     is_used = BooleanField(default=False)
+    # Password-reset OTP attempts are persisted so a process restart cannot
+    # reset the brute-force protection.
+    attempts = IntField(default=0, min_value=0)
     expires_at = DateTimeField(null=True)
     last_used_at = DateTimeField(null=True)
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))

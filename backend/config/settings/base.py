@@ -161,6 +161,16 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    # Protect public auth routes from bursts without affecting normal clients.
+    # The cache backend can be promoted to Redis later without changing APIs.
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/minute',
+        'user': '240/minute',
+    },
 }
 
 SPECTACULAR_SETTINGS = {

@@ -11,6 +11,7 @@ from django.core.mail import EmailMessage, get_connection, send_mail
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.crypto import salted_hmac
 from django.utils.text import slugify
 from mongoengine import NotUniqueError, ValidationError
 from mongoengine.connection import ConnectionFailure
@@ -84,6 +85,25 @@ from tutors.documents import (
 
 
 logger = logging.getLogger(__name__)
+
+ADMIN_RESET_OTP_TTL_MINUTES = 2
+ADMIN_RESET_OTP_MAX_ATTEMPTS = 5
+
+
+def _admin_reset_otp_digest(raw_otp):
+    """Return a server-keyed representation of a six-digit Admin OTP.
+
+    The database must never contain a usable OTP. ``salted_hmac`` uses Django's
+    SECRET_KEY, so a database dump cannot be brute-forced offline.
+    """
+    return salted_hmac('edututor.admin-password-reset', raw_otp).hexdigest()
+
+
+def _admin_reset_rate_key(request, email):
+    address = request.META.get('REMOTE_ADDR', '')
+    return 'admin-password-reset-rate:' + salted_hmac(
+        'edututor.admin-password-reset-rate', f'{email}|{address}',
+    ).hexdigest()
 
 
 MANAGEMENT_PAGES = {
@@ -482,12 +502,14 @@ def _tutors_page_config():
     tutors = list(Tutor.objects.order_by('-created_at'))
     tutor_ids = [tutor.id for tutor in tutors]
     subjects_by_tutor = {}
+    subject_links_by_tutor = {}
     areas_by_tutor = {}
     if tutor_ids:
         # Fetch all related rows once. The former loop issued two or more Atlas
         # queries for every tutor, which grows very slowly on Render.
         for link in TutorSubject.objects(tutor__in=tutor_ids).select_related():
             subjects_by_tutor.setdefault(str(link.tutor.id), []).append(link.subject.name)
+            subject_links_by_tutor.setdefault(str(link.tutor.id), link)
         for link in TutorTeachingArea.objects(tutor__in=tutor_ids).select_related():
             areas_by_tutor.setdefault(str(link.tutor.id), link)
 
@@ -514,6 +536,10 @@ def _tutors_page_config():
         'statuses': ['Pending', 'Approved', 'Rejected'],
         'rows': rows,
         'records': tutors,
+        # Reuse the batch-loaded records when building Edit form values below.
+        # Otherwise the generic renderer would reintroduce one query per tutor.
+        'subject_links_by_tutor': subject_links_by_tutor,
+        'areas_by_tutor': areas_by_tutor,
     }
 
 
@@ -1752,9 +1778,8 @@ def management_page(request, module):
             })
         elif module == 'tutors':
             tutor = config['records'][index - 1]
-            # ``select_related()`` returns a list in MongoEngine.
-            subject_link = next(iter(TutorSubject.objects(tutor=tutor).select_related()), None)
-            area_link = next(iter(TutorTeachingArea.objects(tutor=tutor).select_related()), None)
+            subject_link = config['subject_links_by_tutor'].get(str(tutor.id))
+            area_link = config['areas_by_tutor'].get(str(tutor.id))
             row.update({
                 'id': tutor.slug,
                 'slug': tutor.slug,
@@ -2712,53 +2737,78 @@ def sign_out(request):
 
 
 def request_password_reset(request):
-    """Email a one-time reset link backed by the shared ``tokens`` collection."""
+    """Send a short-lived, one-time Admin reset OTP without leaking accounts."""
     if request.method != 'POST':
         return render(request, 'auth/forgot-password.html')
 
     email = request.POST.get('email', '').strip().lower()
-    admin = Admin.objects(email=email, status=Admin.STATUS_ACTIVE).first()
-    if admin is None:
+    generic_message = 'Nếu email thuộc một tài khoản quản trị đang hoạt động, mã OTP đã được gửi.'
+    if not email:
         return render(request, 'auth/forgot-password.html', {
-            'auth_error': 'Không tìm thấy tài khoản Admin đang hoạt động với email này.',
+            'auth_error': 'Vui lòng nhập email hợp lệ.',
             'entered_email': email,
-        }, status=404)
+        }, status=400)
 
-    now = datetime.now(timezone.utc)
-    active_token = AuthToken.objects(
-        user_type='admin', user_id=int(admin.id), purpose='password_reset', is_used=False,
-    ).order_by('-created_at').first()
-    if active_token and now - active_token.created_at < timedelta(seconds=60):
+    # A short cooldown protects SMTP and prevents OTP spam. It is keyed by
+    # email+client IP and does not reveal whether that email has an Admin.
+    if not cache.add(_admin_reset_rate_key(request, email), True, 60):
         return render(request, 'auth/forgot-password.html', {
-            'auth_error': 'Vui lòng chờ 60 giây trước khi yêu cầu liên kết mới.',
+            'auth_error': 'Vui lòng chờ 60 giây trước khi yêu cầu mã mới.',
             'entered_email': email,
         }, status=429)
 
-    AuthToken.objects(
-        user_type='admin', user_id=int(admin.id), purpose='password_reset', is_used=False,
-    ).update(set__is_used=True, set__last_used_at=now)
-    raw_token = f'{secrets.randbelow(1_000_000):06d}'
-    reset_token = AuthToken(
-        user_type='admin', user_id=int(admin.id), token=raw_token,
-        purpose='password_reset', expires_at=now + timedelta(minutes=2),
-    )
-    reset_token.save()
     try:
+        admin = Admin.objects(email=email, status=Admin.STATUS_ACTIVE).first()
+        if admin is None:
+            return render(request, 'auth/forgot-password.html', {
+                'auth_success': generic_message,
+                'entered_email': email,
+            })
+
+        now = datetime.now(timezone.utc)
+        AuthToken.objects(
+            user_type='admin', user_id=int(admin.id), purpose='password_reset', is_used=False,
+        ).update(set__is_used=True, set__last_used_at=now)
+
+        # Store a server-keyed digest, never the six-digit OTP itself.
+        for _ in range(3):
+            raw_token = f'{secrets.randbelow(1_000_000):06d}'
+            reset_token = AuthToken(
+                user_type='admin', user_id=int(admin.id),
+                token=_admin_reset_otp_digest(raw_token),
+                purpose='password_reset',
+                expires_at=now + timedelta(minutes=ADMIN_RESET_OTP_TTL_MINUTES),
+            )
+            try:
+                reset_token.save()
+                break
+            except NotUniqueError:
+                reset_token = None
+        else:
+            raise RuntimeError('Không thể tạo mã OTP mới. Vui lòng thử lại.')
+
         send_mail(
             subject='Mã OTP đặt lại mật khẩu EduTutor Admin',
             message=(
                 f'Xin chào {admin.name},\n\n'
                 f'Mã OTP đặt lại mật khẩu của bạn là: {raw_token}\n'
-                'Mã chỉ có hiệu lực trong 2 phút.\n\n'
+                f'Mã chỉ có hiệu lực trong {ADMIN_RESET_OTP_TTL_MINUTES} phút.\n\n'
                 'Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.'
             ),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[admin.email],
             fail_silently=False,
         )
+    except (ConnectionFailure, PyMongoError):
+        logger.exception('MongoDB is unavailable during Admin password reset request.')
+        return render(request, 'auth/forgot-password.html', {
+            'auth_error': 'Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau ít phút.',
+            'entered_email': email,
+        }, status=503)
     except Exception:
         logger.exception('Could not send admin password reset OTP email.')
-        reset_token.delete()
+        if 'reset_token' in locals() and reset_token is not None:
+            reset_token.delete()
         return render(request, 'auth/forgot-password.html', {
             'auth_error': 'Không thể gửi email. Vui lòng kiểm tra SMTP rồi thử lại.',
             'entered_email': email,
@@ -2770,70 +2820,8 @@ def request_password_reset(request):
 
 
 def forgot_password(request):
-    """Backward-compatible alias; password resets now use URL tokens only."""
+    """Backward-compatible entry point for the single OTP reset flow."""
     return request_password_reset(request)
-
-    if request.method == 'POST':
-        email = request.POST.get('email', '').strip().lower()
-        admin = Admin.objects(email=email, status=Admin.STATUS_ACTIVE).first()
-        if admin is None:
-            return render(request, 'auth/forgot-password.html', {
-                'auth_error': 'Không tìm thấy tài khoản Admin đang hoạt động với email này.',
-                'entered_email': email,
-            }, status=404)
-
-        now = datetime.now(timezone.utc)
-        latest = PasswordResetOTP.objects(
-            admin=admin,
-            used_at=None,
-        ).order_by('-created_at').first()
-        if latest is not None:
-            created_at = latest.created_at
-            if created_at.tzinfo is None:
-                created_at = created_at.replace(tzinfo=timezone.utc)
-            if now - created_at < timedelta(seconds=60):
-                return render(request, 'auth/forgot-password.html', {
-                    'auth_error': 'Vui lòng chờ 60 giây trước khi yêu cầu mã OTP mới.',
-                    'entered_email': email,
-                }, status=429)
-
-        PasswordResetOTP.objects(admin=admin, used_at=None).update(
-            set__used_at=now,
-        )
-        raw_code = f'{secrets.randbelow(1_000_000):06d}'
-        otp_record = PasswordResetOTP(
-            admin=admin,
-            expires_at=now + timedelta(minutes=5),
-        )
-        otp_record.set_code(raw_code)
-        otp_record.save()
-
-        try:
-            send_mail(
-                subject='Mã OTP đặt lại mật khẩu EduTutor Admin',
-                message=(
-                    f'Xin chào {admin.name},\n\n'
-                    f'Mã OTP của bạn là: {raw_code}\n'
-                    'Mã này chỉ có hiệu lực trong 5 phút.\n\n'
-                    'Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này.'
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[admin.email],
-                fail_silently=False,
-            )
-        except Exception:
-            logger.exception('Could not send admin password reset OTP email.')
-            otp_record.delete()
-            return render(request, 'auth/forgot-password.html', {
-                'auth_error': 'Không thể gửi email. Vui lòng kiểm tra cấu hình SMTP rồi thử lại.',
-                'entered_email': email,
-            }, status=503)
-
-        request.session['password_reset_otp_id'] = str(otp_record.id)
-        request.session['password_reset_admin_id'] = int(admin.id)
-        return redirect('otp')
-
-    return render(request, 'auth/forgot-password.html')
 
 
 def otp(request):
@@ -2865,9 +2853,30 @@ def otp(request):
     if request.method == 'POST':
         context.pop('auth_success', None)
         raw_code = request.POST.get('otp', '').strip()
-        if len(raw_code) != 6 or not raw_code.isdigit() or not secrets.compare_digest(raw_code, reset_token.token):
-            context['auth_error'] = 'Mã OTP không chính xác.'
-            return render(request, 'auth/otp.html', context, status=400)
+        if reset_token.attempts >= ADMIN_RESET_OTP_MAX_ATTEMPTS:
+            reset_token.is_used = True
+            reset_token.last_used_at = datetime.now(timezone.utc)
+            reset_token.save()
+            context['auth_error'] = 'Bạn đã nhập sai quá số lần cho phép. Vui lòng yêu cầu mã OTP mới.'
+            return render(request, 'auth/otp.html', context, status=429)
+        valid_otp = (
+            len(raw_code) == 6
+            and raw_code.isdigit()
+            and secrets.compare_digest(_admin_reset_otp_digest(raw_code), reset_token.token)
+        )
+        if not valid_otp:
+            reset_token.attempts += 1
+            if reset_token.attempts >= ADMIN_RESET_OTP_MAX_ATTEMPTS:
+                reset_token.is_used = True
+                context['auth_error'] = 'Bạn đã nhập sai quá số lần cho phép. Vui lòng yêu cầu mã OTP mới.'
+                response_status = 429
+            else:
+                attempts_left = ADMIN_RESET_OTP_MAX_ATTEMPTS - reset_token.attempts
+                context['auth_error'] = f'Mã OTP không chính xác. Bạn còn {attempts_left} lần thử.'
+                response_status = 400
+            reset_token.last_used_at = datetime.now(timezone.utc)
+            reset_token.save()
+            return render(request, 'auth/otp.html', context, status=response_status)
         reset_token.is_used = True
         reset_token.last_used_at = datetime.now(timezone.utc)
         reset_token.save()
@@ -2880,71 +2889,20 @@ def otp(request):
 
     return render(request, 'auth/otp.html', context)
 
-    otp_id = request.session.get('password_reset_otp_id')
-    admin_id = request.session.get('password_reset_admin_id')
-    otp_record = PasswordResetOTP.objects(id=otp_id, admin=admin_id).first() if otp_id and admin_id else None
-    if otp_record is None or otp_record.used_at is not None:
-        return redirect('forgot-password')
-
-    expires_at = otp_record.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    context = {
-        'reset_email': otp_record.admin.email,
-        'auth_success': f'Mã OTP đã được gửi tới {otp_record.admin.email}. Mã có hiệu lực 5 phút.',
-        'otp_expires_at': int(expires_at.timestamp()),
-    }
-
-    if request.method == 'POST':
-        context.pop('auth_success', None)
-        raw_code = request.POST.get('otp', '').strip()
-        if otp_record.is_expired():
-            context['auth_error'] = 'Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới.'
-            return render(request, 'auth/otp.html', context, status=410)
-        if otp_record.attempts >= 5:
-            context['auth_error'] = 'Bạn đã nhập sai quá 5 lần. Vui lòng yêu cầu mã OTP mới.'
-            return render(request, 'auth/otp.html', context, status=429)
-        if len(raw_code) != 6 or not raw_code.isdigit() or not otp_record.check_code(raw_code):
-            otp_record.attempts += 1
-            otp_record.save()
-            attempts_left = max(0, 5 - otp_record.attempts)
-            context['auth_error'] = f'Mã OTP không chính xác. Bạn còn {attempts_left} lần thử.'
-            return render(request, 'auth/otp.html', context, status=400)
-
-        now = datetime.now(timezone.utc)
-        otp_record.used_at = now
-        otp_record.save()
-        request.session.pop('password_reset_otp_id', None)
-        request.session['password_reset_verified_admin_id'] = int(otp_record.admin.id)
-        request.session['password_reset_verified_until'] = int(
-            (now + timedelta(minutes=5)).timestamp()
-        )
-        return redirect('reset-password')
-
-    return render(request, 'auth/otp.html', context)
-
 
 def reset_password_with_token(request):
-    raw_token = request.GET.get('token') or request.POST.get('token', '')
+    """Set a password only after this browser has passed the OTP challenge."""
     now = datetime.now(timezone.utc)
-    reset_token = AuthToken.objects(
-        token=raw_token, user_type='admin', purpose='password_reset', is_used=False,
-    ).first() if raw_token else None
-    if reset_token is not None:
-        if reset_token.is_expired(now):
-            return redirect('forgot-password')
-        admin_id = reset_token.user_id
-    else:
-        admin_id = request.session.get('password_reset_verified_admin_id')
-        verified_until = request.session.get('password_reset_verified_until', 0)
-        if not admin_id or now.timestamp() > verified_until:
-            return redirect('forgot-password')
+    admin_id = request.session.get('password_reset_verified_admin_id')
+    verified_until = request.session.get('password_reset_verified_until', 0)
+    if not admin_id or now.timestamp() > verified_until:
+        return redirect('forgot-password')
 
     admin = Admin.objects(id=admin_id, status=Admin.STATUS_ACTIVE).first()
     if admin is None:
         return redirect('forgot-password')
 
-    context = {'reset_token': raw_token}
+    context = {}
     if request.method == 'POST':
         new_password = request.POST.get('new_password', '')
         confirm_password = request.POST.get('confirm_password', '')
@@ -2960,10 +2918,6 @@ def reset_password_with_token(request):
             admin.set_password(new_password)
             admin.session_version += 1
             admin.save()
-            if reset_token is not None:
-                reset_token.is_used = True
-                reset_token.last_used_at = now
-                reset_token.save()
             record_admin_activity(request, 'reset_password', admin, actor=admin)
 
             request.session.flush()
