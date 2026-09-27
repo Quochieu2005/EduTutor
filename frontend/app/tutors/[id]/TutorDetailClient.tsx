@@ -324,7 +324,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
                 </div>
 
                 <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-xs text-blue-800">
-                  Yêu cầu sẽ được gửi tới trang Admin thử nghiệm. Trạng thái duyệt được hiển thị trong Profile của bạn.
+                  Yêu cầu sẽ được gửi tới Admin. Trạng thái duyệt được hiển thị trong Profile của bạn.
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">

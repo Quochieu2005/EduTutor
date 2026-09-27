@@ -65,10 +65,10 @@ export default function ProfilePage() {
   }, [user]);
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(refresh, 0);
+    const initialLoad = setTimeout(refresh, 0);
     window.addEventListener(PORTAL_STORE_EVENT, refresh);
     return () => {
-      window.clearTimeout(initialLoad);
+      clearTimeout(initialLoad);
       window.removeEventListener(PORTAL_STORE_EVENT, refresh);
     };
   }, [refresh]);
@@ -96,15 +96,10 @@ export default function ProfilePage() {
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
       <Header />
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Tài khoản EduTutor</p>
-            <h1 className="text-3xl font-bold mt-1">Profile của bạn</h1>
-            <p className="text-sm text-gray-500 mt-1">Quản lý lớp học, lịch dạy và trạng thái yêu cầu.</p>
-          </div>
-          <Link href="/admin-test" className="self-start px-4 py-2.5 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-gray-800">
-            Mở Admin thử nghiệm
-          </Link>
+        <div>
+          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Tài khoản EduTutor</p>
+          <h1 className="text-3xl font-bold mt-1">Profile của bạn</h1>
+          <p className="text-sm text-gray-500 mt-1">Quản lý lớp học, lịch dạy và trạng thái yêu cầu.</p>
         </div>
 
         <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 flex flex-col sm:flex-row gap-4 items-start">
@@ -117,7 +112,15 @@ export default function ProfilePage() {
             <div className="flex flex-wrap gap-2 mt-3 text-xs">
               <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">Học viên</span>
               {application && (
-                <span className={`px-2.5 py-1 rounded-full border ${application.status === "approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>
+                <span
+                  className={`px-2.5 py-1 rounded-full border ${
+                    application.status === "approved"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : application.status === "rejected"
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
+                        : "bg-amber-50 text-amber-700 border-amber-200"
+                  }`}
+                >
                   Hồ sơ gia sư: {tutorStatusLabel[application.status]}
                 </span>
               )}
@@ -173,68 +176,100 @@ export default function ProfilePage() {
           )}
         </section>
 
-        <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
-            <div>
-              <h2 className="text-xl font-bold">Hồ sơ và lịch dạy gia sư</h2>
-              <p className="text-xs text-gray-500 mt-1">Lịch sáng–chiều từ Thứ 2 đến Chủ nhật.</p>
+        {application?.status === "approved" && (
+          <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+              <div>
+                <h2 className="text-xl font-bold">Hồ sơ và lịch dạy gia sư</h2>
+                <p className="text-xs text-gray-500 mt-1">Lịch sáng–chiều từ Thứ 2 đến Chủ nhật.</p>
+              </div>
             </div>
-            {!application && <Link href="/tutors/register" className="px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold">Đăng ký làm gia sư</Link>}
-          </div>
 
-          {!application ? (
-            <p className="py-6 text-sm text-gray-500 text-center">Bạn chưa nộp hồ sơ gia sư.</p>
-          ) : application.status !== "approved" ? (
-            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
-              Hồ sơ gia sư đang ở trạng thái <strong>{tutorStatusLabel[application.status]}</strong>. Admin cần duyệt trước khi lịch dạy được mở.
-            </div>
-          ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] border-separate border-spacing-1 text-xs">
                 <thead>
-                  <tr><th className="p-2 text-left text-gray-500">Buổi</th>{[2,3,4,5,6,7,8].map((day) => <th key={day} className="p-2 bg-gray-50 rounded-lg">{dayLabels[day]}</th>)}</tr>
+                  <tr>
+                    <th className="p-2 text-left text-gray-500">Buổi</th>
+                    {[2, 3, 4, 5, 6, 7, 8].map((day) => (
+                      <th key={day} className="p-2 bg-gray-50 rounded-lg">
+                        {dayLabels[day]}
+                      </th>
+                    ))}
+                  </tr>
                 </thead>
                 <tbody>
                   {(["morning", "afternoon"] as const).map((period) => (
                     <tr key={period}>
-                      <th className="p-2 text-left text-gray-600">{period === "morning" ? "Sáng" : "Chiều"}</th>
-                      {[2,3,4,5,6,7,8].map((day) => {
-                        const item = schedule.find((entry) => entry.day === day && entry.period === period);
-                        return <td key={day} className="align-top p-1 h-28">{item ? (
-                          <div className="h-full rounded-lg bg-blue-50 border border-blue-100 p-2 space-y-1">
-                            <strong className="block text-blue-800">{item.subject}</strong>
-                            <span className="block text-gray-700">{item.grade}</span>
-                            <span className="block text-gray-500">{item.time}</span>
-                            <span className="block text-purple-700">{item.teachingMode === "online" ? "Online" : item.teachingMode === "offline" ? "Trực tiếp" : "Online & Trực tiếp"}</span>
-                            {item.address && <span className="block text-gray-500">{item.address}</span>}
-                          </div>
-                        ) : <div className="h-full rounded-lg bg-gray-50 border border-dashed border-gray-200" />}</td>;
+                      <th className="p-2 text-left text-gray-600">
+                        {period === "morning" ? "Sáng" : "Chiều"}
+                      </th>
+                      {[2, 3, 4, 5, 6, 7, 8].map((day) => {
+                        const item = schedule.find(
+                          (entry) => entry.day === day && entry.period === period,
+                        );
+                        return (
+                          <td key={day} className="align-top p-1 h-28">
+                            {item ? (
+                              <div className="h-full rounded-lg bg-blue-50 border border-blue-100 p-2 space-y-1">
+                                <strong className="block text-blue-800">{item.subject}</strong>
+                                <span className="block text-gray-700">{item.grade}</span>
+                                <span className="block text-gray-500">{item.time}</span>
+                                <span className="block text-purple-700">
+                                  {item.teachingMode === "online"
+                                    ? "Online"
+                                    : item.teachingMode === "offline"
+                                      ? "Trực tiếp"
+                                      : "Online & Trực tiếp"}
+                                </span>
+                                {item.address && (
+                                  <span className="block text-gray-500">{item.address}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="h-full rounded-lg bg-gray-50 border border-dashed border-gray-200" />
+                            )}
+                          </td>
+                        );
                       })}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
 
-          {application?.status === "approved" && (
             <div className="pt-4 border-t border-gray-100 space-y-3">
               <h3 className="font-bold">Yêu cầu từ người dùng</h3>
-              {incomingRequests.length === 0 ? <p className="text-xs text-gray-500">Chưa có yêu cầu mới.</p> : incomingRequests.map((request) => (
-                <div key={request.id} className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div><strong>{request.studentName}</strong><p className="text-gray-500 mt-0.5">{request.classTitle} • PH: {request.parentPhone} • HV: {request.studentPhone}</p></div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                    request.status === "approved"
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : request.status === "rejected"
-                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : "bg-amber-50 text-amber-700 border-amber-200"
-                  }`}>{enrollmentStatusLabel[request.status]}</span>
-                </div>
-              ))}
+              {incomingRequests.length === 0 ? (
+                <p className="text-xs text-gray-500">Chưa có yêu cầu mới.</p>
+              ) : (
+                incomingRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                  >
+                    <div>
+                      <strong>{request.studentName}</strong>
+                      <p className="text-gray-500 mt-0.5">
+                        {request.classTitle} • PH: {request.parentPhone} • HV: {request.studentPhone}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                        request.status === "approved"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : request.status === "rejected"
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}
+                    >
+                      {enrollmentStatusLabel[request.status]}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
         <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
           <div className="border-b border-gray-100 pb-4">
