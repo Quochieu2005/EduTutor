@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.urls import reverse
 from django.utils import timezone as django_timezone
@@ -11,6 +12,13 @@ from accounts.documents import Admin
 from core.documents import Contact
 from lessons.documents import LearningRequest, Message
 from tutors.documents import TutorApplication
+
+
+# The header is rendered on every admin page.  Caching the database-backed
+# source list briefly removes several Atlas round trips on page navigation,
+# while keeping notifications fresh enough for an admin dashboard.
+NOTIFICATION_CACHE_KEY = 'admin-header-notification-items:v1'
+NOTIFICATION_CACHE_SECONDS = 30
 
 
 def _as_utc(value):
@@ -39,6 +47,12 @@ def _relative_time(value, now):
 
 def _notification_items():
     """Build small actionable inbox entries from the system's source tables."""
+    cached_items = cache.get(NOTIFICATION_CACHE_KEY)
+    if cached_items is not None:
+        # ``admin_header_notifications`` adds request-specific fields below;
+        # never mutate the cached dictionaries themselves.
+        return [dict(item) for item in cached_items]
+
     entries = []
     for item in TutorApplication.objects(status='pending').order_by('-created_at')[:3]:
         entries.append({
@@ -48,7 +62,13 @@ def _notification_items():
             'url': reverse('management-page', kwargs={'module': 'tutor-approvals'}),
             'icon': 'approval',
         })
-    for item in LearningRequest.objects(status='pending').order_by('-created_at')[:3]:
+    learning_requests = list(
+        LearningRequest.objects(status='pending')
+        .order_by('-created_at')
+        .limit(3)
+        .select_related(max_depth=1)
+    )
+    for item in learning_requests:
         try:
             student_name = item.student.name
             subject_name = item.subject.name
@@ -77,7 +97,13 @@ def _notification_items():
             'url': reverse('chats'),
             'icon': 'message',
         })
-    return sorted(entries, key=lambda item: _as_utc(item['created_at']) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)[:6]
+    items = sorted(
+        entries,
+        key=lambda item: _as_utc(item['created_at']) or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )[:6]
+    cache.set(NOTIFICATION_CACHE_KEY, items, NOTIFICATION_CACHE_SECONDS)
+    return [dict(item) for item in items]
 
 
 def admin_header_notifications(request):
