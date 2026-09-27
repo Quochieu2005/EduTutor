@@ -1,0 +1,27 @@
+<div class="add-user-modal resource-form-modal subjects-form-modal" data-resource-modal hidden>
+  <div class="add-user-dialog" role="dialog" aria-modal="true" aria-labelledby="subject-form-title">
+    <button class="add-user-close" type="button" data-resource-modal-close aria-label="Đóng">&times;</button>
+    <h2 id="subject-form-title" data-resource-form-title>Thêm môn học</h2>
+    <p>Thiết lập môn học để dùng nhất quán cho gia sư và tin tuyển dụng.</p>
+    <form method="post" action="{{ page.create_url }}" data-resource-form data-server-submit="true" data-create-url="{{ page.create_url }}">
+      {% csrf_token %}
+      <input type="hidden" name="record_id" />
+      <label>Môn học
+        <input name="name" type="text" maxlength="150" placeholder="Ví dụ: Toán học" required />
+      </label>
+      <label>Nhóm chuyên môn
+        <input name="category" type="text" maxlength="150" placeholder="Ví dụ: Khoa học tự nhiên" required />
+      </label>
+      <label>Cấp độ
+        <input name="level" type="text" maxlength="250" placeholder="Ví dụ: Tiểu học, THCS, THPT" />
+      </label>
+      <label>Trạng thái
+        <select name="status" required>
+          <option value="1">Active</option>
+          <option value="0">Inactive</option>
+        </select>
+      </label>
+      <button class="add-user-save" type="submit">Lưu môn học</button>
+    </form>
+  </div>
+</div>

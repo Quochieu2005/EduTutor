@@ -207,6 +207,7 @@ class Admin(Document):
     )
     session_version = IntField(default=1, min_value=1)
     last_login = DateTimeField(null=True, default=None)
+    notifications_read_at = DateTimeField(null=True, default=None)
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 

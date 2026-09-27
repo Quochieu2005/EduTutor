@@ -26,6 +26,34 @@ document.addEventListener("DOMContentLoaded", () => {
   const serverSubmit = form?.dataset.serverSubmit === "true";
   const provinceSelect = form?.querySelector("[data-location-province]");
   const wardSelect = form?.querySelector("[data-location-ward]");
+  const scheduleRecurrenceDays = [
+    ...(form?.querySelectorAll("[data-schedule-recurrence-day]") || []),
+  ];
+  const scheduleRecurrenceEnd = form?.querySelector(
+    "[data-schedule-recurrence-end]",
+  );
+  const scheduleStatus = form?.elements.status;
+  const scheduleStatusNote = form?.querySelector("[data-schedule-status-note]");
+  const tutorRequestSubject = form?.elements.subject_id;
+  const tutorRequestTutor = form?.elements.tutor_id;
+  const feedbackStatus = form?.elements.status;
+  const scheduleMode = form?.querySelector("[data-schedule-mode]");
+  const scheduleWeekdayModes = [
+    ...(form?.querySelectorAll("[data-schedule-weekday-mode]") || []),
+  ];
+  const scheduleWeekdayModeRows = [
+    ...(form?.querySelectorAll("[data-schedule-weekday-mode-row]") || []),
+  ];
+  const scheduleLocationFields = [
+    ...(form?.querySelectorAll("[data-schedule-location-field]") || []),
+  ];
+  const scheduleOnlineField = form?.querySelector("[data-schedule-online-field]");
+  const meetingUrlInput = form?.querySelector('[name="meeting_url"]');
+  const scheduleCreateOnly = [
+    ...(form?.querySelectorAll("[data-schedule-create-only]") || []),
+  ];
+  const scheduleEditScopeField = form?.querySelector("[data-schedule-edit-scope]");
+  const scheduleEditScope = form?.querySelector("[data-schedule-edit-scope-select]");
   let page = 1;
   let sortDirection = 1;
   let sortField = "";
@@ -81,6 +109,163 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   provinceSelect?.addEventListener("change", () => filterWards());
 
+  const selectedScheduleModes = () => {
+    const recurrenceModes = scheduleRecurrenceDays
+      .filter((input) => input.checked)
+      .map((input) =>
+        form?.querySelector(
+          `[data-schedule-weekday-mode="${input.value}"]`,
+        )?.value,
+      )
+      .filter(Boolean);
+    return recurrenceModes.length ? recurrenceModes : [scheduleMode?.value];
+  };
+
+  const syncScheduleDayModes = () => {
+    if (resourceKey !== "schedules") return;
+    const selectedDays = new Set(
+      scheduleRecurrenceDays.filter((input) => input.checked).map((input) => input.value),
+    );
+    scheduleWeekdayModeRows.forEach((row) => {
+      const select = row.querySelector("[data-schedule-weekday-mode]");
+      const isSelected = selectedDays.has(row.dataset.scheduleWeekdayModeRow);
+      row.hidden = !isSelected;
+      if (!select) return;
+      select.disabled = !isSelected;
+      if (!isSelected) {
+        delete select.dataset.modeChosen;
+      } else if (!select.dataset.modeChosen) {
+        select.value = scheduleMode?.value || "online";
+      }
+    });
+    const modes = form?.querySelector("[data-schedule-weekday-modes]");
+    if (modes) modes.hidden = selectedDays.size === 0;
+  };
+
+  const syncScheduleRecurrence = () => {
+    if (resourceKey !== "schedules" || !scheduleRecurrenceEnd) return;
+    const isRecurring = scheduleRecurrenceDays.some((input) => input.checked);
+    scheduleRecurrenceEnd.disabled = !isRecurring;
+    scheduleRecurrenceEnd.required = isRecurring;
+    scheduleRecurrenceEnd
+      .closest(".schedule-recurrence-end")
+      ?.classList.toggle("is-disabled", !isRecurring);
+    if (!isRecurring) scheduleRecurrenceEnd.value = "";
+  };
+  scheduleRecurrenceDays.forEach((input) =>
+    input.addEventListener("change", () => {
+      syncScheduleDayModes();
+      syncScheduleRecurrence();
+      syncScheduleLocation();
+    }),
+  );
+  scheduleWeekdayModes.forEach((input) =>
+    input.addEventListener("change", () => {
+      input.dataset.modeChosen = "true";
+      syncScheduleLocation();
+    }),
+  );
+
+  const syncScheduleLocation = () => {
+    if (resourceKey !== "schedules" || !scheduleMode) return;
+    const modes = selectedScheduleModes();
+    const isOffline = modes.includes("offline");
+    const isOnline = modes.includes("online");
+    [provinceSelect, wardSelect].filter(Boolean).forEach((field) => {
+      field.disabled = !isOffline;
+      field.required = isOffline;
+    });
+    scheduleLocationFields.forEach((field) =>
+      field.classList.toggle("is-disabled", !isOffline),
+    );
+    if (!isOffline) {
+      if (provinceSelect) provinceSelect.value = "";
+      if (wardSelect) wardSelect.value = "";
+    }
+    if (meetingUrlInput) {
+      meetingUrlInput.disabled = !isOnline;
+      meetingUrlInput.required = isOnline;
+    }
+    scheduleOnlineField?.classList.toggle("is-disabled", !isOnline);
+    filterWards();
+  };
+  scheduleMode?.addEventListener("change", () => {
+    syncScheduleDayModes();
+    syncScheduleLocation();
+  });
+
+  const syncScheduleEditScope = (row) => {
+    if (resourceKey !== "schedules" || !scheduleEditScopeField || !scheduleEditScope)
+      return;
+    const hasSeries = Boolean(row?.dataset.seriesId);
+    scheduleEditScopeField.hidden = !hasSeries;
+    scheduleEditScope.disabled = !hasSeries;
+    if (!hasSeries) scheduleEditScope.value = "one";
+    scheduleCreateOnly.forEach((field) => {
+      field.hidden = Boolean(row);
+    });
+  };
+
+  const syncScheduleStatusAuthority = (row, savedValues = {}) => {
+    if (resourceKey !== "schedules" || !scheduleStatus) return;
+    const tutorManaged =
+      Boolean(row) &&
+      Boolean(savedValues.status) &&
+      savedValues.status !== "scheduled";
+    const tutorOnlyOption = scheduleStatus.querySelector(
+      '[data-schedule-tutor-confirmed]',
+    );
+    if (tutorManaged) {
+      const option = tutorOnlyOption || document.createElement("option");
+      const tutorStatusLabels = {
+        completed: "Đã hoàn thành",
+        cancelled: "Đã hủy",
+        no_show: "Vắng mặt",
+      };
+      option.value = savedValues.status;
+      option.textContent = `${tutorStatusLabels[savedValues.status] || savedValues.status} — gia sư cập nhật`;
+      option.dataset.scheduleTutorConfirmed = "true";
+      if (!tutorOnlyOption) scheduleStatus.appendChild(option);
+      scheduleStatus.value = savedValues.status;
+      scheduleStatus.disabled = true;
+    } else {
+      tutorOnlyOption?.remove();
+      scheduleStatus.disabled = false;
+    }
+    if (scheduleStatusNote) scheduleStatusNote.hidden = !tutorManaged;
+  };
+
+  const filterTutorRequestCandidates = () => {
+    if (
+      resourceKey !== "tutor-requests" ||
+      !tutorRequestSubject ||
+      !tutorRequestTutor
+    )
+      return;
+    const subjectId = tutorRequestSubject.value;
+    [...tutorRequestTutor.options].forEach((option) => {
+      if (!option.value) return;
+      const subjectIds = (option.dataset.subjectIds || "").split(",");
+      const matches = !subjectId || subjectIds.includes(subjectId);
+      option.hidden = !matches;
+      option.disabled = !matches;
+    });
+    if (tutorRequestTutor.selectedOptions[0]?.disabled)
+      tutorRequestTutor.value = "";
+  };
+  tutorRequestSubject?.addEventListener("change", filterTutorRequestCandidates);
+
+  const filterFeedbackStatusOptions = (row) => {
+    if (resourceKey !== "reviews-complaints" || !feedbackStatus) return;
+    const allowed = row?.dataset.role === "review"
+      ? new Set(["visible", "hidden"])
+      : new Set(["new", "processing", "resolved", "rejected"]);
+    [...feedbackStatus.options].forEach((option) => {
+      option.hidden = !allowed.has(option.value);
+      option.disabled = !allowed.has(option.value);
+    });
+  };
+
   const columns = [...table.querySelectorAll("thead th[data-field]")].map(
     (item) => ({ key: item.dataset.field, label: item.textContent.trim() }),
   );
@@ -92,16 +277,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const toneFor = (value) => {
     const status = normalize(value);
-    if (/inactive|rejected|cancelled|failed|blocked|locked/.test(status))
+    if (/inactive|rejected|cancelled|failed|blocked|locked|đã hủy|vắng mặt/.test(status))
       return "danger";
     if (
-      /active|approved|completed|published|sent|paid|passed|resolved|matched|available/.test(
+      /active|approved|completed|published|sent|paid|passed|resolved|matched|available|đã hoàn thành/.test(
         status,
       )
     )
       return "success";
     if (
-      /pending|processing|scheduled|draft|review|screening|interview/.test(
+      /pending|processing|scheduled|draft|review|screening|interview|đã lên lịch/.test(
         status,
       )
     )
@@ -247,12 +432,17 @@ document.addEventListener("DOMContentLoaded", () => {
     menu.className = "users-row-actions resource-row-actions-portal";
     menu.hidden = true;
     const isAdministrator = resourceKey === "administrators";
-    const canEdit = !isAdministrator || row.dataset.canEdit === "true";
-    const canDelete = !isAdministrator || row.dataset.canDelete === "true";
+    const canEdit =
+      row.dataset.canEdit !== "false" &&
+      (!isAdministrator || row.dataset.canEdit === "true");
+    const canDelete =
+      row.dataset.canDelete !== "false" &&
+      (!isAdministrator || row.dataset.canDelete === "true");
     const actions = [];
+    const editLabel = resourceKey === "reviews-complaints" ? "Xử lý" : "Edit";
     if (canEdit)
       actions.push(
-        '<button type="button" data-resource-edit>Edit <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11.5 15H7a4 4 0 0 0-4 4v2"></path><path d="m14.4 17.6 4-4a2 2 0 0 1 3 3l-4 4-4 1z"></path><circle cx="10" cy="7" r="4"></circle></svg></button>',
+        `<button type="button" data-resource-edit>${editLabel} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11.5 15H7a4 4 0 0 0-4 4v2"></path><path d="m14.4 17.6 4-4a2 2 0 0 1 3 3l-4 4-4 1z"></path><circle cx="10" cy="7" r="4"></circle></svg></button>`,
       );
     if (canDelete)
       actions.push(
@@ -379,11 +569,23 @@ document.addEventListener("DOMContentLoaded", () => {
       formTitle.textContent =
         resourceKey === "administrators"
           ? `${row ? "Sửa" : "Thêm"} quản trị viên`
+          : resourceKey === "students"
+            ? "Cập nhật thông tin học viên"
           : resourceKey === "tutors"
             ? `${row ? "Cập nhật" : "Tạo"} hồ sơ gia sư`
             : resourceKey === "tutor-jobs"
               ? `${row ? "Cập nhật" : "Đăng"} tin tuyển dụng`
-              : `${row ? "Edit" : "Add"} ${entity}`;
+              : resourceKey === "notifications"
+                ? `${row ? "Cập nhật" : "Tạo"} thông báo`
+                : resourceKey === "subjects"
+                  ? `${row ? "Cập nhật" : "Thêm"} môn học`
+                    : resourceKey === "reviews-complaints"
+                      ? "Xử lý đánh giá hoặc khiếu nại"
+                  : resourceKey === "schedules"
+                    ? `${row ? "Cập nhật" : "Tạo"} lịch học`
+                    : resourceKey === "payments"
+                      ? "Lập hóa đơn học phí"
+                    : `${row ? "Edit" : "Add"} ${entity}`;
     if (row) {
       [...form.elements].forEach((field) => {
         if (!field.name || field.name === "record_id") return;
@@ -412,6 +614,13 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
     filterWards(row ? savedValues.ward_id : "");
+    syncScheduleDayModes();
+    syncScheduleRecurrence();
+    syncScheduleLocation();
+    syncScheduleEditScope(row);
+    syncScheduleStatusAuthority(row, savedValues);
+    filterTutorRequestCandidates();
+    filterFeedbackStatusOptions(row);
     if (resourceKey === "tutors") {
       form.elements.password.required = !row;
       // The default password is intended for a newly created tutor only.
@@ -678,6 +887,54 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       return;
     }
+    const subjectStatusButton = event.target.closest(
+      "[data-subject-status-toggle]",
+    );
+    if (subjectStatusButton) {
+      const row = subjectStatusButton.closest("tr[data-record-id]");
+      if (!row?.dataset.statusToggleUrl) return;
+      subjectStatusButton.disabled = true;
+      const csrfToken =
+        form?.querySelector('[name="csrfmiddlewaretoken"]')?.value || "";
+      fetch(row.dataset.statusToggleUrl, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrfToken,
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        credentials: "same-origin",
+      })
+        .then(async (response) => ({
+          response,
+          result: await response.json().catch(() => ({})),
+        }))
+        .then(({ response, result }) => {
+          if (!response.ok || !result.ok)
+            throw new Error(
+              result.message || "Không thể đổi trạng thái môn học.",
+            );
+          row.dataset.statusCode = String(result.status_code);
+          const cell = subjectStatusButton.closest("td");
+          cell.dataset.value = result.status;
+          cell.title = result.status;
+          subjectStatusButton.textContent = result.status;
+          subjectStatusButton.className = `users-status users-status--${String(result.status_code) === "1" ? "success" : "danger"} subject-status-toggle`;
+          subjectStatusButton.setAttribute(
+            "aria-label",
+            `Đổi trạng thái ${result.status}`,
+          );
+          const formValues = JSON.parse(row.dataset.formValues || "{}");
+          formValues.status = String(result.status_code);
+          row.dataset.formValues = JSON.stringify(formValues);
+          updateStatusCounts();
+          showResourceNotice(result.message);
+        })
+        .catch((error) => showResourceNotice(error.message, true))
+        .finally(() => {
+          subjectStatusButton.disabled = false;
+        });
+      return;
+    }
     const statusButton = event.target.closest(
       "[data-administrator-status-toggle]",
     );
@@ -815,6 +1072,98 @@ document.addEventListener("DOMContentLoaded", () => {
         .catch((error) => showResourceNotice(error.message, true))
         .finally(() => {
           blogStatusButton.disabled = false;
+        });
+      return;
+    }
+    const studentStatusButton = event.target.closest(
+      "[data-student-status-toggle]",
+    );
+    if (studentStatusButton) {
+      const row = studentStatusButton.closest("tr[data-record-id]");
+      if (!row?.dataset.statusToggleUrl) return;
+      studentStatusButton.disabled = true;
+      const csrfToken =
+        form?.querySelector('[name="csrfmiddlewaretoken"]')?.value || "";
+      fetch(row.dataset.statusToggleUrl, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrfToken,
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        credentials: "same-origin",
+      })
+        .then(async (response) => ({
+          response,
+          result: await response.json().catch(() => ({})),
+        }))
+        .then(({ response, result }) => {
+          if (!response.ok || !result.ok)
+            throw new Error(
+              result.message || "Không thể đổi trạng thái học viên.",
+            );
+          const statusCell = studentStatusButton.closest("td");
+          statusCell.dataset.value = result.status;
+          studentStatusButton.textContent = result.status;
+          studentStatusButton.className = `users-status users-status--${result.status_code === "active" ? "success" : "neutral"} student-status-toggle`;
+          studentStatusButton.setAttribute(
+            "aria-label",
+            `Đổi trạng thái ${result.status}`,
+          );
+          const formValues = JSON.parse(row.dataset.formValues || "{}");
+          formValues.status = result.status_code;
+          row.dataset.formValues = JSON.stringify(formValues);
+          updateStatusCounts();
+          showResourceNotice(result.message);
+        })
+        .catch((error) => showResourceNotice(error.message, true))
+        .finally(() => {
+          studentStatusButton.disabled = false;
+        });
+      return;
+    }
+    const tutorStatusButton = event.target.closest(
+      "[data-tutor-status-toggle]",
+    );
+    if (tutorStatusButton) {
+      const row = tutorStatusButton.closest("tr[data-record-id]");
+      if (!row?.dataset.statusToggleUrl) return;
+      tutorStatusButton.disabled = true;
+      const csrfToken =
+        form?.querySelector('[name="csrfmiddlewaretoken"]')?.value || "";
+      fetch(row.dataset.statusToggleUrl, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrfToken,
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        credentials: "same-origin",
+      })
+        .then(async (response) => ({
+          response,
+          result: await response.json().catch(() => ({})),
+        }))
+        .then(({ response, result }) => {
+          if (!response.ok || !result.ok)
+            throw new Error(
+              result.message || "Không thể đổi trạng thái gia sư.",
+            );
+          const statusCell = tutorStatusButton.closest("td");
+          statusCell.dataset.value = result.status;
+          tutorStatusButton.textContent = result.status;
+          tutorStatusButton.className = `users-status users-status--${toneFor(result.status)} tutor-status-toggle`;
+          tutorStatusButton.setAttribute(
+            "aria-label",
+            `Đổi trạng thái ${result.status}`,
+          );
+          const formValues = JSON.parse(row.dataset.formValues || "{}");
+          formValues.status = result.status_code;
+          row.dataset.formValues = JSON.stringify(formValues);
+          updateStatusCounts();
+          showResourceNotice(result.message);
+        })
+        .catch((error) => showResourceNotice(error.message, true))
+        .finally(() => {
+          tutorStatusButton.disabled = false;
         });
       return;
     }

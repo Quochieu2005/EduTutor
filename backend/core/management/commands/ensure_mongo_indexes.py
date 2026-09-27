@@ -9,8 +9,8 @@ def domain_documents():
     """Import every domain document so MongoEngine can resolve references."""
     from accounts.documents import Admin, AuthToken, Parent, Student
     from core.documents import (
-        AuditLog, Banner, BlogCategory, BlogPost, Contact, Invoice, Payment,
-        PaymentItem, Transaction,
+        AuditLog, Banner, BlogCategory, BlogPost, Complaint, Contact, Invoice, Payment,
+        NotificationDelivery, PaymentItem, SystemNotification, Transaction,
     )
     from lessons.documents import LearningRequest, Lesson, Message, Review
     from tutors.documents import (
@@ -21,14 +21,14 @@ def domain_documents():
     return (
         Student, Parent, Tutor, Admin, Subject, Province, District, Ward,
         TutorSubject, TutorTeachingArea, LearningRequest, Lesson, Review,
-        Message, Payment, PaymentItem, BlogCategory, BlogPost, Contact, Banner,
+        Message, Payment, PaymentItem, BlogCategory, BlogPost, Complaint, Contact, Banner,
         TutorApplication, JobPosting, JobApplication, AuthToken, Transaction,
-        Invoice, AuditLog,
+        Invoice, AuditLog, SystemNotification, NotificationDelivery,
     )
 
 
 class Command(BaseCommand):
-    help = 'Create the indexes for all 26 EduTutor MongoDB collections.'
+    help = 'Create and verify indexes for every EduTutor MongoDB collection.'
 
     def add_arguments(self, parser):
         parser.add_argument(

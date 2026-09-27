@@ -41,14 +41,28 @@ class Lesson(TimestampedDocument):
     session_date = DateField(required=True)
     start_time = StringField(required=True, max_length=8)
     end_time = StringField(required=True, max_length=8)
+    # Lessons created from the same recurring timetable share this id. It is
+    # intentionally nullable so legacy and one-off lessons remain unchanged.
+    series_id = StringField(max_length=40, null=True)
     mode = StringField(required=True, choices=('online', 'offline'))
+    # An offline lesson is attached to the shared administrative catalogue.
+    # ``location`` stays as a display snapshot so legacy lesson records remain
+    # readable while new records no longer rely on free-text addresses.
+    province = ReferenceField('Province', null=True, db_field='province_id')
+    ward = ReferenceField('Ward', null=True, db_field='ward_id')
     location = StringField(max_length=500, null=True)
     meeting_url = StringField(max_length=1000, null=True)
     price = IntField(null=True, min_value=0)
     status = StringField(required=True, choices=('scheduled', 'completed', 'cancelled', 'no_show'), default='scheduled')
     payment_status = StringField(required=True, choices=('unpaid', 'paid'), default='unpaid')
     note = StringField(null=True)
-    meta = {'collection': 'lessons', 'indexes': ['request', 'tutor', 'student', 'subject', 'session_date', 'status', 'payment_status']}
+    meta = {
+        'collection': 'lessons',
+        'indexes': [
+            'request', 'tutor', 'student', 'subject', 'series_id', 'province', 'ward',
+            'session_date', 'status', 'payment_status',
+        ],
+    }
 
     def clean(self):
         if self.mode == 'online' and not self.meeting_url:
@@ -63,7 +77,10 @@ class Review(BigIntDocument):
     tutor = ReferenceField('Tutor', required=True, db_field='tutor_id')
     rating = IntField(required=True, min_value=1, max_value=5)
     comment = StringField(null=True)
-    meta = {'collection': 'reviews', 'indexes': ['tutor', 'student', '-rating']}
+    status = StringField(required=True, choices=('visible', 'hidden'), default='visible')
+    admin_reply = StringField(null=True, max_length=3000)
+    moderated_at = DateTimeField(null=True)
+    meta = {'collection': 'reviews', 'indexes': ['tutor', 'student', 'status', '-rating']}
 
 
 class Message(BigIntDocument):

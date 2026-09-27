@@ -337,10 +337,19 @@ export async function adminUpdateTutor(
 // -------------------------------------------------------------
 // LESSONS & CLASS MANAGEMENT (Học viên & Admin)
 // -------------------------------------------------------------
-export async function getLessons(): Promise<LessonRequest[]> {
+export async function getLessons(currentUser?: User | null): Promise<LessonRequest[]> {
   if (isMockEnabled()) {
     await delay(200);
-    return getPersistedLessons();
+    const lessons = getPersistedLessons();
+    if (!currentUser) return [];
+    if (currentUser.role === "admin") return lessons;
+    if (currentUser.role === "tutor") {
+      const tutorId = getPersistedTutors().find(
+        (tutor) => tutor.userId === currentUser.id,
+      )?.id;
+      return tutorId ? lessons.filter((lesson) => lesson.tutorId === tutorId) : [];
+    }
+    return lessons.filter((lesson) => lesson.studentId === currentUser.id);
   }
   const { data } = await api.get("/lessons/");
   return data;
@@ -383,13 +392,20 @@ export async function createLessonRequest(
 export async function updateLessonStatus(
   id: string,
   status: LessonRequest["status"],
+  currentUser?: User | null,
 ): Promise<LessonRequest> {
   if (isMockEnabled()) {
     await delay(200);
     const lessons = getPersistedLessons();
+    const tutorId = currentUser && currentUser.role === "tutor"
+      ? getPersistedTutors().find((tutor) => tutor.userId === currentUser.id)?.id
+      : undefined;
     let updatedLesson: LessonRequest | null = null;
     const updated = lessons.map((l) => {
       if (l.id === id) {
+        if (status === "completed" && (!tutorId || l.tutorId !== tutorId)) {
+          return l;
+        }
         updatedLesson = { ...l, status };
         return updatedLesson;
       }

@@ -1,0 +1,167 @@
+/* Giao diện Swagger UI chuẩn, dùng nền tối như bản tham chiếu. */
+body.swagger-theme-dark {
+  background: #1d2224;
+}
+
+.swagger-theme-dark .swagger-ui {
+  color: #f4f4f4;
+}
+
+.swagger-theme-dark .swagger-ui .topbar {
+  background: #282e30;
+  border-top: 4px solid #384055;
+  border-bottom: 1px solid #32393b;
+  padding: 14px 0;
+}
+
+.swagger-theme-dark .swagger-ui .topbar .wrapper {
+  align-items: center;
+  max-width: 1460px;
+}
+
+.swagger-theme-dark .swagger-ui .topbar .download-url-wrapper {
+  display: none;
+}
+
+.swagger-theme-dark .swagger-ui .info {
+  margin: 52px 0 42px;
+}
+
+.swagger-theme-dark .swagger-ui .info .title,
+.swagger-theme-dark .swagger-ui .info h1,
+.swagger-theme-dark .swagger-ui .info h2,
+.swagger-theme-dark .swagger-ui .info h3,
+.swagger-theme-dark .swagger-ui .info p,
+.swagger-theme-dark .swagger-ui .info li,
+.swagger-theme-dark .swagger-ui .opblock-tag,
+.swagger-theme-dark .swagger-ui .opblock-tag small,
+.swagger-theme-dark .swagger-ui .opblock .opblock-summary-description,
+.swagger-theme-dark .swagger-ui .opblock-description-wrapper,
+.swagger-theme-dark .swagger-ui .opblock-description-wrapper p,
+.swagger-theme-dark .swagger-ui .opblock-section-header h4,
+.swagger-theme-dark .swagger-ui .response-col_status,
+.swagger-theme-dark .swagger-ui .response-col_description,
+.swagger-theme-dark .swagger-ui table thead tr td,
+.swagger-theme-dark .swagger-ui table thead tr th {
+  color: #f4f4f4;
+}
+
+.swagger-theme-dark .swagger-ui .info .title small.version-stamp {
+  background: #66717a;
+}
+
+.swagger-theme-dark .swagger-ui .scheme-container,
+.swagger-theme-dark .swagger-ui .opblock-tag,
+.swagger-theme-dark .swagger-ui .opblock-tag-section,
+.swagger-theme-dark .swagger-ui .opblock-section-header,
+.swagger-theme-dark .swagger-ui .model-box,
+.swagger-theme-dark .swagger-ui .dialog-ux .modal-ux,
+.swagger-theme-dark .swagger-ui .dialog-ux .modal-ux-content,
+.swagger-theme-dark .swagger-ui .tab,
+.swagger-theme-dark .swagger-ui .response-col_links {
+  background: #1d2224;
+}
+
+.swagger-theme-dark .swagger-ui .scheme-container {
+  box-shadow: none;
+  border-top: 1px solid #3d474a;
+  border-bottom: 1px solid #3d474a;
+}
+
+.swagger-theme-dark .swagger-ui .opblock-tag {
+  border-bottom-color: #4c585b;
+}
+
+.swagger-theme-dark .swagger-ui .opblock {
+  box-shadow: none;
+}
+
+.swagger-theme-dark .swagger-ui .opblock.opblock-post {
+  background: rgba(73, 204, 144, .10);
+  border-color: #00b879;
+}
+
+.swagger-theme-dark .swagger-ui .opblock.opblock-get {
+  background: rgba(97, 175, 254, .10);
+  border-color: #5da9f6;
+}
+
+.swagger-theme-dark .swagger-ui .opblock.opblock-put,
+.swagger-theme-dark .swagger-ui .opblock.opblock-patch,
+.swagger-theme-dark .swagger-ui .opblock.opblock-delete {
+  background: rgba(255, 184, 76, .10);
+}
+
+.swagger-theme-dark .swagger-ui .opblock .opblock-summary {
+  border-bottom-color: transparent;
+}
+
+.swagger-theme-dark .swagger-ui .opblock .opblock-summary-method {
+  color: #091b17;
+}
+
+.swagger-theme-dark .swagger-ui .btn,
+.swagger-theme-dark .swagger-ui select,
+.swagger-theme-dark .swagger-ui input[type=text],
+.swagger-theme-dark .swagger-ui textarea {
+  color: #f4f4f4;
+  background: #252c2e;
+}
+
+.swagger-theme-dark .swagger-ui input[type=text],
+.swagger-theme-dark .swagger-ui textarea,
+.swagger-theme-dark .swagger-ui select {
+  border-color: #566164;
+}
+
+.swagger-theme-dark .swagger-ui .authorization__btn svg,
+.swagger-theme-dark .swagger-ui .opblock-control-arrow,
+.swagger-theme-dark .swagger-ui .expand-operation svg,
+.swagger-theme-dark .swagger-ui .svg-assets {
+  fill: #d7dfe0;
+}
+
+.swagger-theme-dark .swagger-ui .model-title,
+.swagger-theme-dark .swagger-ui .prop-type,
+.swagger-theme-dark .swagger-ui .parameter__name,
+.swagger-theme-dark .swagger-ui .parameter__type,
+.swagger-theme-dark .swagger-ui .parameters-col_name,
+.swagger-theme-dark .swagger-ui .models-control {
+  color: #f4f4f4;
+}
+
+.swagger-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-left: 20px;
+  padding: 0;
+  color: #d7dfe0;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.swagger-theme-toggle:hover,
+.swagger-theme-toggle:focus-visible {
+  background: rgba(255, 255, 255, .12);
+  outline: none;
+}
+
+.swagger-theme-toggle svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+body:not(.swagger-theme-dark) .swagger-theme-toggle {
+  color: #343a40;
+}
+
+body:not(.swagger-theme-dark) .swagger-theme-toggle:hover,
+body:not(.swagger-theme-dark) .swagger-theme-toggle:focus-visible {
+  background: rgba(0, 0, 0, .08);
+}

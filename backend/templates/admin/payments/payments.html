@@ -3,3 +3,21 @@
   {% include "payments/payments-heading.html" %}
   {% include "payments/payments-list.html" %}
 {% endblock %}
+
+{% block resource_modal %}
+  <div class="add-user-modal resource-form-modal payment-form-modal" data-resource-modal hidden>
+    <div class="add-user-dialog" role="dialog" aria-modal="true" aria-labelledby="resource-form-title">
+      <button class="add-user-close" type="button" data-resource-modal-close aria-label="Đóng">&times;</button>
+      <h2 id="resource-form-title" data-resource-form-title>Lập hóa đơn học phí</h2>
+      <p>Hệ thống chỉ gom các buổi đã hoàn thành, chưa thuộc hóa đơn nào.</p>
+      <form data-resource-form method="post" data-server-submit="true" data-create-url="{{ page.create_url }}" action="{{ page.create_url }}">
+        {% csrf_token %}
+        <input type="hidden" name="record_id" />
+        <label>Kỳ học phí<input type="month" name="billing_month" required /></label>
+        <label>Hoa hồng nền tảng (%)<input type="number" name="commission_rate" value="15" min="0" max="100" required /></label>
+        <p class="payment-form-hint">Ví dụ: học phí 1.600.000đ, hoa hồng 15% thì gia sư nhận 1.360.000đ.</p>
+        <button class="add-user-save" type="submit">Lập hóa đơn</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

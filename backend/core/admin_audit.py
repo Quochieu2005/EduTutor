@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, time, timedelta
 from ipaddress import ip_address
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 from django.core.paginator import Paginator
 from django.http import HttpResponseForbidden
@@ -17,6 +18,7 @@ from accounts.documents import Admin
 from core.documents import AuditLog
 
 logger = logging.getLogger(__name__)
+VIETNAM_TIME_ZONE = ZoneInfo('Asia/Ho_Chi_Minh')
 ACTION_LABELS = {
     'login': 'Đăng nhập', 'logout': 'Đăng xuất',
     'logout_all': 'Đăng xuất tất cả thiết bị',
@@ -28,8 +30,19 @@ ACTION_LABELS = {
 TARGET_LABELS = {
     'admins': 'Quản trị viên', 'banners': 'Slides', 'blog_posts': 'Bài viết',
     'blog_categories': 'Danh mục Blog', 'job_postings': 'Tin tuyển gia sư',
-    'contacts': 'Liên hệ',
+    'contacts': 'Liên hệ', 'system_notifications': 'Thông báo hệ thống',
+    'subjects': 'Môn học & chuyên môn', 'lessons': 'Lịch học',
 }
+
+
+def _as_vietnam_time(value):
+    """Normalize a stored audit timestamp for the Vietnam admin interface."""
+    if value is None:
+        return None
+    if timezone.is_naive(value):
+        # MongoDB's historical values may be naive even though they represent UTC.
+        value = timezone.make_aware(value, timezone.get_fixed_timezone(0))
+    return timezone.localtime(value, VIETNAM_TIME_ZONE)
 
 
 def record_admin_activity(request, action, target, *, actor=None):
@@ -98,18 +111,20 @@ def activity_logs(request):
     if 'start' in dates and 'end' in dates and dates['start'] > dates['end']:
         errors.append('Từ ngày không được sau đến ngày.')
     if 'start' in dates:
-        records = records.filter(created_at__gte=timezone.make_aware(datetime.combine(dates['start'], time.min)))
+        records = records.filter(created_at__gte=timezone.make_aware(
+            datetime.combine(dates['start'], time.min), VIETNAM_TIME_ZONE,
+        ))
     if 'end' in dates:
-        records = records.filter(created_at__lt=timezone.make_aware(datetime.combine(dates['end'] + timedelta(days=1), time.min)))
+        records = records.filter(created_at__lt=timezone.make_aware(
+            datetime.combine(dates['end'] + timedelta(days=1), time.min), VIETNAM_TIME_ZONE,
+        ))
     if errors:
         records = records.none()
     result = Paginator(records.order_by('-created_at', '-id'), 20).get_page(request.GET.get('page'))
     rows = []
     for entry in records.order_by('-created_at', '-id'):
         metadata = entry.metadata or {}
-        created_at = entry.created_at
-        if created_at and timezone.is_naive(created_at):
-            created_at = timezone.make_aware(created_at, timezone.get_fixed_timezone(0))
+        created_at = _as_vietnam_time(entry.created_at)
         rows.append({
             'id': entry.id, 'actor': metadata.get('actor_name') or f'Admin #{entry.actor_id}',
             'email': metadata.get('actor_email', ''),
@@ -125,13 +140,13 @@ def activity_logs(request):
             'can_manage': False, 'can_create': False, 'statuses': [],
             'columns': [{'key': key, 'label': label} for key, label in (
                 ('admin', 'Quản trị viên'), ('action', 'Hành động'), ('module', 'Phân hệ'),
-                ('time', 'Thời gian'), ('ip', 'Địa chỉ IP'),
+                ('time', 'Thời gian (GMT+7)'), ('ip', 'Địa chỉ IP'),
             )],
             'rows': [{'id': row['id'], 'cells': [
                 {'field': 'admin', 'value': row['actor']},
                 {'field': 'action', 'value': row['description']},
                 {'field': 'module', 'value': row['module']},
-                {'field': 'time', 'value': timezone.localtime(row['created_at']).strftime('%d/%m/%Y') if row['created_at'] else '—'},
+                {'field': 'time', 'value': row['created_at'].strftime('%d/%m/%Y %H:%M:%S') if row['created_at'] else '—'},
                 {'field': 'ip', 'value': row['ip']},
             ]} for row in rows],
         },

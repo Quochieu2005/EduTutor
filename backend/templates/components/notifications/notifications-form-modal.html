@@ -1,0 +1,32 @@
+<div class="add-user-modal resource-form-modal notification-form-modal" data-resource-modal hidden>
+  <div class="add-user-dialog" role="dialog" aria-modal="true" aria-labelledby="notification-form-title">
+    <button class="add-user-close" type="button" data-resource-modal-close aria-label="Đóng">&times;</button>
+    <h2 id="notification-form-title" data-resource-form-title>Tạo thông báo</h2>
+    <p>Soạn nội dung, chọn nhóm người nhận rồi lưu nháp hoặc gửi ngay.</p>
+    <form method="post" action="{{ page.create_url }}" data-resource-form data-server-submit="true" data-create-url="{{ page.create_url }}">
+      {% csrf_token %}
+      <input type="hidden" name="record_id" />
+      <label>Tiêu đề
+        <input name="title" type="text" maxlength="250" placeholder="Ví dụ: Nhắc lịch học tuần này" required />
+      </label>
+      <label>Nội dung
+        <textarea name="message" rows="5" maxlength="3000" placeholder="Nhập nội dung thông báo" required></textarea>
+      </label>
+      <label>Nhóm người nhận
+        <select name="audience" required>
+          <option value="all">Tất cả người dùng</option>
+          <option value="students">Học viên</option>
+          <option value="parents">Phụ huynh</option>
+          <option value="tutors">Gia sư</option>
+        </select>
+      </label>
+      <label>Thao tác khi lưu
+        <select name="status" required>
+          <option value="draft">Lưu nháp — chưa gửi</option>
+          <option value="sent">Gửi ngay</option>
+        </select>
+      </label>
+      <button class="add-user-save" type="submit">Lưu thông báo</button>
+    </form>
+  </div>
+</div>

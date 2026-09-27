@@ -33,9 +33,26 @@ class Payment(BaseDocument):
     total_amount = IntField(required=True, min_value=0)
     status = StringField(required=True, choices=('pending', 'paid', 'failed', 'refunded'), default='pending')
     paid_at = DateTimeField(null=True)
+    # A monthly invoice may contain several completed lesson sessions.  These
+    # values are snapshots, preventing later commission-policy changes from
+    # changing an already issued invoice.
+    billing_month = StringField(max_length=7, null=True)  # YYYY-MM
+    commission_rate = IntField(default=15, min_value=0, max_value=100)
+    commission_amount = IntField(default=0, min_value=0)
+    tutor_payout_amount = IntField(default=0, min_value=0)
+    tutor_payout_status = StringField(
+        required=True, choices=('pending', 'paid'), default='pending',
+    )
+    tutor_paid_at = DateTimeField(null=True)
     note = StringField(null=True)
 
-    meta = {'collection': 'payments', 'indexes': ['payer_type', 'payer_id', 'tutor', 'student', 'status', '-created_at']}
+    meta = {
+        'collection': 'payments',
+        'indexes': [
+            'payer_type', 'payer_id', 'tutor', 'student', 'billing_month',
+            'status', 'tutor_payout_status', '-created_at',
+        ],
+    }
 
 
 class PaymentItem(BigIntDocument):
@@ -123,6 +140,75 @@ class Banner(BaseDocument):
     end_at = DateTimeField(null=True)
 
     meta = {'collection': 'banners', 'indexes': ['status', 'sort_order', 'start_at', 'end_at']}
+
+
+class SystemNotification(BaseDocument):
+    """A broadcast composed by an administrator for a defined user group."""
+
+    AUDIENCE_ALL = 'all'
+    AUDIENCE_STUDENTS = 'students'
+    AUDIENCE_PARENTS = 'parents'
+    AUDIENCE_TUTORS = 'tutors'
+    AUDIENCE_CHOICES = (
+        AUDIENCE_ALL, AUDIENCE_STUDENTS, AUDIENCE_PARENTS, AUDIENCE_TUTORS,
+    )
+
+    STATUS_DRAFT = 'draft'
+    STATUS_SENT = 'sent'
+    STATUS_CHOICES = (STATUS_DRAFT, STATUS_SENT)
+
+    title = StringField(required=True, max_length=250)
+    message = StringField(required=True, max_length=3000)
+    audience = StringField(required=True, choices=AUDIENCE_CHOICES)
+    status = StringField(required=True, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    created_by = ReferenceField('Admin', required=True, db_field='created_by_admin_id')
+    sent_at = DateTimeField(null=True)
+    recipient_count = IntField(required=True, default=0, min_value=0)
+
+    meta = {
+        'collection': 'system_notifications',
+        'indexes': ['audience', 'status', 'created_by', '-created_at', '-sent_at'],
+    }
+
+
+class NotificationDelivery(BigIntDocument):
+    """One recipient of a system notification, ready for a user-facing inbox."""
+
+    notification = ReferenceField(SystemNotification, required=True, db_field='notification_id')
+    recipient_type = StringField(required=True, choices=('student', 'parent', 'tutor'))
+    recipient_id = LongField(required=True, min_value=1)
+    delivered_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    read_at = DateTimeField(null=True)
+
+    meta = {
+        'collection': 'notification_deliveries',
+        'indexes': [
+            'notification', 'recipient_type', 'recipient_id', '-delivered_at',
+            {'fields': ['notification', 'recipient_type', 'recipient_id'], 'unique': True},
+        ],
+    }
+
+
+class Complaint(BaseDocument):
+    """A dispute submitted by a learner, tutor, or parent for Admin handling."""
+
+    sender_type = StringField(required=True, choices=('student', 'tutor', 'parent'))
+    sender_id = LongField(null=True, min_value=1)
+    sender_name = StringField(required=True, max_length=150)
+    sender_email = EmailField(required=True, max_length=254)
+    target_type = StringField(required=True, choices=('lesson', 'tutor', 'student', 'payment', 'other'))
+    target_id = LongField(null=True, min_value=1)
+    target_label = StringField(required=True, max_length=250)
+    content = StringField(required=True, max_length=3000)
+    status = StringField(required=True, choices=('new', 'processing', 'resolved', 'rejected'), default='new')
+    response_message = StringField(null=True, max_length=3000)
+    response_sent_at = DateTimeField(null=True)
+    handled_by = ReferenceField('Admin', null=True, db_field='handled_by_admin_id')
+
+    meta = {
+        'collection': 'complaints',
+        'indexes': ['sender_type', 'sender_id', 'status', 'handled_by', '-created_at'],
+    }
 
 
 class AuditLog(BigIntDocument):
