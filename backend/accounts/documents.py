@@ -49,9 +49,19 @@ class User(Document):
     username = StringField(required=True, unique=True, max_length=50)
     email = EmailField(required=True, unique=True)
     password_hash = StringField(required=True)
+    # Local accounts keep ``local``. OAuth accounts are identified by the
+    # immutable subject supplied by Google/Facebook, never by a client value.
+    oauth_provider = StringField(choices=('local', 'google', 'facebook'), default='local')
+    oauth_uid = StringField(max_length=255, null=True)
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 
-    meta = {'collection': 'users'}
+    meta = {
+        'collection': 'users',
+        'indexes': [
+            {'fields': ['oauth_provider', 'oauth_uid'], 'unique': True, 'sparse': True},
+            '-created_at',
+        ],
+    }
 
     def set_password(self, raw_password):
         self.password_hash = _make_bcrypt_password(raw_password)

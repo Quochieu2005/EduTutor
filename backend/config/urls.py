@@ -19,7 +19,7 @@ from django.http import HttpResponseNotFound
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.views.generic import RedirectView
 from django.urls import include, path
-from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from accounts.documents import Admin
 from accounts.session import admin_session_is_valid
@@ -118,9 +118,11 @@ def private_api_docs(view):
 
 urlpatterns = [
     path('', RedirectView.as_view(pattern_name='login', permanent=False)),
-    path('api/schema/', private_api_docs(SpectacularAPIView.as_view()), name='api-schema'),
+    # Chỉ công khai một trang tài liệu cho người dùng: /api/docs/.
+    # Schema JSON là dữ liệu nội bộ Swagger cần tải để hiển thị endpoint,
+    # không phải một trang docs độc lập.
+    path('api/docs/schema/', private_api_docs(SpectacularAPIView.as_view()), name='api-schema'),
     path('api/docs/', private_api_docs(SpectacularSwaggerView.as_view(url_name='api-schema')), name='api-docs'),
-    path('api/redoc/', private_api_docs(SpectacularRedocView.as_view(url_name='api-schema')), name='api-redoc'),
     path('api/', include('api.urls')),
     path('admin/dashboard', dashboard, name='dashboard'),
     path('admin/dashboard/', dashboard, name='dashboard-slash'),

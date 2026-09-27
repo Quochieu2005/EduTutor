@@ -9,7 +9,7 @@ import {
   SignInButton,
   SignUpButton,
   UserButton,
-} from "@clerk/nextjs";
+} from "@/lib/auth-context";
 
 export function Header() {
   const pathname = usePathname();

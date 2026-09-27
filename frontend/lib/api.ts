@@ -116,8 +116,16 @@ export async function login(
       },
     };
   }
-  const { data } = await api.post("/auth/login/", payload);
-  return data;
+  const { data } = await api.post("/v1/accounts/login/", payload);
+  return {
+    ...data,
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      fullName: data.user.username,
+      role: "student" as const,
+    },
+  };
 }
 
 export async function register(
@@ -137,8 +145,28 @@ export async function register(
       },
     };
   }
-  const { data } = await api.post("/auth/register/", payload);
-  return data;
+  const username = payload.fullName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase()
+    .slice(0, 50) || "user";
+  const { data } = await api.post("/v1/accounts/register/", {
+    username,
+    email: payload.email,
+    password: payload.password,
+  });
+  return {
+    ...data,
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      fullName: data.user.username,
+      role: "student" as const,
+      phone: payload.phone,
+    },
+  };
 }
 
 export async function getTutors(
