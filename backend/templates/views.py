@@ -5,6 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib import messages
 from django.core.mail import EmailMessage, get_connection, send_mail
 from django.http import HttpResponse, JsonResponse
@@ -479,14 +480,21 @@ def _tutor_mode(value):
 
 def _tutors_page_config():
     tutors = list(Tutor.objects.order_by('-created_at'))
+    tutor_ids = [tutor.id for tutor in tutors]
+    subjects_by_tutor = {}
+    areas_by_tutor = {}
+    if tutor_ids:
+        # Fetch all related rows once. The former loop issued two or more Atlas
+        # queries for every tutor, which grows very slowly on Render.
+        for link in TutorSubject.objects(tutor__in=tutor_ids).select_related():
+            subjects_by_tutor.setdefault(str(link.tutor.id), []).append(link.subject.name)
+        for link in TutorTeachingArea.objects(tutor__in=tutor_ids).select_related():
+            areas_by_tutor.setdefault(str(link.tutor.id), link)
+
     rows = []
     for tutor in tutors:
-        subjects = ', '.join(
-            link.subject.name for link in TutorSubject.objects(tutor=tutor).select_related()
-        ) or 'Chưa cập nhật'
-        # MongoEngine evaluates ``select_related()`` into a Python list, unlike
-        # a normal QuerySet, so it does not provide ``.first()``.
-        area_link = next(iter(TutorTeachingArea.objects(tutor=tutor).select_related()), None)
+        subjects = ', '.join(subjects_by_tutor.get(str(tutor.id), [])) or 'Chưa cập nhật'
+        area_link = areas_by_tutor.get(str(tutor.id))
         area = area_link.province.name if area_link else 'Chưa cập nhật'
         if area_link and area_link.ward:
             area = f'{area} — {area_link.ward.name}'
@@ -2398,10 +2406,8 @@ def administrator_avatar(request, slug):
     return response
 
 
-def dashboard(request):
-    welcome_email = request.session.pop('dashboard_welcome_email', '')
-    today = datetime.now(timezone.utc).date()
-    week_end = today + timedelta(days=7)
+def _dashboard_data(today, week_end):
+    """Build a short-lived shared dashboard snapshot for Atlas-backed admin."""
     paid_payments = Payment.objects(status='paid')
     revenue = sum(payment.total_amount or 0 for payment in paid_payments)
     upcoming_lessons = list(
@@ -2411,7 +2417,7 @@ def dashboard(request):
     recent_applications = list(TutorApplication.objects.order_by('-created_at').limit(5))
     paid_count = paid_payments.count()
 
-    dashboard_data = {
+    return {
         'today_label': today.strftime('%d/%m/%Y'),
         'stats': [
             {'label': 'Học viên đang hoạt động', 'value': Student.objects(status='active').count(), 'detail': f"{Student.objects.count()} học viên trong hệ thống", 'icon': 'students', 'url': reverse('students')},
@@ -2433,7 +2439,20 @@ def dashboard(request):
             for application in recent_applications
         ],
     }
-    return render(request, 'admin/dashboard.html', {'welcome_email': welcome_email, 'dashboard': dashboard_data})
+
+
+def dashboard(request):
+    welcome_email = request.session.pop('dashboard_welcome_email', '')
+    today = datetime.now(timezone.utc).date()
+    cache_key = f'admin-dashboard:v2:{today.isoformat()}'
+    dashboard_data = cache.get(cache_key)
+    if dashboard_data is None:
+        dashboard_data = _dashboard_data(today, today + timedelta(days=7))
+        cache.set(cache_key, dashboard_data, 30)
+    return render(request, 'admin/dashboard.html', {
+        'welcome_email': welcome_email,
+        'dashboard': dashboard_data,
+    })
 
 
 def users(request):
