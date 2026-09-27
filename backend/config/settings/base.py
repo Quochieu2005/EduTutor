@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'drf_spectacular',
     'core.apps.CoreConfig',
     'accounts',
     'lessons',
@@ -91,6 +92,7 @@ TEMPLATES = [{
         'django.contrib.auth.context_processors.auth',
         'django.contrib.messages.context_processors.messages',
         'core.admin_contacts.contact_notifications',
+        'core.admin_header_notifications.admin_header_notifications',
     ]},
 }]
 WSGI_APPLICATION = 'config.wsgi.application'
@@ -138,8 +140,46 @@ DEFAULT_FROM_EMAIL = os.getenv(
 )
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '15'))
 
+# Social login credentials are server-side only. Configure them in ``.env``
+# locally and as environment variables on Render; never commit their values.
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
+FACEBOOK_APP_ID = os.getenv('FACEBOOK_APP_ID', '')
+FACEBOOK_APP_SECRET = os.getenv('FACEBOOK_APP_SECRET', '')
+API_JWT_ACCESS_TTL_MINUTES = int(os.getenv('API_JWT_ACCESS_TTL_MINUTES', '15'))
+API_JWT_REFRESH_TTL_DAYS = int(os.getenv('API_JWT_REFRESH_TTL_DAYS', '30'))
+
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'api.exception_handlers.api_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # APIs are private by default.  Login/registration endpoints must opt in
+    # explicitly with AllowAny; every other endpoint requires a valid JWT.
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'EduTutor API',
+    'DESCRIPTION': (
+        'Tài liệu API chính thức cho nền tảng kết nối học viên, phụ huynh, gia sư và quản trị viên. '
+        'Mỗi endpoint mới có serializer và schema sẽ tự xuất hiện tại đây.'
+    ),
+    'VERSION': 'v1',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'displayOperationId': False,
+    },
+    'TAGS': [
+        {'name': 'Tài khoản', 'description': 'Đăng ký, đăng nhập và hồ sơ tài khoản.'},
+        {'name': 'Gia sư', 'description': 'Hồ sơ, chuyên môn và trạng thái gia sư.'},
+        {'name': 'Buổi học', 'description': 'Lịch học, xác nhận giảng dạy và tiến độ.'},
+    ],
 }

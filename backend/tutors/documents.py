@@ -32,7 +32,10 @@ class Subject(BigIntDocument):
     slug = StringField(required=True, unique=True, max_length=180)
     name = StringField(required=True, max_length=150)
     category = StringField(max_length=150, null=True)
-    meta = {'collection': 'subjects', 'indexes': ['category', 'name']}
+    level = StringField(max_length=250, null=True)
+    # 1 = active, 0 = inactive. Existing records without this field stay active.
+    status = IntField(required=True, choices=(0, 1), default=1)
+    meta = {'collection': 'subjects', 'indexes': ['category', 'name', 'status']}
 
 
 class Province(BigIntDocument):

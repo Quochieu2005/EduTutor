@@ -89,6 +89,26 @@ class AdminAuditTests(SimpleTestCase):
         self.assertEqual(upper.astimezone(timezone.utc), datetime(2026, 9, 17, 17, tzinfo=timezone.utc))
         self.assertEqual(rendered.kwargs['status'], 200)
 
+    def test_activity_time_is_displayed_in_vietnam_with_seconds(self):
+        from datetime import datetime, timezone
+        manager = MagicMock()
+        query = manager.return_value
+        query.filter.return_value = query
+        entry = SimpleNamespace(
+            id=1, metadata={}, actor_id=7, action='create', target_type='blog_posts',
+            target_id=12, description='Created',
+            created_at=datetime(2026, 9, 22, 6, 45, 12, tzinfo=timezone.utc),
+            ip_address=None,
+        )
+        query.order_by.return_value = [entry]
+
+        with patch('core.admin_audit.AuditLog.objects', manager), patch('core.admin_audit.render') as render:
+            activity_logs(self.request())
+
+        page = render.call_args.args[2]['page']
+        self.assertEqual(page['columns'][3]['label'], 'Thời gian (GMT+7)')
+        self.assertEqual(page['rows'][0]['cells'][3]['value'], '22/09/2026 13:45:12')
+
     def test_date_filter_accepts_single_boundary_and_keeps_admin_scope(self):
         self.admin.role = 'admin'
         for key, lookup in (('start', 'created_at__gte'), ('end', 'created_at__lt')):

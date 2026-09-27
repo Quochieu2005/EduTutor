@@ -222,11 +222,31 @@
 		notificationMenu?.querySelectorAll('.is-unread').forEach((item) => item.classList.remove('is-unread'));
 		const count = notificationMenu?.querySelector('[data-notification-count]');
 		if (count) count.hidden = true;
-		if (markNotificationsRead) markNotificationsRead.textContent = 'Đã đọc tất cả';
+		const summary = notificationMenu?.querySelector('[data-notification-summary]');
+		if (summary) summary.textContent = 'Bạn không có thông báo mới';
+		if (markNotificationsRead) markNotificationsRead.hidden = true;
 	};
 
-	markNotificationsRead?.addEventListener('click', () => {
-		markAllNotificationsRead();
+	markNotificationsRead?.addEventListener('click', async () => {
+		const endpoint = notificationMenu?.dataset.markReadUrl;
+		if (!endpoint) return;
+		markNotificationsRead.disabled = true;
+		try {
+			const response = await fetch(endpoint, {
+				method: 'POST',
+				headers: {
+					'X-CSRFToken': notificationMenu.dataset.csrfToken || '',
+					'X-Requested-With': 'XMLHttpRequest',
+				},
+				credentials: 'same-origin',
+			});
+			const result = await response.json().catch(() => ({}));
+			if (!response.ok || !result.ok) throw new Error(result.message || 'Không thể cập nhật thông báo.');
+			markAllNotificationsRead();
+		} catch (error) {
+			window.alert(error.message);
+			markNotificationsRead.disabled = false;
+		}
 	});
 
 	viewAllNotifications?.addEventListener('click', () => {

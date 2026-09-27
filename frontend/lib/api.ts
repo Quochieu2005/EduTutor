@@ -116,8 +116,16 @@ export async function login(
       },
     };
   }
-  const { data } = await api.post("/auth/login/", payload);
-  return data;
+  const { data } = await api.post("/v1/accounts/login/", payload);
+  return {
+    ...data,
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      fullName: data.user.username,
+      role: "student" as const,
+    },
+  };
 }
 
 export async function register(
@@ -137,8 +145,28 @@ export async function register(
       },
     };
   }
-  const { data } = await api.post("/auth/register/", payload);
-  return data;
+  const username = payload.fullName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase()
+    .slice(0, 50) || "user";
+  const { data } = await api.post("/v1/accounts/register/", {
+    username,
+    email: payload.email,
+    password: payload.password,
+  });
+  return {
+    ...data,
+    user: {
+      id: data.user.id,
+      email: data.user.email,
+      fullName: data.user.username,
+      role: "student" as const,
+      phone: payload.phone,
+    },
+  };
 }
 
 export async function getTutors(
@@ -337,10 +365,19 @@ export async function adminUpdateTutor(
 // -------------------------------------------------------------
 // LESSONS & CLASS MANAGEMENT (Học viên & Admin)
 // -------------------------------------------------------------
-export async function getLessons(): Promise<LessonRequest[]> {
+export async function getLessons(currentUser?: User | null): Promise<LessonRequest[]> {
   if (isMockEnabled()) {
     await delay(200);
-    return getPersistedLessons();
+    const lessons = getPersistedLessons();
+    if (!currentUser) return [];
+    if (currentUser.role === "admin") return lessons;
+    if (currentUser.role === "tutor") {
+      const tutorId = getPersistedTutors().find(
+        (tutor) => tutor.userId === currentUser.id,
+      )?.id;
+      return tutorId ? lessons.filter((lesson) => lesson.tutorId === tutorId) : [];
+    }
+    return lessons.filter((lesson) => lesson.studentId === currentUser.id);
   }
   const { data } = await api.get("/lessons/");
   return data;
@@ -383,13 +420,20 @@ export async function createLessonRequest(
 export async function updateLessonStatus(
   id: string,
   status: LessonRequest["status"],
+  currentUser?: User | null,
 ): Promise<LessonRequest> {
   if (isMockEnabled()) {
     await delay(200);
     const lessons = getPersistedLessons();
+    const tutorId = currentUser && currentUser.role === "tutor"
+      ? getPersistedTutors().find((tutor) => tutor.userId === currentUser.id)?.id
+      : undefined;
     let updatedLesson: LessonRequest | null = null;
     const updated = lessons.map((l) => {
       if (l.id === id) {
+        if (status === "completed" && (!tutorId || l.tutorId !== tutorId)) {
+          return l;
+        }
         updatedLesson = { ...l, status };
         return updatedLesson;
       }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useUser, useClerk, UserButton } from "@clerk/nextjs";
+import { useUser, useClerk, UserButton } from "@/lib/auth-context";
 import {
   SearchOutlined,
   LoginOutlined,
@@ -249,7 +249,7 @@ export function Header() {
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                 >
                   <UserOutlined className="text-sm text-blue-600" />
-                  <span className="max-w-[100px] truncate">{user.fullName || "Tài khoản"}</span>
+                  <span className="max-w-[100px] truncate">{user?.fullName || "Tài khoản"}</span>
                 </Link>
                 <UserButton afterSignOutUrl="/" />
               </div>
@@ -351,7 +351,7 @@ export function Header() {
                   className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-slate-800 text-sm font-semibold hover:bg-slate-50"
                 >
                   <UserOutlined />
-                  <span>Trang cá nhân ({user.fullName || "Tài khoản"})</span>
+                  <span>Trang cá nhân ({user?.fullName || "Tài khoản"})</span>
                 </Link>
               ) : (
                 <button

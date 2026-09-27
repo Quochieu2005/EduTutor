@@ -2,6 +2,7 @@
 import logging
 
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib import messages
 from django.core.mail import send_mail
 from django.core.validators import validate_email
@@ -20,6 +21,7 @@ from core.documents import Contact
 logger = logging.getLogger(__name__)
 STATUSES = {'new': 'Mới', 'contacted': 'Đã liên hệ', 'closed': 'Đã xử lý'}
 TONES = {'new': 'info', 'contacted': 'warning', 'closed': 'success'}
+NEW_CONTACT_COUNT_CACHE_KEY = 'admin-new-contact-count:v1'
 
 
 def contact_notifications(request):
@@ -27,7 +29,11 @@ def contact_notifications(request):
     if admin is None or admin.status != Admin.STATUS_ACTIVE:
         return {}
     try:
-        return {'new_contact_count': Contact.objects(status='new').count()}
+        count = cache.get(NEW_CONTACT_COUNT_CACHE_KEY)
+        if count is None:
+            count = Contact.objects(status='new').count()
+            cache.set(NEW_CONTACT_COUNT_CACHE_KEY, count, 30)
+        return {'new_contact_count': count}
     except PyMongoError:
         logger.exception('Could not count new contacts')
         return {}
@@ -72,6 +78,7 @@ def contacts(request):
             return HttpResponseNotFound('Không tìm thấy liên hệ.')
         if contact.status != status:
             contact.update(set__status=status, set__updated_at=timezone.now())
+            cache.delete(NEW_CONTACT_COUNT_CACHE_KEY)
             record_admin_activity(request, 'toggle_status', contact)
         messages.success(request, 'Đã cập nhật trạng thái liên hệ.')
         return redirect('management-page', module='contacts')

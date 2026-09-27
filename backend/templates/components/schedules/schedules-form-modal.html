@@ -1,0 +1,97 @@
+<div class="add-user-modal resource-form-modal schedule-form-modal" data-resource-modal hidden>
+  <div class="add-user-dialog" role="dialog" aria-modal="true" aria-labelledby="resource-form-title">
+    <button class="add-user-close" type="button" data-resource-modal-close aria-label="Đóng">&times;</button>
+    <h2 id="resource-form-title" data-resource-form-title>Thêm buổi học</h2>
+    <p>Tạo một buổi lẻ hoặc chọn các thứ để tạo lịch học lặp.</p>
+    <form data-resource-form method="post" data-server-submit="true" data-create-url="{{ page.create_url }}" action="{{ page.create_url }}">
+      {% csrf_token %}
+      <input type="hidden" name="record_id" />
+
+      <label>Học viên
+        <select name="student_id" required>
+          <option value="">Chọn học viên đang Active</option>
+          {% for choice in page.schedule_choices.students %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Gia sư
+        <select name="tutor_id" required>
+          <option value="">Chọn gia sư đang Active</option>
+          {% for choice in page.schedule_choices.tutors %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Môn học
+        <select name="subject_id" required>
+          <option value="">Chọn môn học đang Active</option>
+          {% for choice in page.schedule_choices.subjects %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Ngày bắt đầu<input name="session_date" type="date" required /></label>
+      <label>Giờ bắt đầu<input name="start_time" type="time" required /></label>
+      <label>Giờ kết thúc<input name="end_time" type="time" required /></label>
+
+      <span class="schedule-recurrence-label" data-schedule-create-only>Lịch lặp</span>
+      <fieldset class="schedule-weekday-options" data-schedule-recurrence data-schedule-create-only>
+        <legend class="sr-only">Chọn các thứ học lặp</legend>
+        {% for day in page.schedule_weekdays %}
+          <label><input type="checkbox" name="recurrence_days" value="{{ day.value }}" data-schedule-recurrence-day /><span>{{ day.label }}</span></label>
+        {% endfor %}
+        <small>Không chọn thứ nào nếu chỉ tạo một buổi học.</small>
+      </fieldset>
+      <label class="schedule-recurrence-end" data-schedule-create-only>Lặp đến ngày<input name="recurrence_end_date" type="date" data-schedule-recurrence-end disabled /></label>
+
+      <div class="schedule-weekday-modes" data-schedule-weekday-modes data-schedule-create-only hidden>
+        <span>Hình thức theo từng thứ</span>
+        {% for day in page.schedule_weekdays %}
+          <label data-schedule-weekday-mode-row="{{ day.value }}" hidden>
+            <span>{{ day.label }}</span>
+            <select name="weekday_mode_{{ day.value }}" data-schedule-weekday-mode="{{ day.value }}" disabled>
+              {% for choice in page.schedule_mode_choices %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
+            </select>
+          </label>
+        {% endfor %}
+        <small>Ví dụ: T2 học trực tuyến, T4 học trực tiếp. Các buổi trực tuyến dùng chung liên kết; các buổi trực tiếp dùng chung địa điểm bên dưới.</small>
+      </div>
+
+      <label>Hình thức học
+        <select name="mode" data-schedule-mode required>
+          {% for choice in page.schedule_mode_choices %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label data-schedule-online-field>Liên kết lớp trực tuyến<input name="meeting_url" type="url" placeholder="https://meet.google.com/..." /></label>
+      <label data-schedule-location-field>Tỉnh/Thành phố
+        <select name="province_id" data-location-province disabled>
+          <option value="">Chọn tỉnh/thành phố</option>
+          {% for choice in page.schedule_choices.provinces %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label data-schedule-location-field>Xã/Phường/Đặc khu
+        <select name="ward_id" data-location-ward disabled>
+          <option value="">Chọn tỉnh/thành phố trước</option>
+          {% for choice in page.schedule_choices.wards %}<option value="{{ choice.value }}" data-province-id="{{ choice.province_id }}">{{ choice.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Học phí (VNĐ)<input name="price" type="number" min="0" placeholder="Ví dụ: 200000" /></label>
+      <label>Thanh toán
+        <select name="payment_status" required>
+          {% for choice in page.schedule_payment_choices %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Trạng thái buổi học
+        <select name="status" required>
+          {% for choice in page.schedule_status_choices %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
+        </select>
+        <small data-schedule-status-note hidden>Trạng thái này do gia sư cập nhật nên Admin không thể thay đổi.</small>
+      </label>
+      <label class="schedule-edit-scope" data-schedule-edit-scope hidden>Áp dụng thay đổi cho
+        <select name="edit_scope" data-schedule-edit-scope-select disabled>
+          <option value="one">Chỉ buổi học này</option>
+          <option value="future">Buổi này và các buổi sau</option>
+          <option value="series">Toàn bộ lịch lặp</option>
+        </select>
+        <small>Khi cập nhật nhiều buổi, ngày riêng của từng buổi được giữ nguyên.</small>
+      </label>
+      <label>Ghi chú<textarea name="note" rows="3" placeholder="Ghi chú dành cho quản trị viên"></textarea></label>
+      <button class="add-user-save" type="submit">Lưu lịch học</button>
+    </form>
+  </div>
+</div>

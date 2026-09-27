@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useUser, useClerk } from "@/lib/auth-context";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CITIES, SUBJECTS } from "@/lib/home-mock-data";
