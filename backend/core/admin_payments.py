@@ -8,6 +8,7 @@ from django.shortcuts import redirect
 from mongoengine import ValidationError
 
 from core.admin_audit import record_admin_activity
+from core.admin_query_stats import reference_counts
 from core.documents import Invoice, Payment, PaymentItem
 from lessons.documents import Lesson
 
@@ -44,9 +45,9 @@ def _payment_items(payment):
 
 def payment_page_config():
     payments = list(Payment.objects.order_by('-created_at').select_related())
+    item_counts = reference_counts(PaymentItem, 'payment') if payments else {}
     rows = []
     for payment in payments:
-        items = _payment_items(payment)
         payout_status = (
             PAYOUT_STATUS_LABELS.get(payment.tutor_payout_status, 'Chưa chi trả')
             if payment.status == 'paid' else 'Chờ học viên thanh toán'
@@ -56,7 +57,7 @@ def payment_page_config():
             payment.billing_month or 'Chưa phân kỳ',
             _ref_name(payment.student),
             _ref_name(payment.tutor),
-            str(len(items)),
+            str(item_counts.get(payment.id, 0)),
             _money(payment.total_amount),
             _money(payment.commission_amount),
             _money(payment.tutor_payout_amount),

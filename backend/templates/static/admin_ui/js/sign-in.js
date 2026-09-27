@@ -1,7 +1,7 @@
 (() => {
     const form = document.querySelector('[data-sign-in-form]');
     const status = document.querySelector('[data-sign-in-status]');
-    let submitTimer;
+    let submitting = false;
 
     if (!form || !status) return;
 
@@ -13,7 +13,7 @@
     });
 
     const resetSignInPage = () => {
-        window.clearTimeout(submitTimer);
+        submitting = false;
         form.reset();
         const submitButton = form.querySelector('.sign-in-form__submit');
         submitButton.disabled = false;
@@ -31,7 +31,9 @@
 
     form.addEventListener('submit', (event) => {
         event.preventDefault();
+        if (submitting) return;
         if (!form.reportValidity()) return;
+        submitting = true;
 
         const submitButton = form.querySelector('.sign-in-form__submit');
         submitButton.disabled = true;
@@ -40,8 +42,7 @@
         status.hidden = false;
         status.classList.remove('is-visible');
         requestAnimationFrame(() => status.classList.add('is-visible'));
-        submitTimer = window.setTimeout(() => {
-            form.submit();
-        }, 900);
+        // Display progress while the real request runs; do not delay the POST.
+        form.submit();
     });
 })();

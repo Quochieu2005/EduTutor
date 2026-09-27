@@ -25,6 +25,7 @@ from accounts.cloudinary_media import (
 from accounts.session import admin_session_is_valid, clear_admin_session
 from core.documents import Banner, BlogCategory, BlogPost, Payment
 from core.admin_audit import activity_logs, record_admin_activity
+from core.admin_query_stats import reference_counts
 from core.admin_classes import classes_page_config
 from core.admin_students import (
     student_delete,
@@ -660,6 +661,7 @@ def _location_page_config(tab='provinces'):
         }
 
     provinces = list(Province.objects.order_by('name'))
+    ward_counts = reference_counts(Ward, 'province') if provinces else {}
     return {
         'tab': 'provinces',
         'title': 'Tỉnh & Thành phố',
@@ -668,7 +670,7 @@ def _location_page_config(tab='provinces'):
         'description': '34 tỉnh và thành phố trực thuộc trung ương theo danh mục hành chính Việt Nam 2026.',
         'columns': [('name', 'Tỉnh/Thành phố'), ('code', 'Mã hành chính'), ('wards', 'Số đơn vị cấp xã')],
         'statuses': [],
-        'rows': [(province.name, province.code, str(Ward.objects(province=province).count())) for province in provinces],
+        'rows': [(province.name, province.code, str(ward_counts.get(province.id, 0))) for province in provinces],
     }
 
 
@@ -794,6 +796,7 @@ def _catalogue_slug(document_class, value, fallback):
 def _blog_page_config(tab='posts'):
     if tab == 'categories':
         categories = list(BlogCategory.objects.order_by('name'))
+        post_counts = reference_counts(BlogPost, 'category') if categories else {}
         return {
             'tab': 'categories',
             'title': 'Danh mục Blog',
@@ -809,13 +812,13 @@ def _blog_page_config(tab='posts'):
             'rows': [(
                 category.name,
                 category.slug,
-                str(BlogPost.objects(category=category).count()),
+                str(post_counts.get(category.id, 0)),
                 _recruitment_date(category.created_at),
                 'Active' if category.status != 0 else 'Inactive',
             ) for category in categories],
         }
 
-    posts = list(BlogPost.objects.order_by('-created_at'))
+    posts = list(BlogPost.objects.order_by('-created_at').select_related())
     return {
         'tab': 'posts',
         'title': 'Quản lý Blog',

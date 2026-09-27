@@ -7,6 +7,7 @@ from django.utils.text import slugify
 from mongoengine import NotUniqueError, ValidationError
 
 from core.admin_audit import record_admin_activity
+from core.admin_query_stats import reference_counts
 from tutors.documents import JobPosting, Subject, TutorSubject
 
 
@@ -21,6 +22,7 @@ def _subject_status_label(subject):
 
 def subject_page_config():
     subjects = list(Subject.objects.order_by('category', 'name'))
+    tutor_counts = reference_counts(TutorSubject, 'subject') if subjects else {}
     return {
         'title': 'Môn học & Chuyên môn',
         'group': 'Quản lý',
@@ -39,7 +41,7 @@ def subject_page_config():
             (
                 subject.name,
                 subject.level or 'Chưa cập nhật',
-                str(TutorSubject.objects(subject=subject).count()),
+                str(tutor_counts.get(subject.id, 0)),
                 subject.category or 'Chưa phân loại',
                 _subject_status_label(subject),
             )
