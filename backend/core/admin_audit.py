@@ -122,7 +122,10 @@ def activity_logs(request):
         records = records.none()
     result = Paginator(records.order_by('-created_at', '-id'), 20).get_page(request.GET.get('page'))
     rows = []
-    for entry in records.order_by('-created_at', '-id'):
+    # ``Paginator`` has already performed the bounded database slice.  Iterating
+    # over ``records`` here used to fetch every log row again, making the page
+    # slower as the audit history grew and defeating the visible pagination.
+    for entry in result.object_list:
         metadata = entry.metadata or {}
         created_at = _as_vietnam_time(entry.created_at)
         rows.append({
