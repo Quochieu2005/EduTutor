@@ -34,6 +34,7 @@ npm install
 Tạo file `.env.local` trong thư mục `frontend`:
 
 ```env
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
 ```
 
@@ -53,4 +54,5 @@ npm run build    # Build production
 npm run start    # Chạy bản build production
 ```
 
-Backend mặc định chạy tại `http://localhost:8000`. Khi deploy, thay `NEXT_PUBLIC_API_URL` bằng URL HTTPS của backend.
+Backend mặc định chạy tại `http://localhost:8000`. Khi deploy, đặt `NEXT_PUBLIC_BACKEND_URL` bằng URL HTTPS của Django backend để điều hướng trang Admin (`/admin`), và `NEXT_PUBLIC_API_URL` bằng URL API.
+

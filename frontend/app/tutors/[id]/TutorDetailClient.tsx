@@ -3,7 +3,8 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useUser, useClerk } from "@/lib/auth-context";
+import { useUser, useClerk } from "@clerk/nextjs";
+
 import {
   SafetyCertificateFilled,
   CheckCircleFilled,

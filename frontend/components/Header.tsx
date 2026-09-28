@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useUser, useClerk, UserButton } from "@/lib/auth-context";
+import { useUser, UserButton } from "@clerk/nextjs";
 import {
   SearchOutlined,
   LoginOutlined,
@@ -17,12 +17,17 @@ import {
   TeamOutlined,
 } from "@ant-design/icons";
 
+const emptySubscribe = () => () => {};
+
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { isSignedIn, user } = useUser();
-  const { openSignIn } = useClerk();
+  const { isLoaded, isSignedIn, user } = useUser();
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const authReady = mounted && isLoaded;
+
+
 
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -202,7 +207,11 @@ export function Header() {
                   <div className="my-1 border-t border-slate-100" />
 
                   {/* Gia sư đăng nhập */}
-                  {isSignedIn ? (
+                  {!authReady ? (
+                    <div className="px-4 py-2.5">
+                      <div className="h-6 w-full rounded-lg bg-slate-100 animate-pulse" />
+                    </div>
+                  ) : isSignedIn ? (
                     <Link
                       href="/profile"
                       role="menuitem"
@@ -213,18 +222,15 @@ export function Header() {
                       <span>Hồ sơ cá nhân</span>
                     </Link>
                   ) : (
-                    <button
-                      type="button"
+                    <Link
+                      href="/login"
                       role="menuitem"
-                      onClick={() => {
-                        setMoreMenuOpen(false);
-                        openSignIn();
-                      }}
+                      onClick={() => setMoreMenuOpen(false)}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer text-left"
                     >
                       <LoginOutlined className="text-blue-600 text-sm" />
                       <span>Gia sư đăng nhập</span>
-                    </button>
+                    </Link>
                   )}
                 </div>
               )}
@@ -242,26 +248,27 @@ export function Header() {
               <span>Tìm gia sư</span>
             </a>
 
-            {isSignedIn ? (
+            {!authReady ? (
+              <div className="h-10 w-28 rounded-xl bg-slate-100 animate-pulse" aria-hidden="true" />
+            ) : isSignedIn ? (
               <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
                 <Link
                   href="/profile"
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                 >
                   <UserOutlined className="text-sm text-blue-600" />
-                  <span className="max-w-[100px] truncate">{user?.fullName || "Tài khoản"}</span>
+                  <span className="max-w-[120px] truncate">{user?.fullName || user?.firstName || "Tài khoản"}</span>
                 </Link>
-                <UserButton afterSignOutUrl="/" />
+                <UserButton />
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => openSignIn()}
+              <Link
+                href="/login"
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 text-slate-700 hover:text-blue-600 text-sm font-semibold transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <LoginOutlined />
                 <span>Đăng nhập</span>
-              </button>
+              </Link>
             )}
           </div>
 
@@ -344,27 +351,29 @@ export function Header() {
                 <span>Tìm gia sư</span>
               </a>
 
-              {isSignedIn ? (
-                <Link
-                  href="/profile"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-slate-800 text-sm font-semibold hover:bg-slate-50"
-                >
-                  <UserOutlined />
-                  <span>Trang cá nhân ({user?.fullName || "Tài khoản"})</span>
-                </Link>
+              {!authReady ? (
+                <div className="h-11 w-full rounded-xl bg-slate-100 animate-pulse" aria-hidden="true" />
+              ) : isSignedIn ? (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <Link
+                    href="/profile"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-2 text-sm font-semibold text-slate-800 truncate"
+                  >
+                    <UserOutlined className="text-blue-600 shrink-0" />
+                    <span className="truncate">{user?.fullName || user?.firstName || "Tài khoản"}</span>
+                  </Link>
+                  <UserButton />
+                </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    openSignIn();
-                  }}
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
                   className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 cursor-pointer"
                 >
                   <LoginOutlined />
                   <span>Đăng nhập</span>
-                </button>
+                </Link>
               )}
             </div>
           </div>

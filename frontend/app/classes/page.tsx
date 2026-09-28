@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useUser, useClerk } from "@/lib/auth-context";
+import { useUser, useClerk } from "@clerk/nextjs";
+
 import {
   SearchOutlined,
   ReloadOutlined,
