@@ -15,14 +15,9 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.conf import settings
-from django.http import HttpResponseNotFound
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.views.generic import RedirectView
 from django.urls import include, path
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-
-from accounts.documents import Admin
-from accounts.session import admin_session_is_valid
 
 from templates.views import (
     account_settings,
@@ -94,35 +89,9 @@ from templates.views import (
 
 handler404 = page_not_found
 
-
-def _active_admin_for_docs(request):
-    """Read the Admin session without making every ``/api/`` request a login route."""
-    admin_id = request.session.get('admin_id')
-    if admin_id is None or not admin_session_is_valid(request.session):
-        return None
-    admin = Admin.objects(id=admin_id, status=Admin.STATUS_ACTIVE).first()
-    if admin is None or request.session.get('admin_session_version') != admin.session_version:
-        return None
-    return admin
-
-
-def private_api_docs(view):
-    """Swagger/schema are convenient locally but must not be public on Render."""
-    def wrapped(request, *args, **kwargs):
-        if not settings.DEBUG and _active_admin_for_docs(request) is None:
-            # A 404 avoids advertising internal API documentation to anonymous
-            # visitors in production.
-            return HttpResponseNotFound('Không tìm thấy trang này.')
-        return view(request, *args, **kwargs)
-    return wrapped
-
 urlpatterns = [
     path('', RedirectView.as_view(pattern_name='login', permanent=False)),
-    # Chỉ công khai một trang tài liệu cho người dùng: /api/docs/.
-    # Schema JSON là dữ liệu nội bộ Swagger cần tải để hiển thị endpoint,
-    # không phải một trang docs độc lập.
-    path('api/docs/schema/', private_api_docs(SpectacularAPIView.as_view()), name='api-schema'),
-    path('api/docs/', private_api_docs(SpectacularSwaggerView.as_view(url_name='api-schema')), name='api-docs'),
+    # Tất cả API và Swagger được quản lý riêng trong api/urls.py.
     path('api/', include('api.urls')),
     path('admin/dashboard', dashboard, name='dashboard'),
     path('admin/dashboard/', dashboard, name='dashboard-slash'),

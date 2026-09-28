@@ -2,30 +2,32 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { getLessons, updateLessonStatus } from "@/lib/api";
-import { useUser } from "@clerk/nextjs";
-import type { LessonRequest, User } from "@/lib/types";
+import { getLessons, proposeLessonSchedule, updateLessonStatus } from "@/lib/api";
+import { useEduUser } from "@/lib/auth";
+import type { LessonRequest, ScheduleProposalPayload, User } from "@/lib/types";
 import { LessonCard, ScheduleCalendar } from "@/components/lessons/LessonCard";
 
 type Tab = "all" | "schedule";
 
 export default function LessonsPage() {
-  const { isLoaded, isSignedIn, user } = useUser();
+  const { isLoaded, isSignedIn, user } = useEduUser();
   const router = useRouter();
   const [lessons, setLessons] = useState<LessonRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("all");
 
   const currentUser: User | null = useMemo(
-    () =>
-      user
-        ? {
+    () => {
+      if (!user) return null;
+      const metadataRole = user.publicMetadata?.role;
+      const role = metadataRole === "tutor" ? "tutor" : "student";
+      return {
             id: user.id,
             email: user.primaryEmailAddress?.emailAddress || "",
             fullName: user.fullName || "Học viên",
-            role: "student",
-          }
-        : null,
+            role,
+          };
+    },
     [user],
   );
 
@@ -75,6 +77,15 @@ export default function LessonsPage() {
       );
     } catch {
       alert("Không thể cập nhật trạng thái.");
+    }
+  }
+
+  async function handleCounterProposal(id: string, payload: ScheduleProposalPayload) {
+    try {
+      const updated = await proposeLessonSchedule(id, payload);
+      setLessons((prev) => prev.map((lesson) => (lesson.id === id ? updated : lesson)));
+    } catch {
+      alert("Không thể gửi đề xuất lịch mới.");
     }
   }
 
@@ -146,6 +157,7 @@ export default function LessonsPage() {
                 onReject={(id) => handleStatusChange(id, "rejected")}
                 onComplete={(id) => handleStatusChange(id, "completed")}
                 onCancel={(id) => handleStatusChange(id, "cancelled")}
+                onCounterProposal={handleCounterProposal}
               />
             ))}
           </div>

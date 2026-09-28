@@ -29,7 +29,27 @@ class LearningRequest(TimestampedDocument):
     subject = ReferenceField('Subject', required=True, db_field='subject_id')
     message = StringField(null=True)
     expected_schedule = StringField(null=True)
-    status = StringField(required=True, choices=('pending', 'accepted', 'declined', 'cancelled'), default='pending')
+    proposed_date = DateField(null=True)
+    proposed_start_time = StringField(max_length=8, null=True)
+    proposed_end_time = StringField(max_length=8, null=True)
+    proposed_mode = StringField(choices=('online', 'offline'), null=True)
+    proposed_location = StringField(max_length=500, null=True)
+    proposed_meeting_url = StringField(max_length=1000, null=True)
+    # Both entry points converge here: a learner can invite a tutor from the
+    # tutor directory, or a tutor can apply to a class from the class board.
+    source = StringField(
+        choices=('tutor_directory', 'class_board'), default='tutor_directory',
+    )
+    job_posting = ReferenceField('JobPosting', null=True, db_field='job_posting_id')
+    proposed_by = StringField(choices=('student', 'tutor'), default='student')
+    proposal_version = IntField(default=1, min_value=1)
+    student_confirmed = BooleanField(default=True)
+    tutor_confirmed = BooleanField(default=False)
+    status = StringField(
+        required=True,
+        choices=('pending', 'accepted', 'declined', 'cancelled', 'completed', 'no_show'),
+        default='pending',
+    )
     meta = {'collection': 'learning_requests', 'indexes': ['student', 'tutor', 'subject', 'status', '-created_at']}
 
 
@@ -80,7 +100,8 @@ class Review(BigIntDocument):
     status = StringField(required=True, choices=('visible', 'hidden'), default='visible')
     admin_reply = StringField(null=True, max_length=3000)
     moderated_at = DateTimeField(null=True)
-    meta = {'collection': 'reviews', 'indexes': ['tutor', 'student', 'status', '-rating']}
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    meta = {'collection': 'reviews', 'indexes': ['tutor', 'student', 'status', '-rating', '-created_at']}
 
 
 class Message(BigIntDocument):

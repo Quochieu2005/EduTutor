@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useClerk, useUser } from "@clerk/nextjs";
+import { useEduClerk, useEduUser } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import {
@@ -39,8 +39,8 @@ const tutorStatusLabel: Record<string, string> = {
 };
 
 export default function ProfilePage() {
-  const { isLoaded, isSignedIn, user } = useUser();
-  const { signOut } = useClerk();
+  const { isLoaded, isSignedIn, user } = useEduUser();
+  const { signOut } = useEduClerk();
   const router = useRouter();
   const [enrollments, setEnrollments] = useState<EnrollmentRequest[]>([]);
   const [application, setApplication] = useState<TutorApplication | null>(null);

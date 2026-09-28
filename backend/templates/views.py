@@ -1437,6 +1437,7 @@ def tutor_create(request):
         for field in ('name', 'email', 'phone', 'headline', 'bio', 'education_level', 'experience_years', 'hourly_rate_min', 'hourly_rate_max', 'teaching_mode', 'status', 'is_verified'):
             setattr(tutor, field, values[field])
         tutor.set_password(values['password'])
+        tutor.must_change_password = True
         if values['avatar_upload']:
             asset = upload_tutor_avatar(values['avatar_upload'], tutor.slug)
             tutor.avatar, tutor.avatar_public_id = asset['secure_url'], asset['public_id']
@@ -1445,7 +1446,30 @@ def tutor_create(request):
     except (ValueError, ValidationError, NotUniqueError) as exc:
         return _tutor_redirect(request, str(exc) or 'Không thể tạo gia sư.', error=True)
     record_admin_activity(request, 'create', tutor)
-    return _tutor_redirect(request, 'Tạo hồ sơ gia sư thành công.')
+    try:
+        EmailMessage(
+            subject='Thông tin đăng nhập tài khoản gia sư EduTutor',
+            body=(
+                f'Xin chào {tutor.name},\n\n'
+                'Tài khoản gia sư EduTutor của bạn đã được tạo.\n'
+                f'Email đăng nhập: {tutor.email}\n'
+                f'Mật khẩu tạm thời: {values["password"]}\n\n'
+                'Bạn có thể đăng nhập bằng mật khẩu này. '
+                'Hệ thống sẽ yêu cầu bạn đổi mật khẩu để bảo mật tài khoản.\n\n'
+                'Trân trọng,\nEduTutor'
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[tutor.email],
+        ).send(fail_silently=False)
+    except Exception:
+        logger.exception('Could not send newly created tutor credentials: tutor_id=%s', tutor.id)
+        messages.warning(
+            request,
+            'Tạo gia sư thành công nhưng chưa gửi được email. '
+            'Tài khoản vẫn dùng được; hãy kiểm tra SMTP hoặc dùng nút Gửi thông tin đăng nhập.',
+        )
+        return redirect('management-page', module='tutors')
+    return _tutor_redirect(request, 'Tạo gia sư và gửi thông tin đăng nhập thành công.')
 
 
 def tutor_edit(request, slug):
@@ -1461,6 +1485,8 @@ def tutor_edit(request, slug):
             setattr(tutor, field, values[field])
         if values['password']:
             tutor.set_password(values['password'])
+            tutor.must_change_password = True
+            tutor.token_version = (tutor.token_version or 1) + 1
         if values['avatar_upload']:
             asset = upload_tutor_avatar(values['avatar_upload'], tutor.slug)
             tutor.avatar, tutor.avatar_public_id = asset['secure_url'], asset['public_id']
@@ -1521,6 +1547,8 @@ def tutor_send_credentials(request):
                     connection=connection,
                 ).send(fail_silently=False)
                 tutor.set_password(temporary_password)
+                tutor.must_change_password = True
+                tutor.token_version = (tutor.token_version or 1) + 1
                 tutor.save()
                 record_admin_activity(request, 'reset_password', tutor)
                 sent_count += 1
@@ -1636,6 +1664,11 @@ def management_page(request, module):
         # on the schedule page so there is only one source of truth.
         page['can_manage'] = False
         page['can_create'] = False
+    if module == 'schedules':
+        # Lịch chính thức được sinh sau khi học viên đề xuất và gia sư chấp
+        # nhận. Admin chỉ giám sát, không thay hai bên quyết định lịch.
+        page['can_manage'] = False
+        page['can_create'] = False
     if module == 'locations':
         page['can_manage'] = False
         page['can_create'] = False
@@ -1660,8 +1693,6 @@ def management_page(request, module):
         page['create_url'] = reverse('notification-create')
     if module == 'subjects':
         page['create_url'] = reverse('subject-create')
-    if module == 'schedules':
-        page['create_url'] = reverse('schedule-create')
     if module == 'payments':
         page['create_url'] = reverse('payment-generate')
         page['action_label'] = 'Lập hóa đơn tháng'

@@ -1,4 +1,6 @@
 import { SignUp } from "@clerk/nextjs";
+import { ClerkMissingNotice } from "@/components/ClerkMissingNotice";
+import { isClerkConfigured } from "@/lib/clerk-config";
 
 function getSafeReturnTo(returnTo?: string): string | undefined {
   if (!returnTo) return undefined;
@@ -14,6 +16,7 @@ export default async function RegisterPage({
 }: {
   searchParams: Promise<{ returnTo?: string }>;
 }) {
+  if (!isClerkConfigured) return <ClerkMissingNotice />;
   const { returnTo } = await searchParams;
   const safeReturnTo = getSafeReturnTo(returnTo);
 

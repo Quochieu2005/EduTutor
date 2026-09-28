@@ -1,6 +1,7 @@
 """Cloudinary storage helpers for admin-uploaded images."""
 
 from datetime import date
+from uuid import uuid4
 
 from django.conf import settings
 
@@ -100,6 +101,76 @@ def upload_tutor_avatar(upload, slug):
         )
     except Exception as exc:
         raise ValueError('Không thể tải ảnh đại diện lên Cloudinary. Vui lòng thử lại.') from exc
+
+
+def upload_user_avatar(upload, slug):
+    """Upload a website account portrait below Edututor/users/<slug>/<date>."""
+    if not settings.CLOUDINARY_ENABLED:
+        raise ValueError('Cloudinary chưa được cấu hình. Vui lòng kiểm tra file .env.')
+    if upload.content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
+        raise ValueError('Ảnh đại diện phải là JPG, PNG, WEBP hoặc GIF.')
+    if upload.size > 5 * 1024 * 1024:
+        raise ValueError('Ảnh đại diện không được vượt quá 5 MB.')
+
+    import cloudinary
+    import cloudinary.uploader
+
+    cloudinary.config(
+        cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+        api_key=settings.CLOUDINARY_API_KEY,
+        api_secret=settings.CLOUDINARY_API_SECRET,
+        secure=True,
+    )
+    today = date.today()
+    try:
+        return cloudinary.uploader.upload(
+            upload,
+            folder=_cloudinary_folder('users', slug, str(today.year), f'{today.month:02d}', f'{today.day:02d}'),
+            resource_type='image', use_filename=True, unique_filename=True,
+        )
+    except Exception as exc:
+        raise ValueError('Không thể tải ảnh đại diện lên Cloudinary. Vui lòng thử lại.') from exc
+
+
+def upload_tutor_application_document(upload, applicant_slug, document_type):
+    """Upload a validated recruitment document below the project root."""
+    if not settings.CLOUDINARY_ENABLED:
+        raise ValueError('Cloudinary chưa được cấu hình. Vui lòng kiểm tra file .env.')
+    allowed_types = {
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg', 'image/png', 'image/webp',
+    }
+    if upload.content_type not in allowed_types:
+        raise ValueError('Tài liệu phải là PDF, DOCX, JPG, PNG hoặc WEBP.')
+    if upload.size > 5 * 1024 * 1024:
+        raise ValueError('Mỗi tài liệu không được vượt quá 5 MB.')
+
+    import cloudinary
+    import cloudinary.uploader
+
+    cloudinary.config(
+        cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+        api_key=settings.CLOUDINARY_API_KEY,
+        api_secret=settings.CLOUDINARY_API_SECRET,
+        secure=True,
+    )
+    today = date.today()
+    try:
+        return cloudinary.uploader.upload(
+            upload,
+            folder=_cloudinary_folder(
+                'tutor-applications', applicant_slug, str(today.year),
+                f'{today.month:02d}', f'{today.day:02d}',
+            ),
+            public_id=f'{document_type}-{uuid4().hex}',
+            resource_type='auto',
+            overwrite=False,
+            unique_filename=True,
+            timeout=10,
+        )
+    except Exception as exc:
+        raise ValueError('Không thể tải tài liệu ứng tuyển lên Cloudinary.') from exc
 
 
 def upload_banner_image(upload, slug):

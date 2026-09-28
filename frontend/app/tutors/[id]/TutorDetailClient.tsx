@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useEduUser, useEduClerk } from "@/lib/auth";
 
 import {
   SafetyCertificateFilled,
@@ -65,8 +65,8 @@ const PERIODS: { key: "morning" | "afternoon" | "evening"; label: "Sáng" | "Chi
 ];
 
 export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClientProps) {
-  const { isSignedIn, user } = useUser();
-  const { openSignIn } = useClerk();
+  const { isSignedIn, user } = useEduUser();
+  const { openSignIn } = useEduClerk();
 
   // State các lớp đang mở & đặt lớp
   const [openClasses] = useState<TutorOpenClass[]>(initialOpenClasses);

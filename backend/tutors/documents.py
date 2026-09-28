@@ -3,10 +3,14 @@
 from datetime import datetime, timezone
 
 from bson.int64 import Int64
-from django.contrib.auth.hashers import check_password, make_password
 from mongoengine import (
     BooleanField, DateTimeField, DecimalField, Document, EmailField, IntField, LongField,
     ReferenceField, SequenceField, StringField, URLField,
+)
+
+from accounts.passwords import (
+    check_bcrypt_password, check_previous_password_format, is_bcrypt_password,
+    make_bcrypt_password,
 )
 
 
@@ -102,16 +106,27 @@ class Tutor(TimestampedDocument):
     rating_count = IntField(default=0, min_value=0)
     oauth_provider = StringField(choices=('local', 'google', 'facebook'), null=True)
     oauth_uid = StringField(max_length=255, null=True)
+    # Admin-issued credentials require a password change after the first login.
+    # The temporary password remains valid until the tutor explicitly changes it.
+    must_change_password = BooleanField(default=True)
+    # Incrementing this value revokes all previously issued tutor JWTs.
+    token_version = IntField(default=1, min_value=1)
     meta = {'collection': 'tutors', 'indexes': [
         {'fields': ['oauth_provider', 'oauth_uid'], 'unique': True, 'sparse': True},
         'status', 'teaching_mode', 'is_verified', '-rating_avg',
     ]}
 
     def set_password(self, raw_password):
-        self.password_hash = make_password(raw_password)
+        self.password_hash = make_bcrypt_password(raw_password)
 
     def check_password(self, raw_password):
-        return bool(self.password_hash) and check_password(raw_password, self.password_hash)
+        if is_bcrypt_password(self.password_hash):
+            return check_bcrypt_password(raw_password, self.password_hash)
+        if check_previous_password_format(raw_password, self.password_hash):
+            self.set_password(raw_password)
+            self.save()
+            return True
+        return False
 
     def clean(self):
         if (
@@ -136,6 +151,22 @@ class TutorTeachingArea(BigIntDocument):
     district = ReferenceField(District, null=True, db_field='district_id')
     ward = ReferenceField(Ward, null=True, db_field='ward_id')
     meta = {'collection': 'tutor_teaching_areas', 'indexes': ['tutor', 'province', 'district', 'ward']}
+
+
+class TutorAvailability(BigIntDocument):
+    """A recurring weekly time window explicitly published by a tutor."""
+
+    tutor = ReferenceField(Tutor, required=True, db_field='tutor_id')
+    weekday = IntField(required=True, min_value=0, max_value=6)
+    period = StringField(required=True, choices=('morning', 'afternoon', 'evening'))
+    is_available = BooleanField(default=True)
+    meta = {
+        'collection': 'tutor_availability',
+        'indexes': [
+            {'fields': ['tutor', 'weekday', 'period'], 'unique': True},
+            'tutor', 'weekday', 'is_available',
+        ],
+    }
 
 
 class TutorApplication(TimestampedDocument):

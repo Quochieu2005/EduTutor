@@ -1,4 +1,4 @@
-"""MongoDB-backed lesson scheduling for the EduTutor admin."""
+"""Read-only admin overview for schedules agreed by students and tutors."""
 
 from datetime import date, datetime, timedelta
 from urllib.parse import urlparse
@@ -327,7 +327,9 @@ def _lesson_values(request, lesson=None, session_date=None, mode_override=None):
 
 
 def schedule_create(request):
-    if request.method != 'POST':
+    messages.error(request, 'Lịch học phải do học viên đề xuất và gia sư xác nhận.')
+    return redirect('management-page', module='schedules')
+    if request.method != 'POST':  # pragma: no cover - legacy code kept below temporarily
         return redirect('management-page', module='schedules')
     try:
         session_dates = _recurrence_dates(request)
@@ -356,7 +358,9 @@ def schedule_create(request):
 
 
 def schedule_edit(request, lesson_id):
-    if request.method != 'POST':
+    messages.error(request, 'Admin chỉ theo dõi; lịch học do gia sư và học viên thống nhất.')
+    return redirect('management-page', module='schedules')
+    if request.method != 'POST':  # pragma: no cover - legacy code kept below temporarily
         return redirect('management-page', module='schedules')
     lesson = Lesson.objects(id=lesson_id).first()
     if lesson is None:
@@ -409,7 +413,11 @@ def schedule_edit(request, lesson_id):
 
 
 def schedule_delete(request, lesson_id):
-    if request.method != 'POST':
+    return JsonResponse({
+        'ok': False,
+        'message': 'Admin chỉ theo dõi; không thể xóa lịch đã được hai bên thống nhất.',
+    }, status=403)
+    if request.method != 'POST':  # pragma: no cover - legacy code kept below temporarily
         return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
     lesson = Lesson.objects(id=lesson_id).first()
     if lesson is None:

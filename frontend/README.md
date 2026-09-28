@@ -36,6 +36,8 @@ Tạo file `.env.local` trong thư mục `frontend`:
 ```env
 NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_publishable_key
+CLERK_SECRET_KEY=sk_test_your_secret_key
 ```
 
 ## Chạy môi trường phát triển

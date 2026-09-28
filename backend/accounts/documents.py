@@ -1,12 +1,11 @@
 from datetime import datetime, timezone
 
-import bcrypt
 from bson.int64 import Int64
-from django.contrib.auth.hashers import check_password as check_legacy_password
 from django.utils.text import slugify
 from mongoengine import (
     BinaryField,
     BooleanField,
+    CASCADE,
     NULLIFY,
     DateTimeField,
     Document,
@@ -21,61 +20,77 @@ from mongoengine import (
     ValidationError,
 )
 
-
-def _make_bcrypt_password(raw_password):
-    if not raw_password:
-        raise ValueError('Password must not be empty.')
-    if len(raw_password.encode('utf-8')) > 72:
-        raise ValueError('Password must not exceed 72 bytes for bcrypt.')
-    return bcrypt.hashpw(
-        raw_password.encode('utf-8'),
-        bcrypt.gensalt(rounds=12),
-    ).decode('utf-8')
-
-
-def _check_bcrypt_password(raw_password, encoded_password):
-    if not raw_password or not encoded_password:
-        return False
-    try:
-        return bcrypt.checkpw(
-            raw_password.encode('utf-8'),
-            encoded_password.encode('utf-8'),
-        )
-    except (TypeError, ValueError):
-        return False
-
+from .passwords import (
+    check_bcrypt_password, check_previous_password_format, is_bcrypt_password,
+    make_bcrypt_password,
+)
 
 class User(Document):
     username = StringField(required=True, unique=True, max_length=50)
     email = EmailField(required=True, unique=True)
+    display_name = StringField(max_length=150, null=True)
+    avatar = StringField(max_length=1000, null=True)
+    avatar_public_id = StringField(max_length=1000, null=True)
     password_hash = StringField(required=True)
     # Local accounts keep ``local``. OAuth accounts are identified by the
     # immutable subject supplied by Google/Facebook, never by a client value.
     oauth_provider = StringField(choices=('local', 'google', 'facebook'), default='local')
     oauth_uid = StringField(max_length=255, null=True)
+    # Incrementing this value invalidates every JWT issued before a password reset.
+    token_version = IntField(default=1, min_value=1)
+    password_reset_after = DateTimeField(null=True)
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     meta = {
         'collection': 'users',
         'indexes': [
-            {'fields': ['oauth_provider', 'oauth_uid'], 'unique': True, 'sparse': True},
+            {
+                'fields': ['oauth_provider', 'oauth_uid'], 'unique': True,
+                'name': 'unique_oauth_identity_v2',
+                'partialFilterExpression': {'oauth_uid': {'$type': 'string'}},
+            },
             '-created_at',
         ],
     }
 
     def set_password(self, raw_password):
-        self.password_hash = _make_bcrypt_password(raw_password)
+        self.password_hash = make_bcrypt_password(raw_password)
 
     def check_password(self, raw_password):
-        if self.password_hash.startswith(('$2a$', '$2b$', '$2y$')):
-            return _check_bcrypt_password(raw_password, self.password_hash)
+        if is_bcrypt_password(self.password_hash):
+            return check_bcrypt_password(raw_password, self.password_hash)
 
         # Nâng cấp tài khoản cũ từ PBKDF2 sang bcrypt ngay khi đăng nhập đúng.
-        if check_legacy_password(raw_password, self.password_hash):
+        if check_previous_password_format(raw_password, self.password_hash):
             self.set_password(raw_password)
             self.save()
             return True
         return False
+
+
+class UserPasswordResetToken(Document):
+    """One-time password-reset link for a website User.
+
+    Only a keyed digest is persisted. The raw token exists solely in the email.
+    """
+
+    user = ReferenceField(User, required=True, reverse_delete_rule=CASCADE, db_field='user_id')
+    token_digest = StringField(required=True, unique=True, max_length=64)
+    token_version = IntField(default=1, min_value=1)
+    is_used = BooleanField(default=False)
+    expires_at = DateTimeField(required=True)
+    used_at = DateTimeField(null=True)
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    meta = {
+        'collection': 'user_password_reset_tokens',
+        'indexes': [
+            'user', 'token_digest', '-created_at', ('user', '-created_at'),
+            # Keep expired records for one extra hour so the per-account email
+            # limit remains effective; API validation still expires links at 5m.
+            {'fields': ['expires_at'], 'expireAfterSeconds': 3600},
+        ],
+    }
 
 
 class AccountDocument(Document):
@@ -90,6 +105,7 @@ class AccountDocument(Document):
     password_hash = StringField(null=True, db_field='password')
     phone = StringField(max_length=20, null=True)
     avatar = StringField(max_length=1000, null=True)
+    avatar_public_id = StringField(max_length=1000, null=True)
     oauth_provider = StringField(choices=('local', 'google', 'facebook'), null=True)
     oauth_uid = StringField(max_length=255, null=True)
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
@@ -100,14 +116,14 @@ class AccountDocument(Document):
         return super().save(*args, **kwargs)
 
     def set_password(self, raw_password):
-        self.password_hash = _make_bcrypt_password(raw_password)
+        self.password_hash = make_bcrypt_password(raw_password)
 
     def check_password(self, raw_password):
         if not self.password_hash:
             return False
-        if self.password_hash.startswith(('$2a$', '$2b$', '$2y$')):
-            return _check_bcrypt_password(raw_password, self.password_hash)
-        if check_legacy_password(raw_password, self.password_hash):
+        if is_bcrypt_password(self.password_hash):
+            return check_bcrypt_password(raw_password, self.password_hash)
+        if check_previous_password_format(raw_password, self.password_hash):
             self.set_password(raw_password)
             self.save()
             return True
@@ -272,10 +288,10 @@ class Admin(Document):
         return super().save(*args, **kwargs)
 
     def set_password(self, raw_password):
-        self.password_hash = _make_bcrypt_password(raw_password)
+        self.password_hash = make_bcrypt_password(raw_password)
 
     def check_password(self, raw_password):
-        return _check_bcrypt_password(raw_password, self.password_hash)
+        return check_bcrypt_password(raw_password, self.password_hash)
 
     def has_permission(self, permission):
         if self.status != self.STATUS_ACTIVE:

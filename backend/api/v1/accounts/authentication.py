@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 import jwt
+from bson import ObjectId
 from django.conf import settings
 from rest_framework import authentication, exceptions
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
@@ -37,25 +38,31 @@ class MongoJWTAuthentication(authentication.BaseAuthentication):
         header = authentication.get_authorization_header(request).split()
         if not header:
             return None
-        if len(header) != 2 or header[0].decode('utf-8').lower() != self.keyword.lower():
+        if len(header) != 2 or header[0].lower() != b'bearer':
             raise exceptions.AuthenticationFailed('Authorization phải có dạng Bearer <access_token>.')
 
         try:
             payload = jwt.decode(
-                header[1], settings.SECRET_KEY, algorithms=['HS256'], issuer='edututor-api'
+                header[1], settings.SECRET_KEY, algorithms=['HS256'], issuer='edututor-api',
+                options={'require': ['exp', 'iat', 'sub']},
             )
         except jwt.ExpiredSignatureError as error:
             raise exceptions.AuthenticationFailed('Access token đã hết hạn.') from error
         except jwt.PyJWTError as error:
             raise exceptions.AuthenticationFailed('Access token không hợp lệ.') from error
 
-        if payload.get('token_type') != 'access' or not payload.get('sub'):
+        if payload.get('token_type') != 'access' or not ObjectId.is_valid(payload.get('sub', '')):
             raise exceptions.AuthenticationFailed('Access token không hợp lệ.')
 
         user = User.objects(id=payload['sub']).first()
         if user is None:
             raise exceptions.AuthenticationFailed('Tài khoản không còn tồn tại.')
+        if payload.get('ver', 1) != (user.token_version or 1):
+            raise exceptions.AuthenticationFailed('Phiên đăng nhập không còn hiệu lực.')
         return MongoUserPrincipal(user), payload
+
+    def authenticate_header(self, request):
+        return self.keyword
 
 
 class MongoJWTAuthenticationScheme(OpenApiAuthenticationExtension):
