@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useEduUser, useEduClerk } from "@/lib/auth";
 
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -22,8 +22,8 @@ interface ClassDetailClientProps {
 }
 
 export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
-  const { isSignedIn, user } = useUser();
-  const { openSignIn } = useClerk();
+  const { isSignedIn, user } = useEduUser();
+  const { openSignIn } = useEduClerk();
   const router = useRouter();
 
   const [classItem] = useState<ClassListing>(initialClass);

@@ -122,18 +122,8 @@ class AdminScheduleTests(SimpleTestCase):
                 start_time='19:00', end_time='20:00',
             )
 
-    @patch('core.admin_schedules.PaymentItem.objects')
-    @patch('core.admin_schedules.Review.objects')
-    @patch('core.admin_schedules.Lesson.objects')
-    def test_delete_refuses_lesson_with_review_or_payment(self, lessons, reviews, payment_items):
-        lesson = MagicMock()
-        lessons.return_value.first.return_value = lesson
-        reviews.return_value.count.return_value = 1
-        payment_items.return_value.count.return_value = 0
-
+    def test_admin_cannot_delete_a_schedule_agreed_by_both_sides(self):
         response = schedule_delete(
             self.factory.post('/admin/management/schedules/5/delete/'), 5,
         )
-
-        self.assertEqual(response.status_code, 409)
-        lesson.delete.assert_not_called()
+        self.assertEqual(response.status_code, 403)

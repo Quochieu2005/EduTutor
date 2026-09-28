@@ -4,13 +4,18 @@ from unittest.mock import MagicMock, patch
 
 from django.template.loader import render_to_string
 from django.test import RequestFactory, SimpleTestCase
+from django.core.cache import cache
 
 from accounts.documents import Admin
-from core.admin_contacts import contacts, contact_notifications
+from core.admin_contacts import contacts, contact_notifications, NEW_CONTACT_COUNT_CACHE_KEY
 
 
 class AdminContactTests(SimpleTestCase):
     def setUp(self):
+        # Cached counts from another rendered admin page must not bypass this
+        # test's mocked query.
+        cache.delete(NEW_CONTACT_COUNT_CACHE_KEY)
+        self.addCleanup(cache.delete, NEW_CONTACT_COUNT_CACHE_KEY)
         self.factory = RequestFactory()
         self.admin = SimpleNamespace(id=1, status=Admin.STATUS_ACTIVE)
 

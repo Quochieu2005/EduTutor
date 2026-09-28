@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useUser, UserButton } from "@clerk/nextjs";
+import { EduUserButton, useEduUser } from "@/lib/auth";
 import {
   SearchOutlined,
   LoginOutlined,
@@ -23,7 +23,7 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { isLoaded, isSignedIn, user } = useUser();
+  const { isLoaded, isSignedIn, user } = useEduUser();
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const authReady = mounted && isLoaded;
 
@@ -259,7 +259,7 @@ export function Header() {
                   <UserOutlined className="text-sm text-blue-600" />
                   <span className="max-w-[120px] truncate">{user?.fullName || user?.firstName || "Tài khoản"}</span>
                 </Link>
-                <UserButton />
+                <EduUserButton />
               </div>
             ) : (
               <Link
@@ -363,7 +363,7 @@ export function Header() {
                     <UserOutlined className="text-blue-600 shrink-0" />
                     <span className="truncate">{user?.fullName || user?.firstName || "Tài khoản"}</span>
                   </Link>
-                  <UserButton />
+                  <EduUserButton />
                 </div>
               ) : (
                 <Link

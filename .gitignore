@@ -6,6 +6,7 @@ __pycache__/
 db.sqlite3
 backend/.env
 *.env
+!frontend/.env.example
 node_modules/
 .next/
 frontend/.env.local

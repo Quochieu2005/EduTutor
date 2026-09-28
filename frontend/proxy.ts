@@ -1,4 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+import { isClerkConfigured } from "./lib/clerk-config";
 
 // Routes that strictly require user authentication
 const isProtectedRoute = createRouteMatcher([
@@ -6,7 +8,7 @@ const isProtectedRoute = createRouteMatcher([
   "/lessons(.*)",
 ]);
 
-const proxy = clerkMiddleware(async (auth, req) => {
+const clerkProxy = clerkMiddleware(async (auth, req) => {
   // Never interfere with /admin routes — they are completely handled by Django backend
   if (req.nextUrl.pathname.startsWith("/admin")) {
     return;
@@ -17,6 +19,10 @@ const proxy = clerkMiddleware(async (auth, req) => {
     await auth.protect();
   }
 });
+
+const proxy = isClerkConfigured ? clerkProxy : function authNotConfigured() {
+  return NextResponse.next();
+};
 
 export { proxy };
 export default proxy;

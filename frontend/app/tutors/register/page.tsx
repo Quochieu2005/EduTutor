@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useEduUser, useEduClerk } from "@/lib/auth";
 
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -14,8 +14,8 @@ import {
 } from "@/lib/portal-store";
 
 export default function TutorRegisterPage() {
-  const { isSignedIn, user } = useUser();
-  const { openSignIn } = useClerk();
+  const { isSignedIn, user } = useEduUser();
+  const { openSignIn } = useEduClerk();
 
   const [formData, setFormData] = useState({
     fullName: "",

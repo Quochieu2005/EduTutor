@@ -8,6 +8,7 @@ import type {
   RegisterPayload,
   RegisterTutorPayload,
   ScheduleSession,
+  ScheduleProposalPayload,
   TutorIncomingRequest,
   TutorProfile,
   TutorSearchParams,
@@ -28,6 +29,8 @@ export const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
 });
+
+export { requestPasswordReset, resetPassword } from './password-reset-api';
 
 api.interceptors.request.use(async (config) => {
   if (typeof window !== "undefined") {
@@ -386,7 +389,7 @@ export async function getLessons(currentUser?: User | null): Promise<LessonReque
     }
     return lessons.filter((lesson) => lesson.studentId === currentUser.id);
   }
-  const { data } = await api.get("/lessons/");
+  const { data } = await api.get("/v1/lessons/");
   return data;
 }
 
@@ -420,7 +423,7 @@ export async function createLessonRequest(
     savePersistedLessons(updated);
     return newLesson;
   }
-  const { data } = await api.post("/lessons/", payload);
+  const { data } = await api.post("/v1/lessons/", payload);
   return data;
 }
 
@@ -450,7 +453,30 @@ export async function updateLessonStatus(
     if (!updatedLesson) throw new Error("Không tìm thấy buổi học");
     return updatedLesson;
   }
-  const { data } = await api.patch(`/lessons/${id}/`, { status });
+  const { data } = await api.patch(`/v1/lessons/${id}/`, { status });
+  return data;
+}
+
+export async function proposeLessonSchedule(
+  id: string,
+  payload: ScheduleProposalPayload,
+): Promise<LessonRequest> {
+  const { data } = await api.put(`/v1/lessons/${id}/proposal/`, payload);
+  return data;
+}
+
+export async function getPublishedTutorAvailability(slug: string): Promise<{
+  tutor: { id: number; slug: string; name: string };
+  slots: Array<{ weekday: number; period: "morning" | "afternoon" | "evening" }>;
+}> {
+  const { data } = await api.get(`/v1/tutors/${slug}/availability/`);
+  return data;
+}
+
+export async function applyForClass(jobSlug: string, coverLetter = "") {
+  const { data } = await api.post(`/v1/tutors/jobs/${jobSlug}/apply/`, {
+    cover_letter: coverLetter,
+  });
   return data;
 }
 

@@ -39,7 +39,8 @@ export type LessonStatus =
   | "accepted"
   | "rejected"
   | "completed"
-  | "cancelled";
+  | "cancelled"
+  | "no_show";
 
 export interface LessonRequest {
   id: string;
@@ -52,11 +53,28 @@ export interface LessonRequest {
   message: string;
   preferredDate: string;
   preferredTime: string;
+  endTime?: string;
+  mode?: "online" | "offline";
+  meetingUrl?: string;
   location?: string;
   hourlyRate?: number;
   status: LessonStatus;
   createdAt: string;
   notes?: string;
+  source?: "tutor_directory" | "class_board";
+  proposedBy?: "student" | "tutor";
+  proposalVersion?: number;
+  studentConfirmed?: boolean;
+  tutorConfirmed?: boolean;
+}
+
+export interface ScheduleProposalPayload {
+  preferredDate: string;
+  preferredTime: string;
+  endTime: string;
+  mode: "online" | "offline";
+  meetingUrl?: string;
+  location?: string;
 }
 
 export interface AuthTokens {
@@ -105,6 +123,9 @@ export interface CreateLessonPayload {
   message: string;
   preferredDate: string;
   preferredTime: string;
+  endTime: string;
+  mode: "online" | "offline";
+  meetingUrl?: string;
   studentName?: string;
   studentPhone?: string;
   location?: string;

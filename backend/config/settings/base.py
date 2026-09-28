@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'corsheaders',
     'drf_spectacular',
     'core.apps.CoreConfig',
     'accounts',
@@ -72,6 +73,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -166,6 +168,19 @@ DEFAULT_FROM_EMAIL = os.getenv(
     EMAIL_HOST_USER or 'EduTutor <no-reply@edututor.local>',
 )
 EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '15'))
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+# Only the configured website may call public APIs from another origin.
+# This is not authentication; private endpoints still require their JWT.
+CORS_ALLOWED_ORIGINS = [
+    origin.strip().rstrip('/')
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', FRONTEND_URL).split(',')
+    if origin.strip()
+]
+CORS_URLS_REGEX = r'^/api/v1/'
+CORS_ALLOW_CREDENTIALS = False
+PASSWORD_RESET_TOKEN_TTL_SECONDS = 300
+PASSWORD_RESET_RESEND_SECONDS = 60
+PASSWORD_RESET_EMAILS_PER_HOUR = 3
 
 # Social login credentials are server-side only. Configure them in ``.env``
 # locally and as environment variables on Render; never commit their values.

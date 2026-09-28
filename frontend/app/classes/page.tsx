@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useEduUser, useEduClerk } from "@/lib/auth";
 
 import {
   SearchOutlined,
@@ -34,8 +34,8 @@ import {
 function ClassesListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isSignedIn, user } = useUser();
-  const { openSignIn } = useClerk();
+  const { isSignedIn, user } = useEduUser();
+  const { openSignIn } = useEduClerk();
 
   // URL parameters
   const paramSubject = searchParams.get("subject") || "all";

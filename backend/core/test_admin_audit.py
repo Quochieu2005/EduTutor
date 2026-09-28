@@ -141,7 +141,11 @@ class AdminAuditTests(SimpleTestCase):
         with patch('core.admin_audit.AuditLog.objects', manager), patch('core.admin_audit.render') as render:
             activity_logs(self.request(data={'page': '2', 'action': 'create'}))
         context = render.call_args.args[2]
-        self.assertEqual(len(context['page']['rows']), 25)
+        # Pagination is server-side: page 2 contains the remaining five rows,
+        # not all 25 records from the collection.
+        self.assertEqual(len(context['page']['rows']), 5)
+        self.assertEqual(context['pagination'].paginator.count, 25)
+        self.assertEqual(context['pagination'].number, 2)
         self.assertEqual(context['filter_query'], 'action=create')
 
     def test_template_renders_read_only_and_escapes_content(self):

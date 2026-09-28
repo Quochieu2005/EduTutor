@@ -1,6 +1,6 @@
 "use client";
 
-import type { LessonRequest, UserRole } from "@/lib/types";
+import type { LessonRequest, ScheduleProposalPayload, UserRole } from "@/lib/types";
 import { Badge, Card, statusBadgeVariant, statusLabels } from "../ui/Card";
 import { Button } from "../ui/Button";
 
@@ -11,6 +11,7 @@ interface LessonCardProps {
   onReject?: (id: string) => void;
   onComplete?: (id: string) => void;
   onCancel?: (id: string) => void;
+  onCounterProposal?: (id: string, payload: ScheduleProposalPayload) => void;
 }
 
 export function LessonCard({
@@ -20,9 +21,35 @@ export function LessonCard({
   onReject,
   onComplete,
   onCancel,
+  onCounterProposal,
 }: LessonCardProps) {
   const isTutor = userRole === "tutor";
   const counterpart = isTutor ? lesson.studentName : lesson.tutorName;
+  const mySide = isTutor ? "tutor" : "student";
+  const canRespond = lesson.status === "pending" && lesson.proposedBy !== mySide;
+
+  function counterPropose() {
+    const preferredDate = window.prompt("Ngày học mới (YYYY-MM-DD)", lesson.preferredDate);
+    if (!preferredDate) return;
+    const preferredTime = window.prompt("Giờ bắt đầu (HH:MM)", lesson.preferredTime);
+    if (!preferredTime) return;
+    const endTime = window.prompt("Giờ kết thúc (HH:MM)", lesson.endTime || "20:00");
+    if (!endTime) return;
+    const modeValue = window.prompt("Hình thức: online hoặc offline", lesson.mode || "online");
+    if (modeValue !== "online" && modeValue !== "offline") return;
+    const place = window.prompt(
+      modeValue === "online" ? "Liên kết lớp trực tuyến" : "Địa điểm học",
+      modeValue === "online" ? lesson.meetingUrl || "" : lesson.location || "",
+    );
+    if (!place) return;
+    onCounterProposal?.(lesson.id, {
+      preferredDate,
+      preferredTime,
+      endTime,
+      mode: modeValue,
+      ...(modeValue === "online" ? { meetingUrl: place } : { location: place }),
+    });
+  }
 
   return (
     <Card>
@@ -46,10 +73,11 @@ export function LessonCard({
         </div>
 
         <div className="flex flex-wrap gap-2 shrink-0">
-          {isTutor && lesson.status === "pending" && (
+          {canRespond && (
             <>
-              <Button size="sm" onClick={() => onAccept?.(lesson.id)}>Chấp nhận</Button>
-              <Button size="sm" variant="danger" onClick={() => onReject?.(lesson.id)}>Từ chối</Button>
+              <Button size="sm" onClick={() => onAccept?.(lesson.id)}>Đồng ý lịch</Button>
+              <Button size="sm" variant="danger" onClick={() => onReject?.(lesson.id)}>Từ chối đề xuất</Button>
+              <Button size="sm" variant="outline" onClick={counterPropose}>Đề xuất lịch khác</Button>
             </>
           )}
           {isTutor && lesson.status === "accepted" && (
@@ -57,9 +85,9 @@ export function LessonCard({
               Xác nhận đã dạy
             </Button>
           )}
-          {isTutor && (lesson.status === "pending" || lesson.status === "accepted") && (
+          {!isTutor && lesson.status === "pending" && (
             <Button size="sm" variant="outline" onClick={() => onCancel?.(lesson.id)}>
-              Hủy
+              Hủy đề xuất
             </Button>
           )}
         </div>
