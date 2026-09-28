@@ -29,15 +29,22 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("access_token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      // Use Clerk's official session token if a session is active
+      // @ts-expect-error Clerk is attached to window in client browser by @clerk/nextjs
+      const clerkToken = await window.Clerk?.session?.getToken();
+      if (clerkToken) {
+        config.headers.Authorization = `Bearer ${clerkToken}`;
+      }
+    } catch {
+      // Continue without token if session token is unavailable
     }
   }
   return config;
 });
+
 
 function isMockEnabled() {
   if (process.env.NEXT_PUBLIC_USE_MOCK === "false") return false;

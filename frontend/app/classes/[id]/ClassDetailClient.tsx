@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useUser, useClerk } from "@/lib/auth-context";
+import { useUser, useClerk } from "@clerk/nextjs";
+
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import type { ClassListing, ClassComment } from "@/lib/home-mock-data";
@@ -337,7 +338,7 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
         <nav aria-label="Breadcrumb" className="text-xs text-gray-500">
           <ol className="flex items-center gap-1.5 flex-wrap">
             <li>
-              <Link href="/Home" className="hover:text-blue-600 transition-colors">
+              <Link href="/" className="hover:text-blue-600 transition-colors">
                 Trang chủ
               </Link>
             </li>

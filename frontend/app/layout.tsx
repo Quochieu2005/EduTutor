@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { AuthProvider } from "@/lib/auth-context";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EduTutor",
-  description: "EduTutor đang được xây dựng lại",
+  title: "EduTutor - Dịch Vụ Gia Sư Uy Tín & Tận Tâm Hàng Đầu",
+  description: "Hệ thống kết nối gia sư chất lượng cao, đội ngũ giỏi chuyên môn, phương pháp hiện đại và học phí minh bạch.",
 };
 
 export default function RootLayout({
@@ -13,10 +13,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <AuthProvider>
-      <html lang="vi">
-        <body>{children}</body>
-      </html>
-    </AuthProvider>
+    <html lang="vi">
+      <body>
+        <ClerkProvider>{children}</ClerkProvider>
+      </body>
+    </html>
   );
 }
+

@@ -1,46 +1,67 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useUser, UserButton } from "@clerk/nextjs";
 import {
-  SignedIn,
-  SignedOut,
-  SignInButton,
-  SignUpButton,
-  UserButton,
-} from "@/lib/auth-context";
+  SearchOutlined,
+  LoginOutlined,
+  MenuOutlined,
+  CloseOutlined,
+  UserOutlined,
+  EllipsisOutlined,
+  PhoneOutlined,
+  InfoCircleOutlined,
+  FileTextOutlined,
+  TeamOutlined,
+} from "@ant-design/icons";
+
+const emptySubscribe = () => () => {};
 
 export function Header() {
-  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const { isLoaded, isSignedIn, user } = useUser();
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const authReady = mounted && isLoaded;
 
-  // Trạng thái dropdown trên desktop
-  const [classDropdownOpen, setClassDropdownOpen] = useState(false);
-  const [tutorDropdownOpen, setTutorDropdownOpen] = useState(false);
 
-  // Trạng thái accordion trên mobile
-  const [mobileClassOpen, setMobileClassOpen] = useState(false);
-  const [mobileTutorOpen, setMobileTutorOpen] = useState(false);
 
-  const classRef = useRef<HTMLDivElement>(null);
-  const tutorRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Đóng dropdown khi click ra ngoài hoặc bấm Escape
+  const isHome = pathname === "/" || pathname === "/Home";
+  const isClasses = pathname === "/classes" || pathname.startsWith("/classes/");
+  const isTutors = pathname === "/tutors" || pathname.startsWith("/tutors/");
+
+  const navLinks = [
+    { label: "Trang chủ", href: isHome ? "#hero" : "/", isActive: isHome, isAnchor: isHome },
+    { label: "Đội ngũ gia sư", href: "/tutors", isActive: isTutors, isAnchor: false },
+    { label: "Nhận lớp", href: "/classes", isActive: isClasses, isAnchor: false },
+    { label: "Quy trình", href: isHome ? "#timeline" : "/#timeline", isActive: false, isAnchor: isHome },
+    { label: "Bài viết", href: isHome ? "#articles" : "/#articles", isActive: false, isAnchor: isHome },
+    { label: "Liên hệ", href: isHome ? "#contact" : "/#contact", isActive: false, isAnchor: isHome },
+  ];
+
+  // Close more menu on click outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (classRef.current && !classRef.current.contains(event.target as Node)) {
-        setClassDropdownOpen(false);
-      }
-      if (tutorRef.current && !tutorRef.current.contains(event.target as Node)) {
-        setTutorDropdownOpen(false);
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(e.target as Node) &&
+        moreButtonRef.current &&
+        !moreButtonRef.current.contains(e.target as Node)
+      ) {
+        setMoreMenuOpen(false);
       }
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setClassDropdownOpen(false);
-        setTutorDropdownOpen(false);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && moreMenuOpen) {
+        setMoreMenuOpen(false);
+        moreButtonRef.current?.focus();
       }
     };
 
@@ -50,475 +71,312 @@ export function Header() {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [moreMenuOpen]);
 
-  // Đường dẫn liên hệ: Nếu đang ở /Home thì dùng #contact, nếu ở trang khác thì dùng /Home#contact
-  const contactHref = pathname === "/Home" ? "#contact" : "/Home#contact";
+  const handleScrollOrNav = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (href.startsWith("#") && isHome) {
+      e.preventDefault();
+      const el = document.querySelector(href);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+      }
+      setMobileMenuOpen(false);
+    } else {
+      setMobileMenuOpen(false);
+    }
+  };
+
+  const moreMenuItems = [
+    {
+      label: "Giới thiệu",
+      href: isHome ? "#why-choose" : "/#why-choose",
+      icon: <InfoCircleOutlined className="text-blue-600" />,
+      action: (e: React.MouseEvent<HTMLAnchorElement>) => {
+        handleScrollOrNav(e, isHome ? "#why-choose" : "/#why-choose");
+        setMoreMenuOpen(false);
+      },
+    },
+    {
+      label: "Liên hệ",
+      href: isHome ? "#contact" : "/#contact",
+      icon: <PhoneOutlined className="text-blue-600" />,
+      action: (e: React.MouseEvent<HTMLAnchorElement>) => {
+        handleScrollOrNav(e, isHome ? "#contact" : "/#contact");
+        setMoreMenuOpen(false);
+      },
+    },
+    {
+      label: "Blog",
+      href: isHome ? "#articles" : "/#articles",
+      icon: <FileTextOutlined className="text-blue-600" />,
+      action: (e: React.MouseEvent<HTMLAnchorElement>) => {
+        handleScrollOrNav(e, isHome ? "#articles" : "/#articles");
+        setMoreMenuOpen(false);
+      },
+    },
+    {
+      label: "Tuyển dụng",
+      href: "/tutors/register",
+      icon: <TeamOutlined className="text-blue-600" />,
+      action: () => setMoreMenuOpen(false),
+    },
+  ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-xs">
+    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-blue-100 shadow-xs transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* 4.1. Góc trái: Logo EduTutor - đồng thời là nút Home dẫn về /Home */}
+        <div className="flex items-center justify-between h-20 gap-4">
+          {/* Logo EduTutor */}
           <Link
-            href="/Home"
-            aria-label="EduTutor Trang chủ"
-            className="flex items-center gap-2.5 group focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg p-1 transition-transform active:scale-95"
+            href="/"
+            className="flex items-center group focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-600 rounded-xl py-1 px-1 transition-colors"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-sm group-hover:shadow-md transition-shadow">
-              <svg
-                className="w-6 h-6"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M21.42 10.922a1 1 0 0 0-.019-.838L12.83 2.18a2 2 0 0 0-1.66 0L2.6 10.084a1 1 0 0 0 0 1.832l8.57 7.904a2 2 0 0 0 1.66 0l8.57-7.904a1 1 0 0 0 .02-.994z" />
-                <path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5" />
-              </svg>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xl font-bold tracking-tight text-gray-900 group-hover:text-blue-600 transition-colors">
-                Edu<span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">Tutor</span>
-              </span>
-              <span className="text-[10px] text-gray-500 font-medium -mt-1 tracking-wider uppercase">
-                Kết nối tri thức
-              </span>
-            </div>
+            <span className="text-2xl font-black tracking-tight text-blue-900 select-none">
+              Edu<span className="text-blue-600">Tutor</span>
+            </span>
           </Link>
 
-          {/* 4.2. Chính giữa: Menu điều hướng (Lớp có dropdown, Gia sư có dropdown, Liên hệ) */}
-          <nav
-            aria-label="Menu chính"
-            className="hidden md:flex items-center gap-1 lg:gap-2"
-          >
-            {/* 2. Menu Lớp với Dropdown */}
-            <div
-              ref={classRef}
-              className="relative"
-              onMouseEnter={() => setClassDropdownOpen(true)}
-              onMouseLeave={() => setClassDropdownOpen(false)}
-            >
-              <div className="flex items-center rounded-lg hover:bg-blue-50/70 transition-colors group">
+          {/* Desktop Navigation */}
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
+            {navLinks.map((item) =>
+              item.isAnchor ? (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  onClick={(e) => handleScrollOrNav(e, item.href)}
+                  className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    item.isActive
+                      ? "text-blue-600 bg-blue-50 font-bold"
+                      : "text-slate-700 hover:text-blue-600 hover:bg-blue-50/70"
+                  }`}
+                >
+                  {item.label}
+                </a>
+              ) : (
                 <Link
-                  href="/classes"
-                  className="px-3 py-2 text-sm font-semibold text-gray-700 group-hover:text-blue-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 rounded-l-lg"
+                  key={item.label}
+                  href={item.href}
+                  className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    item.isActive
+                      ? "text-blue-600 bg-blue-50 font-bold"
+                      : "text-slate-700 hover:text-blue-600 hover:bg-blue-50/70"
+                  }`}
                 >
-                  Lớp
+                  {item.label}
                 </Link>
-                <button
-                  type="button"
-                  aria-label="Mở danh mục lớp học"
-                  aria-haspopup="true"
-                  aria-expanded={classDropdownOpen}
-                  onClick={() => setClassDropdownOpen((prev) => !prev)}
-                  className="pr-2 py-2 text-gray-400 group-hover:text-blue-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 rounded-r-lg"
-                >
-                  <svg
-                    className={`w-4 h-4 transition-transform duration-200 ${
-                      classDropdownOpen ? "rotate-180 text-blue-600" : ""
-                    }`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
+              )
+            )}
 
-              {/* Dropdown Menu Lớp Desktop */}
-              {classDropdownOpen && (
+            {/* Menu Ba Chấm (Ảnh 6 - EllipsisOutlined) */}
+            <div className="relative">
+              <button
+                ref={moreButtonRef}
+                type="button"
+                onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                aria-haspopup="menu"
+                aria-expanded={moreMenuOpen}
+                aria-label="Tùy chọn mở rộng"
+                className={`p-2 rounded-xl border text-slate-700 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  moreMenuOpen ? "bg-blue-50 border-blue-300 text-blue-600" : "border-transparent"
+                }`}
+              >
+                <EllipsisOutlined className="text-xl rotate-90" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {moreMenuOpen && (
                 <div
+                  ref={moreMenuRef}
                   role="menu"
-                  aria-label="Danh mục lớp học"
-                  className="absolute left-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50 animate-in fade-in slide-in-from-top-1"
+                  aria-orientation="vertical"
+                  className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-blue-100 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                 >
-                  <Link
-                    href="/classes?category=primary"
-                    role="menuitem"
-                    onClick={() => setClassDropdownOpen(false)}
-                    className="flex items-center px-4 py-2 text-xs font-semibold text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    <span className="text-blue-500 mr-2">▸</span>
-                    <span>Lớp cấp 1</span>
-                  </Link>
-                  <Link
-                    href="/classes?category=secondary"
-                    role="menuitem"
-                    onClick={() => setClassDropdownOpen(false)}
-                    className="flex items-center px-4 py-2 text-xs font-semibold text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    <span className="text-blue-500 mr-2">▸</span>
-                    <span>Lớp cấp 2</span>
-                  </Link>
-                  <Link
-                    href="/classes?category=high-school"
-                    role="menuitem"
-                    onClick={() => setClassDropdownOpen(false)}
-                    className="flex items-center px-4 py-2 text-xs font-semibold text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    <span className="text-blue-500 mr-2">▸</span>
-                    <span>Lớp cấp 3</span>
-                  </Link>
-                  <Link
-                    href="/classes?category=foreign-language"
-                    role="menuitem"
-                    onClick={() => setClassDropdownOpen(false)}
-                    className="flex items-center px-4 py-2 text-xs font-semibold text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    <span className="text-blue-500 mr-2">▸</span>
-                    <span>Lớp ngoại ngữ</span>
-                  </Link>
-                  <Link
-                    href="/classes?category=talent"
-                    role="menuitem"
-                    onClick={() => setClassDropdownOpen(false)}
-                    className="flex items-center px-4 py-2 text-xs font-semibold text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    <span className="text-blue-500 mr-2">▸</span>
-                    <span>Lớp năng khiếu</span>
-                  </Link>
-                  <Link
-                    href="/classes?category=exam-prep"
-                    role="menuitem"
-                    onClick={() => setClassDropdownOpen(false)}
-                    className="flex items-center px-4 py-2 text-xs font-semibold text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    <span className="text-blue-500 mr-2">▸</span>
-                    <span>Lớp luyện thi</span>
-                  </Link>
+                  {moreMenuItems.map((item, idx) => (
+                    <a
+                      key={idx}
+                      href={item.href}
+                      role="menuitem"
+                      onClick={item.action}
+                      className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors focus:outline-hidden focus:bg-blue-50 focus:text-blue-600"
+                    >
+                      <span className="text-sm">{item.icon}</span>
+                      <span>{item.label}</span>
+                    </a>
+                  ))}
+
+                  <div className="my-1 border-t border-slate-100" />
+
+                  {/* Gia sư đăng nhập */}
+                  {!authReady ? (
+                    <div className="px-4 py-2.5">
+                      <div className="h-6 w-full rounded-lg bg-slate-100 animate-pulse" />
+                    </div>
+                  ) : isSignedIn ? (
+                    <Link
+                      href="/profile"
+                      role="menuitem"
+                      onClick={() => setMoreMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                    >
+                      <UserOutlined className="text-blue-600 text-sm" />
+                      <span>Hồ sơ cá nhân</span>
+                    </Link>
+                  ) : (
+                    <Link
+                      href="/login"
+                      role="menuitem"
+                      onClick={() => setMoreMenuOpen(false)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer text-left"
+                    >
+                      <LoginOutlined className="text-blue-600 text-sm" />
+                      <span>Gia sư đăng nhập</span>
+                    </Link>
+                  )}
                 </div>
               )}
             </div>
-
-            {/* 3. Menu Gia sư với Dropdown */}
-            <div
-              ref={tutorRef}
-              className="relative"
-              onMouseEnter={() => setTutorDropdownOpen(true)}
-              onMouseLeave={() => setTutorDropdownOpen(false)}
-            >
-              <div className="flex items-center rounded-lg hover:bg-purple-50/70 transition-colors group">
-                <Link
-                  href="/tutors"
-                  className="px-3 py-2 text-sm font-semibold text-gray-700 group-hover:text-purple-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-purple-500 rounded-l-lg"
-                >
-                  Gia sư
-                </Link>
-                <button
-                  type="button"
-                  aria-label="Mở danh mục gia sư"
-                  aria-haspopup="true"
-                  aria-expanded={tutorDropdownOpen}
-                  onClick={() => setTutorDropdownOpen((prev) => !prev)}
-                  className="pr-2 py-2 text-gray-400 group-hover:text-purple-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-purple-500 rounded-r-lg"
-                >
-                  <svg
-                    className={`w-4 h-4 transition-transform duration-200 ${
-                      tutorDropdownOpen ? "rotate-180 text-purple-600" : ""
-                    }`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Dropdown Menu Gia sư Desktop */}
-              {tutorDropdownOpen && (
-                <div
-                  role="menu"
-                  aria-label="Danh mục gia sư"
-                  className="absolute left-0 mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50 animate-in fade-in slide-in-from-top-1"
-                >
-                  <Link
-                    href="/tutors"
-                    role="menuitem"
-                    onClick={() => setTutorDropdownOpen(false)}
-                    className="flex items-center px-4 py-2 text-xs font-semibold text-gray-700 hover:text-purple-600 hover:bg-purple-50 transition-colors"
-                  >
-                    <span className="text-purple-500 mr-2">▸</span>
-                    <span>Gia sư hiện có</span>
-                  </Link>
-                  <Link
-                    href="/tutors/register"
-                    role="menuitem"
-                    onClick={() => setTutorDropdownOpen(false)}
-                    className="flex items-center px-4 py-2 text-xs font-semibold text-gray-700 hover:text-purple-600 hover:bg-purple-50 transition-colors"
-                  >
-                    <span className="text-purple-500 mr-2">▸</span>
-                    <span>Đăng ký gia sư</span>
-                  </Link>
-                  <Link
-                    href="/tutors/class-rules"
-                    role="menuitem"
-                    onClick={() => setTutorDropdownOpen(false)}
-                    className="flex items-center px-4 py-2 text-xs font-semibold text-gray-700 hover:text-purple-600 hover:bg-purple-50 transition-colors"
-                  >
-                    <span className="text-purple-500 mr-2">▸</span>
-                    <span>Nội quy nhận lớp</span>
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* 4. Menu Liên hệ */}
-            <a
-              href={contactHref}
-              className="px-4 py-2 text-sm font-semibold text-gray-700 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-gray-400"
-            >
-              Liên hệ
-            </a>
           </nav>
 
-          {/* 4.3. Bên phải: Đăng ký & Đăng nhập bằng Icon (Chưa đăng nhập) hoặc UserButton (Đã đăng nhập) */}
-          <div className="flex items-center gap-2">
-            <SignedOut>
-              <div className="flex items-center gap-1.5">
-                {/* 1. Icon Đăng ký tài khoản (mở SignUp của Clerk) */}
-                <SignUpButton mode="modal">
-                  <button
-                    type="button"
-                    aria-label="Đăng ký tài khoản"
-                    title="Đăng ký tài khoản"
-                    className="p-2.5 text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-purple-500 border border-gray-200 hover:border-purple-300"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                      <line x1="19" y1="8" x2="19" y2="14" />
-                      <line x1="22" y1="11" x2="16" y2="11" />
-                    </svg>
-                  </button>
-                </SignUpButton>
-
-                {/* 2. Icon Đăng nhập (mở SignIn của Clerk) */}
-                <SignInButton mode="modal">
-                  <button
-                    type="button"
-                    aria-label="Đăng nhập"
-                    title="Đăng nhập"
-                    className="p-2.5 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 border border-gray-200 hover:border-blue-300"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                      <polyline points="10 17 15 12 10 7" />
-                      <line x1="15" y1="12" x2="3" y2="12" />
-                    </svg>
-                  </button>
-                </SignInButton>
-              </div>
-            </SignedOut>
-
-            <SignedIn>
-              <div className="flex items-center pl-1">
-                <UserButton
-                  userProfileMode="navigation"
-                  userProfileUrl="/profile"
-                  appearance={{
-                    elements: {
-                      avatarBox: "w-9 h-9 ring-2 ring-blue-500/30",
-                    },
-                  }}
-                />
-              </div>
-            </SignedIn>
-
-            {/* Mobile menu button */}
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg text-gray-700 hover:text-blue-600 hover:bg-gray-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-              aria-label={mobileMenuOpen ? "Đóng menu" : "Mở menu"}
-              aria-expanded={mobileMenuOpen}
+          {/* Header Actions (CTA + Auth) */}
+          <div className="hidden sm:flex items-center gap-3">
+            <a
+              href={isHome ? "#register" : "/#register"}
+              onClick={(e) => handleScrollOrNav(e, isHome ? "#register" : "/#register")}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-bold shadow-md shadow-blue-600/20 hover:shadow-lg hover:shadow-blue-600/30 transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
+              <SearchOutlined />
+              <span>Tìm gia sư</span>
+            </a>
+
+            {!authReady ? (
+              <div className="h-10 w-28 rounded-xl bg-slate-100 animate-pulse" aria-hidden="true" />
+            ) : isSignedIn ? (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                <Link
+                  href="/profile"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                >
+                  <UserOutlined className="text-sm text-blue-600" />
+                  <span className="max-w-[120px] truncate">{user?.fullName || user?.firstName || "Tài khoản"}</span>
+                </Link>
+                <UserButton />
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 text-slate-700 hover:text-blue-600 text-sm font-semibold transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
               >
-                {mobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
-            </button>
+                <LoginOutlined />
+                <span>Đăng nhập</span>
+              </Link>
+            )}
           </div>
+
+          {/* Mobile menu button */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Đóng menu" : "Mở menu"}
+            aria-expanded={mobileMenuOpen}
+            className="lg:hidden p-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-blue-600 text-lg transition-colors cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            {mobileMenuOpen ? <CloseOutlined /> : <MenuOutlined />}
+          </button>
         </div>
       </div>
 
-      {/* Mobile Menu Dropdown & Accordion */}
+      {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white px-4 pt-3 pb-5 space-y-2 shadow-lg">
-          {/* Accordion Lớp */}
-          <div className="border border-gray-100 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50/70">
-              <Link
-                href="/classes"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-sm font-bold text-gray-900 hover:text-blue-600"
-              >
-                Lớp học
-              </Link>
-              <button
-                type="button"
-                onClick={() => setMobileClassOpen(!mobileClassOpen)}
-                className="p-1 text-gray-500 hover:text-blue-600"
-                aria-label="Mở rộng danh mục lớp"
-                aria-expanded={mobileClassOpen}
-              >
-                <svg
-                  className={`w-4 h-4 transition-transform duration-200 ${
-                    mobileClassOpen ? "rotate-180 text-blue-600" : ""
-                  }`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            {mobileClassOpen && (
-              <div className="bg-white py-1 px-3 space-y-1 divide-y divide-gray-50">
-                <Link
-                  href="/classes?category=primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-xs font-medium text-gray-700 hover:text-blue-600"
-                >
-                  Lớp cấp 1
-                </Link>
-                <Link
-                  href="/classes?category=secondary"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-xs font-medium text-gray-700 hover:text-blue-600"
-                >
-                  Lớp cấp 2
-                </Link>
-                <Link
-                  href="/classes?category=high-school"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-xs font-medium text-gray-700 hover:text-blue-600"
-                >
-                  Lớp cấp 3
-                </Link>
-                <Link
-                  href="/classes?category=foreign-language"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-xs font-medium text-gray-700 hover:text-blue-600"
-                >
-                  Lớp ngoại ngữ
-                </Link>
-                <Link
-                  href="/classes?category=talent"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-xs font-medium text-gray-700 hover:text-blue-600"
-                >
-                  Lớp năng khiếu
-                </Link>
-                <Link
-                  href="/classes?category=exam-prep"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-xs font-medium text-gray-700 hover:text-blue-600"
-                >
-                  Lớp luyện thi
-                </Link>
-              </div>
-            )}
-          </div>
+        <div className="lg:hidden border-t border-slate-100 bg-white shadow-xl animate-in slide-in-from-top-2 duration-200">
+          <div className="max-w-7xl mx-auto px-4 py-5 space-y-4">
+            <nav className="flex flex-col space-y-1">
+              {navLinks.map((item) =>
+                item.isAnchor ? (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    onClick={(e) => handleScrollOrNav(e, item.href)}
+                    className={`px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
+                      item.isActive
+                        ? "bg-blue-50 text-blue-600 font-bold"
+                        : "text-slate-700 hover:bg-blue-50 hover:text-blue-600"
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                ) : (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
+                      item.isActive
+                        ? "bg-blue-50 text-blue-600 font-bold"
+                        : "text-slate-700 hover:bg-blue-50 hover:text-blue-600"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                )
+              )}
 
-          {/* Accordion Gia sư */}
-          <div className="border border-gray-100 rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2.5 bg-gray-50/70">
-              <Link
-                href="/tutors"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-sm font-bold text-gray-900 hover:text-purple-600"
-              >
-                Gia sư
-              </Link>
-              <button
-                type="button"
-                onClick={() => setMobileTutorOpen(!mobileTutorOpen)}
-                className="p-1 text-gray-500 hover:text-purple-600"
-                aria-label="Mở rộng danh mục gia sư"
-                aria-expanded={mobileTutorOpen}
-              >
-                <svg
-                  className={`w-4 h-4 transition-transform duration-200 ${
-                    mobileTutorOpen ? "rotate-180 text-purple-600" : ""
-                  }`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            {mobileTutorOpen && (
-              <div className="bg-white py-1 px-3 space-y-1 divide-y divide-gray-50">
-                <Link
-                  href="/tutors"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-xs font-medium text-gray-700 hover:text-purple-600"
-                >
-                  Gia sư hiện có
-                </Link>
-                <Link
-                  href="/tutors/register"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-xs font-medium text-gray-700 hover:text-purple-600"
-                >
-                  Đăng ký gia sư
-                </Link>
-                <Link
-                  href="/tutors/class-rules"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block py-2 text-xs font-medium text-gray-700 hover:text-purple-600"
-                >
-                  Nội quy nhận lớp
-                </Link>
+              <div className="my-2 border-t border-slate-100 pt-2">
+                <p className="px-4 text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                  Mở rộng
+                </p>
+                {moreMenuItems.map((item, idx) => (
+                  <a
+                    key={idx}
+                    href={item.href}
+                    onClick={(e) => {
+                      item.action(e);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600"
+                  >
+                    <span className="text-sm">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </a>
+                ))}
               </div>
-            )}
-          </div>
+            </nav>
 
-          {/* Liên hệ */}
-          <a
-            href={contactHref}
-            onClick={() => setMobileMenuOpen(false)}
-            className="block px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-800 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-          >
-            Liên hệ
-          </a>
+            <div className="pt-4 border-t border-slate-100 flex flex-col gap-2.5">
+              <a
+                href={isHome ? "#register" : "/#register"}
+                onClick={(e) => handleScrollOrNav(e, isHome ? "#register" : "/#register")}
+                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold shadow-md shadow-blue-600/20"
+              >
+                <SearchOutlined />
+                <span>Tìm gia sư</span>
+              </a>
+
+              {!authReady ? (
+                <div className="h-11 w-full rounded-xl bg-slate-100 animate-pulse" aria-hidden="true" />
+              ) : isSignedIn ? (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                  <Link
+                    href="/profile"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-2 text-sm font-semibold text-slate-800 truncate"
+                  >
+                    <UserOutlined className="text-blue-600 shrink-0" />
+                    <span className="truncate">{user?.fullName || user?.firstName || "Tài khoản"}</span>
+                  </Link>
+                  <UserButton />
+                </div>
+              ) : (
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  <LoginOutlined />
+                  <span>Đăng nhập</span>
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </header>

@@ -76,13 +76,43 @@ Có thể thay `MONGO_URI` bằng connection string của MongoDB Atlas.
 
 ## Chạy backend
 
-```bash
-python manage.py check
-python manage.py migrate
+Luôn chạy backend bằng Python trong `venv` để tránh lỗi nhầm Python hệ thống (`ModuleNotFoundError`):
+
+### Cách 1: Chạy trực tiếp qua Python của venv (Khuyên dùng trên Windows)
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe manage.py check
+.\venv\Scripts\python.exe manage.py migrate
+.\venv\Scripts\python.exe manage.py runserver
+```
+
+Hoặc sử dụng script khởi động nhanh có sẵn:
+
+```powershell
+# Trên PowerShell:
+.\run_dev.ps1
+
+# Hoặc trên Command Prompt (cmd):
+run_dev.bat
+```
+
+### Cách 2: Kích hoạt venv trước khi chạy
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
 python manage.py runserver
 ```
 
+> **Lưu ý PowerShell ExecutionPolicy:** Nếu PowerShell báo lỗi script execution bị chặn khi chạy `Activate.ps1`, bạn có thể chạy kích hoạt cho phiên làm việc hiện tại:
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File .\venv\Scripts\Activate.ps1
+> ```
+> Hoặc đơn giản nhất là dùng **Cách 1** (`.\venv\Scripts\python.exe manage.py runserver`) không bao giờ bị ảnh hưởng bởi chính sách bảo mật PowerShell.
+
 Backend chạy tại `http://localhost:8000`.
+
 
 ## Kiểm tra MongoDB
 

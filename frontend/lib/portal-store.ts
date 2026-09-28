@@ -247,3 +247,84 @@ export function buildDemoTeachingSchedule(
     },
   ];
 }
+
+// ---------------- Class Application Store ("Đề nghị dạy") ----------------
+export interface ClassApplication {
+  id: string;
+  classId: string;
+  classCode: string;
+  classTitle: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  note?: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+}
+
+const CLASS_APPLICATIONS_KEY = "edututor.demo.class-applications.v1";
+
+export function getClassApplications(): ClassApplication[] {
+  return readList<ClassApplication>(CLASS_APPLICATIONS_KEY);
+}
+
+export function getClassApplicationsForUser(userId: string): ClassApplication[] {
+  return getClassApplications().filter((app) => app.userId === userId);
+}
+
+export function hasUserAppliedForClass(userId: string | undefined | null, classIdOrCode: string): boolean {
+  if (!userId) return false;
+  const apps = getClassApplicationsForUser(userId);
+  const target = classIdOrCode.toLowerCase();
+  return apps.some((a) => a.classId.toLowerCase() === target || a.classCode.toLowerCase() === target);
+}
+
+export function addClassApplication(
+  input: Omit<ClassApplication, "id" | "status" | "createdAt">
+): ClassApplication {
+  const newApp: ClassApplication = {
+    ...input,
+    id: createId("app"),
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+  writeList(CLASS_APPLICATIONS_KEY, [newApp, ...getClassApplications()]);
+  return newApp;
+}
+
+// ---------------- Tutor Hire / Consult Request Store ("Mời dạy" / "Cần tư vấn") ----------------
+export interface TutorDirectRequest {
+  id: string;
+  type: "hire" | "consult";
+  tutorId: string;
+  tutorName: string;
+  contactName: string;
+  contactPhone: string;
+  studentName?: string;
+  grade?: string;
+  subject?: string;
+  notes?: string;
+  status: "pending" | "connected";
+  createdAt: string;
+}
+
+const TUTOR_DIRECT_REQUESTS_KEY = "edututor.demo.tutor-direct-requests.v1";
+
+export function getTutorDirectRequests(): TutorDirectRequest[] {
+  return readList<TutorDirectRequest>(TUTOR_DIRECT_REQUESTS_KEY);
+}
+
+export function addTutorDirectRequest(
+  input: Omit<TutorDirectRequest, "id" | "status" | "createdAt">
+): TutorDirectRequest {
+  const req: TutorDirectRequest = {
+    ...input,
+    id: createId("direct-req"),
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  };
+  writeList(TUTOR_DIRECT_REQUESTS_KEY, [req, ...getTutorDirectRequests()]);
+  return req;
+}
+

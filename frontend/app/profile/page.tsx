@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useClerk, useUser } from "@/lib/auth-context";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import {
@@ -36,11 +36,10 @@ const enrollmentStatusLabel: Record<string, string> = {
 const tutorStatusLabel: Record<string, string> = {
   pending: "Chờ duyệt",
   approved: "Đã duyệt",
-  rejected: "Từ chối",
 };
 
 export default function ProfilePage() {
-  const { user } = useUser();
+  const { isLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
   const router = useRouter();
   const [enrollments, setEnrollments] = useState<EnrollmentRequest[]>([]);
@@ -49,6 +48,12 @@ export default function ProfilePage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      router.replace("/login");
+    }
+  }, [isLoaded, isSignedIn, router]);
 
   const refresh = useCallback(() => {
     if (!user) return;
@@ -73,6 +78,7 @@ export default function ProfilePage() {
     };
   }, [refresh]);
 
+
   const schedule = useMemo(
     () => (application?.status === "approved" ? buildDemoTeachingSchedule(application) : []),
     [application],
@@ -84,7 +90,7 @@ export default function ProfilePage() {
     try {
       await user.delete();
       await signOut();
-      router.replace("/Home");
+      router.replace("/");
     } catch {
       setDeleteError("Không thể xóa tài khoản lúc này. Vui lòng thử lại hoặc kiểm tra cấu hình Clerk.");
     }
@@ -92,10 +98,25 @@ export default function ProfilePage() {
 
   const usesGoogle = (user?.externalAccounts.length ?? 0) > 0;
 
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
+        <Header />
+        <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <div className="h-8 w-48 bg-slate-200 rounded-lg animate-pulse" />
+          <div className="h-32 w-full bg-white rounded-2xl border border-gray-200 shadow-xs p-6 animate-pulse" />
+          <div className="h-48 w-full bg-white rounded-2xl border border-gray-200 shadow-xs p-6 animate-pulse" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
       <Header />
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
         <div>
           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Tài khoản EduTutor</p>
           <h1 className="text-3xl font-bold mt-1">Profile của bạn</h1>
@@ -110,14 +131,12 @@ export default function ProfilePage() {
             <p className="text-sm text-gray-500 break-all">{user?.primaryEmailAddress?.emailAddress}</p>
             <div className="flex flex-wrap gap-2 mt-3 text-xs">
               <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">Học viên</span>
-              {application && (
+              {application && application.status !== "rejected" && (
                 <span
                   className={`px-2.5 py-1 rounded-full border ${
                     application.status === "approved"
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : application.status === "rejected"
-                        ? "bg-rose-50 text-rose-700 border-rose-200"
-                        : "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200"
                   }`}
                 >
                   Hồ sơ gia sư: {tutorStatusLabel[application.status]}

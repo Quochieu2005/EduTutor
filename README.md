@@ -142,12 +142,13 @@ MONGO_URI=mongodb://localhost:27017
 MONGO_DB_NAME=edututor
 ```
 
-Chạy migrate và khởi động server:
+Chạy migrate và khởi động server (trên Windows có thể dùng trực tiếp `.\venv\Scripts\python.exe` hoặc `run_dev.bat`):
 
 ```bash
-python manage.py migrate
-python manage.py runserver
+.\venv\Scripts\python.exe manage.py migrate
+.\venv\Scripts\python.exe manage.py runserver
 ```
+
 
 ### Frontend (Next.js)
 

@@ -60,6 +60,9 @@ export interface ClassListing {
   requirements: string;
   description: string;
   contact: string;
+  postedDate?: string;
+  contractFee?: string;
+  applicationsCount?: number;
   tutorName?: string;
   tutorBio?: string;
   tutorId?: string;
@@ -107,16 +110,32 @@ export interface TutorOpenClass {
   enrolled: number;
 }
 
+export type DayPeriod = "morning" | "afternoon" | "evening";
+
 export interface Tutor {
   id: string;
+  code?: string;
   name: string;
   avatarColor: string;
+  avatarUrl?: string;
   initials: string;
   subject: string;
   grades: string;
   gradeLevel?: GradeLevelSlug;
   gradeLevels: GradeLevelSlug[];
   tutorType: TutorType;
+  roleTitle?: string;
+  institution?: string;
+  major?: string;
+  birthYear?: number;
+  gender?: "male" | "female";
+  hometown?: string;
+  voice?: string;
+  degreeLevel?: string;
+  achievements?: string[];
+  teachingSubjects?: string[];
+  teachingAreas?: string[];
+  availability?: Record<number, DayPeriod[]>;
   location: string;
   city: string;
   experience: number;
@@ -131,6 +150,71 @@ export interface Tutor {
   fullBio?: string;
   reviews: TutorReview[];
   comments: TutorComment[];
+}
+
+export function getTutorCode(tutor: Tutor): string {
+  if (tutor.code) return tutor.code;
+  const num = tutor.id.replace(/\D/g, "");
+  return `GS-${num ? num.padStart(3, "0") : "101"}`;
+}
+
+export function getTutorRoleTitle(tutor: Tutor): string {
+  if (tutor.roleTitle) return tutor.roleTitle;
+  return tutor.tutorType === "teacher" ? "Giáo viên" : "Sinh viên";
+}
+
+export function getTutorInstitution(tutor: Tutor): string {
+  if (tutor.institution) return tutor.institution;
+  if (tutor.city === "Hà Nội") return "ĐH Sư phạm Hà Nội";
+  if (tutor.city === "Đà Nẵng") return "ĐH Sư phạm - ĐH Đà Nẵng";
+  return "ĐH Sư phạm TP.HCM";
+}
+
+export function getTutorMajor(tutor: Tutor): string {
+  if (tutor.major) return tutor.major;
+  return `Sư phạm ${tutor.subject}`;
+}
+
+export function getTutorBirthYear(tutor: Tutor): number {
+  if (tutor.birthYear) return tutor.birthYear;
+  return tutor.tutorType === "teacher" ? 1993 : 2003;
+}
+
+export function getTutorGender(tutor: Tutor): "male" | "female" {
+  if (tutor.gender) return tutor.gender;
+  return tutor.name.includes("Thị") || tutor.name.includes("Lan") || tutor.name.includes("Linh") || tutor.name.includes("Mai") || tutor.name.includes("Bình")
+    ? "female"
+    : "male";
+}
+
+export function getTutorHometown(tutor: Tutor): string {
+  if (tutor.hometown) return tutor.hometown;
+  return tutor.city || "Hà Nội";
+}
+
+export function getTutorVoice(tutor: Tutor): string {
+  if (tutor.voice) return tutor.voice;
+  if (tutor.city === "TP.HCM" || tutor.city === "Cần Thơ") return "Giọng Nam chuẩn";
+  if (tutor.city === "Đà Nẵng") return "Giọng Trung truyền cảm";
+  return "Giọng Bắc chuẩn";
+}
+
+export function getTutorDegree(tutor: Tutor): string {
+  if (tutor.degreeLevel) return tutor.degreeLevel;
+  return tutor.tutorType === "teacher" ? "Cử nhân Sư phạm" : "Sinh viên năm 3";
+}
+
+export function getTutorAvailability(tutor: Tutor): Record<number, DayPeriod[]> {
+  if (tutor.availability) return tutor.availability;
+  return {
+    2: ["evening"],
+    3: ["afternoon", "evening"],
+    4: ["evening"],
+    5: ["afternoon", "evening"],
+    6: ["evening"],
+    7: ["morning", "afternoon", "evening"],
+    8: ["morning", "afternoon"],
+  };
 }
 
 

@@ -68,7 +68,7 @@ export default function ClassRulesPage() {
         <nav aria-label="Breadcrumb" className="text-xs text-gray-500">
           <ol className="flex items-center gap-1.5">
             <li>
-              <Link href="/Home" className="hover:text-blue-600 transition-colors">
+              <Link href="/" className="hover:text-blue-600 transition-colors">
                 Trang chủ
               </Link>
             </li>

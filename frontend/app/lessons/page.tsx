@@ -1,30 +1,43 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getLessons, updateLessonStatus } from "@/lib/api";
-import { useAuth } from "@/lib/auth-context";
-import type { LessonRequest } from "@/lib/types";
+import { useUser } from "@clerk/nextjs";
+import type { LessonRequest, User } from "@/lib/types";
 import { LessonCard, ScheduleCalendar } from "@/components/lessons/LessonCard";
 
 type Tab = "all" | "schedule";
 
 export default function LessonsPage() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
   const [lessons, setLessons] = useState<LessonRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("all");
 
+  const currentUser: User | null = useMemo(
+    () =>
+      user
+        ? {
+            id: user.id,
+            email: user.primaryEmailAddress?.emailAddress || "",
+            fullName: user.fullName || "Học viên",
+            role: "student",
+          }
+        : null,
+    [user],
+  );
+
   useEffect(() => {
     let ignore = false;
-    if (authLoading) return;
-    if (!user) {
+    if (!isLoaded) return;
+    if (!isSignedIn) {
       router.replace("/login");
       return;
     }
 
-    getLessons(user)
+    getLessons(currentUser)
       .then((data) => {
         if (!ignore) setLessons(data);
       })
@@ -38,13 +51,15 @@ export default function LessonsPage() {
     return () => {
       ignore = true;
     };
-  }, [user, authLoading, router]);
+  }, [isLoaded, isSignedIn, router, currentUser]);
+
+
 
   async function handleStatusChange(
     id: string,
     status: LessonRequest["status"],
   ) {
-    if (status === "completed" && user?.role !== "tutor") {
+    if (status === "completed" && currentUser?.role !== "tutor") {
       return;
     }
     if (
@@ -54,7 +69,7 @@ export default function LessonsPage() {
       return;
     }
     try {
-      await updateLessonStatus(id, status, user);
+      await updateLessonStatus(id, status, currentUser);
       setLessons((prev) =>
         prev.map((l) => (l.id === id ? { ...l, status } : l)),
       );
@@ -63,11 +78,12 @@ export default function LessonsPage() {
     }
   }
 
-  if (authLoading || loading) {
+  if (!isLoaded || loading) {
     return (
       <div className="py-12 text-center text-gray-500">
         Đang tải lịch học...
       </div>
+
     );
   }
 
@@ -84,7 +100,7 @@ export default function LessonsPage() {
             Quản lý buổi học
           </h1>
           <p className="text-gray-600">
-            {user?.role === "tutor"
+            {currentUser?.role === "tutor"
               ? "Xem và quản lý các yêu cầu học từ học sinh"
               : "Theo dõi yêu cầu học và lịch học của bạn"}
           </p>
@@ -125,7 +141,7 @@ export default function LessonsPage() {
               <LessonCard
                 key={lesson.id}
                 lesson={lesson}
-                userRole={user?.role}
+                userRole={currentUser?.role}
                 onAccept={(id) => handleStatusChange(id, "accepted")}
                 onReject={(id) => handleStatusChange(id, "rejected")}
                 onComplete={(id) => handleStatusChange(id, "completed")}
