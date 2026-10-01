@@ -176,6 +176,16 @@ CORS_ALLOWED_ORIGINS = [
     for origin in os.getenv('CORS_ALLOWED_ORIGINS', FRONTEND_URL).split(',')
     if origin.strip()
 ]
+# Local Django binds to IPv4 while browsers may open the frontend with either
+# hostname. Allow both development origins; production remains explicit-only.
+if os.getenv('DJANGO_ENV') != 'production':
+    for local_origin in ('http://localhost:3000', 'http://127.0.0.1:3000'):
+        if local_origin not in CORS_ALLOWED_ORIGINS:
+            CORS_ALLOWED_ORIGINS.append(local_origin)
+# Keep the configured production Vercel origin working even when an older
+# Render service has not yet synchronized the new render.yaml env vars.
+if os.getenv('DJANGO_ENV') == 'production' and 'https://edututor-xi.vercel.app' not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append('https://edututor-xi.vercel.app')
 CORS_URLS_REGEX = r'^/api/v1/'
 CORS_ALLOW_CREDENTIALS = False
 PASSWORD_RESET_TOKEN_TTL_SECONDS = 300
@@ -189,6 +199,17 @@ FACEBOOK_APP_ID = os.getenv('FACEBOOK_APP_ID', '')
 FACEBOOK_APP_SECRET = os.getenv('FACEBOOK_APP_SECRET', '')
 API_JWT_ACCESS_TTL_MINUTES = int(os.getenv('API_JWT_ACCESS_TTL_MINUTES', '15'))
 API_JWT_REFRESH_TTL_DAYS = int(os.getenv('API_JWT_REFRESH_TTL_DAYS', '30'))
+
+# Clerk session issuer, for exchanging a verified Clerk browser session for the
+# short-lived Django API JWT used by Mongo-backed endpoints.
+CLERK_JWT_ISSUER = _configured_value('CLERK_JWT_ISSUER').rstrip('/')
+CLERK_JWT_AUDIENCE = _configured_value('CLERK_JWT_AUDIENCE').strip()
+# Required in every non-local environment before accepting payment-provider
+# callbacks. A missing value means the webhook is disabled, never public.
+PAYMENT_WEBHOOK_SECRET = _configured_value('PAYMENT_WEBHOOK_SECRET')
+PAYMENT_RECONCILIATION_LOCK_SECONDS = int(
+    _configured_value('PAYMENT_RECONCILIATION_LOCK_SECONDS', '300')
+)
 
 REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'api.exception_handlers.api_exception_handler',
@@ -212,6 +233,12 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': '60/minute',
         'user': '240/minute',
+        'tutor_login': '10/minute',
+        'tutor_application': '3/day',
+        'tutor_request': '5/hour',
+        # A gateway can retry a receipt, but sustained unauthenticated traffic
+        # should still be bounded before reaching reconciliation code.
+        'payment_webhook': '300/minute',
     },
 }
 
@@ -233,5 +260,7 @@ SPECTACULAR_SETTINGS = {
         {'name': 'Tài khoản', 'description': 'Đăng ký, đăng nhập và hồ sơ tài khoản.'},
         {'name': 'Gia sư', 'description': 'Hồ sơ, chuyên môn và trạng thái gia sư.'},
         {'name': 'Buổi học', 'description': 'Lịch học, xác nhận giảng dạy và tiến độ.'},
+        {'name': 'Thanh toán', 'description': 'Học phí, giao dịch và đối soát tự động an toàn.'},
+        {'name': 'Hóa đơn', 'description': 'Hóa đơn học phí của học viên đang đăng nhập.'},
     ],
 }

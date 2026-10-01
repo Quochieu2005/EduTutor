@@ -101,6 +101,44 @@ export const TUTOR_SUBJECT_FILTERS: TutorSubjectFilter[] = [
   },
 ];
 
+const PROVINCE_SLUGS: Record<string, string> = {
+  "Hà Nội": "ha-noi",
+  "TP.HCM": "ho-chi-minh",
+  "Đà Nẵng": "da-nang",
+  "Cần Thơ": "can-tho",
+  "Bình Dương": "binh-duong",
+  "Đồng Nai": "dong-nai",
+  "Khánh Hòa": "khanh-hoa",
+  "Vũng Tàu": "ba-ria-vung-tau",
+};
+
+/** Converts the labels used by the public filters to the geography API slug. */
+export function getProvinceSlug(label: string | null | undefined): string | undefined {
+  if (!label || label === "all" || label === "Tất cả tỉnh/thành") return undefined;
+  return PROVINCE_SLUGS[label] ?? label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+export function getSubjectSlug(label: string | null | undefined): string | undefined {
+  if (!label || label === "all" || label === "Tất cả môn") return undefined;
+  const known = getSubjectFilterByQuery(label);
+  if (known) return known.slug;
+  return label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export const TUTOR_CATEGORIES: TutorCategoryItem[] = [
   {
     id: "sub-1",

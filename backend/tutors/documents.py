@@ -173,6 +173,9 @@ class TutorApplication(TimestampedDocument):
     name = StringField(required=True, max_length=150)
     email = EmailField(required=True, max_length=254)
     phone = StringField(required=True, max_length=20)
+    # Optional link to the admin recruitment notice the tutor applied for.
+    # Generic tutor registrations can leave this empty.
+    job_posting = ReferenceField('JobPosting', null=True, db_field='job_posting_id')
     cv_file = StringField(max_length=1000, null=True)
     id_card_file = StringField(max_length=1000, null=True)
     education_proof_file = StringField(max_length=1000, null=True)
@@ -181,7 +184,10 @@ class TutorApplication(TimestampedDocument):
     rejected_reason = StringField(null=True)
     reviewed_by = ReferenceField('Admin', null=True, db_field='reviewed_by')
     reviewed_at = DateTimeField(null=True)
-    meta = {'collection': 'tutor_applications', 'indexes': ['status', 'email', 'reviewed_by', '-created_at']}
+    meta = {
+        'collection': 'tutor_applications',
+        'indexes': ['status', 'email', 'job_posting', 'reviewed_by', '-created_at'],
+    }
 
 
 class JobPosting(TimestampedDocument):
@@ -199,7 +205,7 @@ class JobPosting(TimestampedDocument):
     budget_max = IntField(null=True, min_value=0)
     schedule_expect = StringField(null=True)
     status = StringField(required=True, choices=('open', 'closed'), default='open')
-    meta = {'collection': 'job_postings', 'indexes': ['status', 'subject', 'province', 'district', 'ward', '-created_at']}
+    meta = {'collection': 'job_postings', 'indexes': ['status', 'posted_by_type', 'subject', 'province', 'district', 'ward', '-created_at']}
 
     def clean(self):
         if (

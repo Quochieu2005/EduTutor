@@ -1,0 +1,52 @@
+<section class="dashboard-tab-panel dashboard-overview-grid" role="tabpanel" data-panel="finance" hidden aria-label="Báo cáo dòng tiền">
+    <article class="dashboard-panel dashboard-sales-panel dashboard-finance-summary">
+        <header class="dashboard-panel__header dashboard-panel__header--stacked">
+            <h2>Tổng quan học phí</h2>
+            <p>Số liệu dòng tiền được đối soát theo giờ Việt Nam · Cập nhật {{ dashboard.finance.updated_at }}</p>
+        </header>
+        <div class="dashboard-sales-list">
+            <div class="dashboard-sale"><span class="dashboard-sale__avatar">✓</span><div><strong>Đã thu học phí</strong><small>Giao dịch thành công</small></div><b>{{ dashboard.finance.received_total }}</b></div>
+            <div class="dashboard-sale"><span class="dashboard-sale__avatar">…</span><div><strong>Đang chờ học viên thanh toán</strong><small>Hóa đơn chưa khớp giao dịch</small></div><b>{{ dashboard.finance.pending_total }}</b></div>
+            <div class="dashboard-sale"><span class="dashboard-sale__avatar">↑</span><div><strong>Chờ chi trả gia sư</strong><small>Học phí đã thu, chưa chuyển lương</small></div><b>{{ dashboard.finance.payout_due }}</b></div>
+            <div class="dashboard-sale"><span class="dashboard-sale__avatar">✓</span><div><strong>Đã chi trả gia sư</strong><small>Khoản lương đã xác nhận</small></div><b>{{ dashboard.finance.payout_paid }}</b></div>
+        </div>
+    </article>
+    <section class="dashboard-finance-recent-grid" aria-label="Học phí theo kỳ">
+        <article class="dashboard-panel dashboard-finance-recent-panel">
+            <header class="dashboard-panel__header dashboard-panel__header--stacked">
+                <h2>Học phí hôm nay</h2>
+                <p>{{ dashboard.finance.reports.day.label }} · {{ dashboard.finance.reports.day.total }}</p>
+                <a href="{% url 'management-page' module='payments' %}">Mở tất cả hóa đơn</a>
+            </header>
+            <div class="dashboard-sales-list">
+                {% for payment in dashboard.finance.reports.day.payments %}
+                    <div class="dashboard-sale"><span class="dashboard-sale__avatar">{{ payment.student|slice:':1'|upper }}</span><div><strong>{{ payment.code }} · {{ payment.student }}</strong><small>{{ payment.paid_at }}</small></div><b>{{ payment.amount }}</b></div>
+                {% empty %}<p>Chưa có học phí được thanh toán hôm nay.</p>{% endfor %}
+            </div>
+        </article>
+        <article class="dashboard-panel dashboard-finance-recent-panel">
+            <header class="dashboard-panel__header dashboard-panel__header--stacked">
+                <h2>Học phí tuần này</h2>
+                <p>{{ dashboard.finance.reports.week.label }} · {{ dashboard.finance.reports.week.total }}</p>
+                <a href="{% url 'management-page' module='payments' %}">Mở tất cả hóa đơn</a>
+            </header>
+            <div class="dashboard-sales-list">
+                {% for payment in dashboard.finance.reports.week.payments %}
+                    <div class="dashboard-sale"><span class="dashboard-sale__avatar">{{ payment.student|slice:':1'|upper }}</span><div><strong>{{ payment.code }} · {{ payment.student }}</strong><small>{{ payment.paid_at }}</small></div><b>{{ payment.amount }}</b></div>
+                {% empty %}<p>Chưa có học phí được thanh toán trong tuần này.</p>{% endfor %}
+            </div>
+        </article>
+        <article class="dashboard-panel dashboard-finance-recent-panel">
+            <header class="dashboard-panel__header dashboard-panel__header--stacked">
+                <h2>Học phí tháng này</h2>
+                <p>{{ dashboard.finance.reports.month.label }} · {{ dashboard.finance.reports.month.total }}</p>
+                <a href="{% url 'management-page' module='payments' %}">Mở tất cả hóa đơn</a>
+            </header>
+            <div class="dashboard-sales-list">
+                {% for payment in dashboard.finance.reports.month.payments %}
+                    <div class="dashboard-sale"><span class="dashboard-sale__avatar">{{ payment.student|slice:':1'|upper }}</span><div><strong>{{ payment.code }} · {{ payment.student }}</strong><small>{{ payment.paid_at }}</small></div><b>{{ payment.amount }}</b></div>
+                {% empty %}<p>Chưa có học phí được thanh toán trong tháng này.</p>{% endfor %}
+            </div>
+        </article>
+    </section>
+</section>

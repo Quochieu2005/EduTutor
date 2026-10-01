@@ -1,4 +1,4 @@
-export type UserRole = "student" | "tutor" | "admin";
+export type UserRole = "student" | "parent" | "tutor" | "admin";
 
 export interface User {
   id: string;
@@ -85,6 +85,7 @@ export interface AuthTokens {
 export interface LoginPayload {
   email: string;
   password: string;
+  accountType?: "auto" | "user" | "student" | "parent" | "tutor";
 }
 
 export interface RegisterPayload {

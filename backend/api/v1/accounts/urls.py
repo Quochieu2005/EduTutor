@@ -2,12 +2,16 @@ from django.urls import path
 
 from .views import (
     AccountProfileView, FacebookLoginView, ForgotPasswordView, GoogleLoginView, LoginView, MeView,
+    ClerkExchangeView,
     RefreshView, RegisterView, ResetPasswordView,
+    UnifiedLoginView,
 )
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='api-register'),
     path('login/', LoginView.as_view(), name='api-login'),
+    path('login/unified/', UnifiedLoginView.as_view(), name='api-unified-login'),
+    path('clerk/exchange/', ClerkExchangeView.as_view(), name='api-clerk-exchange'),
     path('password/forgot/', ForgotPasswordView.as_view(), name='api-forgot-password'),
     path('password/reset/', ResetPasswordView.as_view(), name='api-reset-password'),
     path('google/', GoogleLoginView.as_view(), name='api-login-google'),

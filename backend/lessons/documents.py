@@ -104,6 +104,19 @@ class Review(BigIntDocument):
     meta = {'collection': 'reviews', 'indexes': ['tutor', 'student', 'status', '-rating', '-created_at']}
 
 
+class TutorQuestion(BigIntDocument):
+    """Questions submitted by learners on a public tutor profile."""
+
+    tutor = ReferenceField('Tutor', required=True, db_field='tutor_id')
+    student = ReferenceField('Student', required=True, db_field='student_id')
+    content = StringField(required=True, max_length=3000)
+    answer = StringField(null=True, max_length=3000)
+    status = StringField(required=True, choices=('pending', 'visible', 'hidden'), default='visible')
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    answered_at = DateTimeField(null=True)
+    meta = {'collection': 'tutor_questions', 'indexes': ['tutor', 'student', 'status', '-created_at']}
+
+
 class Message(BigIntDocument):
     request = ReferenceField(LearningRequest, null=True, db_field='request_id')
     student = ReferenceField('Student', required=True, db_field='student_id')

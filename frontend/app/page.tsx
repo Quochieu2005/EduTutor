@@ -3,7 +3,7 @@ import { HeroBanner } from "@/components/HeroBanner";
 import { WhyChooseTutor } from "@/components/WhyChooseTutor";
 import { TutorCategories } from "@/components/TutorCategories";
 import { ProcessTimeline } from "@/components/ProcessTimeline";
-import { ArticlesSection } from "@/components/ArticlesSection";
+import { RecruitmentSection } from "@/components/RecruitmentSection";
 import { RegistrationSection } from "@/components/RegistrationSection";
 import { Footer } from "@/components/Footer";
 
@@ -16,7 +16,7 @@ export default function LandingPage() {
         <WhyChooseTutor />
         <ProcessTimeline />
         <TutorCategories />
-        <ArticlesSection />
+        <RecruitmentSection />
         <RegistrationSection />
       </main>
       <Footer />

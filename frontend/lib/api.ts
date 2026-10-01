@@ -1,4 +1,6 @@
-import axios from "axios";
+import axios, { type AxiosRequestConfig } from "axios";
+import { clearAuthSession, getAuthSession, saveAuthSession, type ActorType } from "./auth-session";
+import { toast } from "./toast";
 import type {
   AuthTokens,
   ChatMessage,
@@ -23,36 +25,147 @@ import {
   MOCK_TUTOR_SCHEDULE,
 } from "./mock-data";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
+const defaultApiUrl = process.env.NODE_ENV === "production"
+  ? "https://edututor-po0q.onrender.com/api"
+  : "http://127.0.0.1:8000/api";
+
+function resolveApiUrl() {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!configured) return defaultApiUrl;
+  const normalized = configured.replace(/\/$/, "");
+  const pointsToLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(`${normalized}/`);
+  const runningOnDeployedFrontend = typeof window !== "undefined"
+    && !["localhost", "127.0.0.1"].includes(window.location.hostname);
+  // Django's local dev server is bound to IPv4 (127.0.0.1). Browsers may
+  // resolve `localhost` to ::1 first, which surfaces as Axios `Network Error`.
+  const localSafeUrl = normalized.replace(
+    /^(https?):\/\/localhost(?=:\d+(?:\/|$))/i,
+    "$1://127.0.0.1",
+  );
+  // A stale localhost value in Vercel's environment must not make the
+  // production browser call itself. Local development keeps using Django.
+  return pointsToLocalhost && runningOnDeployedFrontend ? defaultApiUrl : localSafeUrl;
+}
+
+export const API_URL = resolveApiUrl();
 
 export const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
 });
 
-export { requestPasswordReset, resetPassword } from './password-reset-api';
+type EduTutorRequestConfig = AxiosRequestConfig & {
+  _edututorSkipAuth?: boolean;
+  _edututorSilentToast?: boolean;
+  _edututorRetried?: boolean;
+};
 
-api.interceptors.request.use(async (config) => {
+const publicAuthRequest = {
+  _edututorSkipAuth: true,
+  _edututorSilentToast: true,
+} as EduTutorRequestConfig;
+
+export { requestPasswordReset, resetPassword } from './password-reset-api';
+export { edututorApi } from "./edututor-api";
+
+api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    try {
-      // Use Clerk's official session token if a session is active
-      // @ts-expect-error Clerk is attached to window in client browser by @clerk/nextjs
-      const clerkToken = await window.Clerk?.session?.getToken();
-      if (clerkToken) {
-        config.headers.Authorization = `Bearer ${clerkToken}`;
-      }
-    } catch {
-      // Continue without token if session token is unavailable
+    const session = getAuthSession();
+    if (session?.access && !(config as EduTutorRequestConfig)._edututorSkipAuth) {
+      config.headers.Authorization = `Bearer ${session.access}`;
     }
   }
   return config;
 });
 
+let refreshPromise: Promise<string | null> | null = null;
+let sessionExpiredToastShown = false;
+
+function apiErrorMessage(error: unknown, status?: number): string {
+  if (status === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+  if (status === 403) return "Bạn không có quyền thực hiện thao tác này.";
+  if (status === 404) return "Không tìm thấy dữ liệu yêu cầu.";
+  if (status === 409) return "Thao tác bị trùng hoặc dữ liệu đã được xử lý trước đó.";
+  if (status === 429) return "Bạn thao tác quá nhanh. Vui lòng thử lại sau ít phút.";
+  if (status && status >= 500) return "Máy chủ đang bận. Vui lòng thử lại sau.";
+  const responseData = (error as { response?: { data?: unknown } })?.response?.data;
+  if (typeof responseData === "string" && responseData.trim()) return responseData;
+  if (responseData && typeof responseData === "object") {
+    const detail = (responseData as { detail?: unknown; message?: unknown }).detail
+      ?? (responseData as { message?: unknown }).message;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    const firstFieldError = Object.values(responseData).find((value) => typeof value === "string" || Array.isArray(value));
+    if (typeof firstFieldError === "string") return firstFieldError;
+    if (Array.isArray(firstFieldError) && typeof firstFieldError[0] === "string") return firstFieldError[0];
+  }
+  return "Không thể kết nối tới hệ thống. Vui lòng thử lại.";
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const original = error.config as EduTutorRequestConfig | undefined;
+    const status = error.response?.status;
+    const isClerkExchange = original?.url?.includes("/v1/accounts/clerk/exchange/") ?? false;
+    const skipsAuth = original?._edututorSkipAuth ?? false;
+    const shouldNotify = typeof window !== "undefined"
+      && !isClerkExchange
+      && !original?._edututorSilentToast;
+    if (isClerkExchange || skipsAuth || typeof window === "undefined" || status !== 401 || !original || original._edututorRetried) {
+      if (shouldNotify && (status !== 401 || !sessionExpiredToastShown)) {
+        toast.error(apiErrorMessage(error, status));
+        if (status === 401) sessionExpiredToastShown = true;
+      }
+      return Promise.reject(error);
+    }
+
+    const session = getAuthSession();
+    if (!session?.refresh || original.url?.includes("/refresh/")) {
+      if (shouldNotify) toast.error(apiErrorMessage(error, status));
+      return Promise.reject(error);
+    }
+    original._edututorRetried = true;
+    refreshPromise ??= (async () => {
+      try {
+        const endpoint = session.actorType === "tutor"
+          ? "/v1/tutors/auth/refresh/"
+          : "/v1/accounts/refresh/";
+        const { data } = await axios.post(`${API_URL}${endpoint}`, { refresh: session.refresh }, {
+          headers: { "Content-Type": "application/json" },
+        });
+        const next = {
+          access: data.access,
+          refresh: data.refresh,
+          actorType: (data.actor_type ?? session.actorType) as ActorType,
+          account: data.account ?? data.user ?? data.tutor ?? session.account,
+          source: session.source,
+        };
+        saveAuthSession(next);
+        sessionExpiredToastShown = false;
+        return next.access as string;
+      } catch {
+        clearAuthSession();
+        return null;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+    const access = await refreshPromise;
+    if (!access) {
+      if (shouldNotify && !sessionExpiredToastShown) {
+        sessionExpiredToastShown = true;
+        toast.error(apiErrorMessage(error, status));
+      }
+      return Promise.reject(error);
+    }
+    original.headers = original.headers ?? {};
+    original.headers.Authorization = `Bearer ${access}`;
+    return api.request(original);
+  },
+);
 
 function isMockEnabled() {
-  if (process.env.NEXT_PUBLIC_USE_MOCK === "false") return false;
-  if (process.env.NEXT_PUBLIC_USE_MOCK === "true") return true;
-  return process.env.NODE_ENV === "development";
+  return process.env.NEXT_PUBLIC_USE_MOCK === "true";
 }
 
 // Helper to get / set persisted tutors in mock mode
@@ -122,19 +235,46 @@ export async function login(
             : role === "tutor"
               ? "Nguyễn Văn An"
               : "Hoàng Minh",
-        role,
+          role,
       },
     };
   }
-  const { data } = await api.post("/v1/accounts/login/", payload);
+  const { data } = await api.post("/v1/accounts/login/unified/", {
+    email: payload.email,
+    password: payload.password,
+    account_type: payload.accountType ?? "auto",
+  }, publicAuthRequest);
+  sessionExpiredToastShown = false;
+  const account = data.account ?? data.user ?? data.tutor;
   return {
     ...data,
     user: {
-      id: data.user.id,
-      email: data.user.email,
-      fullName: data.user.username,
-      role: "student" as const,
+      id: String(account.id),
+      email: account.email,
+      fullName: account.name ?? account.display_name ?? account.username,
+      role: data.actor_type === "admin" ? "admin"
+        : data.actor_type === "tutor" ? "tutor"
+        : data.actor_type === "parent" ? "parent" : "student",
     },
+  };
+}
+
+export type UnifiedAuthResponse = {
+  access: string;
+  refresh: string;
+  token_type: string;
+  expires_in: number;
+  actor_type: ActorType;
+  account: Record<string, unknown>;
+};
+
+export async function loginWithSocial(provider: "google" | "facebook", token: string): Promise<UnifiedAuthResponse> {
+  const { data } = await api.post(`/v1/accounts/${provider}/`, { token }, publicAuthRequest);
+  sessionExpiredToastShown = false;
+  return {
+    ...data,
+    actor_type: data.actor_type as ActorType,
+    account: data.account as Record<string, unknown>,
   };
 }
 
@@ -164,16 +304,19 @@ export async function register(
     .slice(0, 50) || "user";
   const { data } = await api.post("/v1/accounts/register/", {
     username,
+    display_name: payload.fullName,
     email: payload.email,
     password: payload.password,
-  });
+    account_type: payload.role === "parent" ? "parent" : "student",
+  }, publicAuthRequest);
+  sessionExpiredToastShown = false;
   return {
     ...data,
     user: {
       id: data.user.id,
       email: data.user.email,
-      fullName: data.user.username,
-      role: "student" as const,
+      fullName: data.user.display_name ?? data.user.username,
+      role: payload.role === "parent" ? "parent" : "student",
       phone: payload.phone,
     },
   };
@@ -390,7 +533,7 @@ export async function getLessons(currentUser?: User | null): Promise<LessonReque
     return lessons.filter((lesson) => lesson.studentId === currentUser.id);
   }
   const { data } = await api.get("/v1/lessons/");
-  return data;
+  return Array.isArray(data) ? data : data.results ?? [];
 }
 
 export const adminGetLessons = getLessons;

@@ -10,7 +10,7 @@ from mongoengine import ValidationError
 
 from core.admin_audit import record_admin_activity
 from core.documents import Complaint
-from lessons.documents import Review
+from lessons.documents import Review, TutorQuestion
 
 
 REVIEW_STATUS_LABELS = {'visible': 'Hiển thị', 'hidden': 'Đã ẩn'}
@@ -19,6 +19,11 @@ COMPLAINT_STATUS_LABELS = {
     'processing': 'Đang xử lý',
     'resolved': 'Đã giải quyết',
     'rejected': 'Từ chối',
+}
+QUESTION_STATUS_LABELS = {
+    'pending': 'Chờ duyệt',
+    'visible': 'Hiển thị',
+    'hidden': 'Đã ẩn',
 }
 
 
@@ -44,7 +49,7 @@ def _format_date(value):
 
 
 def reviews_complaints_page_config():
-    """Combine two real collections into one moderation inbox."""
+    """Combine reviews, tutor questions and complaints into one moderation inbox."""
     records = []
     for review in Review.objects:
         records.append({
@@ -58,6 +63,19 @@ def reviews_complaints_page_config():
             'content': f'{review.rating}/5 — {review.comment or "Không có nhận xét"}',
             'submitted': _format_date(getattr(review, 'created_at', None)),
             'status': REVIEW_STATUS_LABELS.get(getattr(review, 'status', 'visible'), 'Hiển thị'),
+        })
+    for question in TutorQuestion.objects.order_by('-created_at').select_related():
+        records.append({
+            'key': f'question-{question.id}',
+            'kind': 'question',
+            'record': question,
+            'sender': _name(question.student),
+            'sender_email': _email(question.student),
+            'target': _name(question.tutor),
+            'type': 'Hỏi đáp',
+            'content': question.content,
+            'submitted': _format_date(getattr(question, 'created_at', None)),
+            'status': QUESTION_STATUS_LABELS.get(getattr(question, 'status', 'pending'), 'Chờ duyệt'),
         })
     for complaint in Complaint.objects.order_by('-created_at'):
         records.append({
@@ -85,7 +103,11 @@ def reviews_complaints_page_config():
             ('sender', 'Người gửi'), ('email', 'Email người gửi'), ('target', 'Đối tượng'), ('type', 'Loại'),
             ('content', 'Nội dung'), ('submitted', 'Ngày gửi'), ('status', 'Trạng thái'),
         ],
-        'statuses': ['Mới', 'Đang xử lý', 'Đã giải quyết', 'Từ chối', 'Hiển thị', 'Đã ẩn'],
+        'statuses': [
+            *COMPLAINT_STATUS_LABELS.values(),
+            *REVIEW_STATUS_LABELS.values(),
+            *QUESTION_STATUS_LABELS.values(),
+        ],
         'records': records,
         'rows': [
             (item['sender'], item['sender_email'], item['target'], item['type'], item['content'], item['submitted'], item['status'])
@@ -102,6 +124,8 @@ def _record_from_key(record_key):
         return None, None
     if kind == 'review':
         return kind, Review.objects(id=record_id).first()
+    if kind == 'question':
+        return kind, TutorQuestion.objects(id=record_id).first()
     if kind == 'complaint':
         return kind, Complaint.objects(id=record_id).first()
     return None, None
@@ -143,6 +167,12 @@ def review_complaint_update(request, record_key):
             recipient = _email(record.student)
             sender_name = _name(record.student, 'bạn')
             item_type = 'đánh giá'
+        elif kind == 'question':
+            if status not in QUESTION_STATUS_LABELS:
+                raise ValueError('Trạng thái câu hỏi không hợp lệ.')
+            recipient = _email(record.student)
+            sender_name = _name(record.student, 'bạn')
+            item_type = 'câu hỏi'
         else:
             if status not in COMPLAINT_STATUS_LABELS:
                 raise ValueError('Trạng thái khiếu nại không hợp lệ.')
@@ -162,6 +192,11 @@ def review_complaint_update(request, record_key):
             record.status = status
             record.admin_reply = response or record.admin_reply
             record.moderated_at = datetime.now(timezone.utc)
+        elif kind == 'question':
+            record.status = status
+            if response:
+                record.answer = response
+                record.answered_at = datetime.now(timezone.utc)
         else:
             record.status = status
             if response:

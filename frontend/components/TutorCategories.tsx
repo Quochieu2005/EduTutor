@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -10,14 +10,45 @@ import {
   CheckCircleFilled,
 } from "@ant-design/icons";
 
-import { TUTOR_CATEGORIES } from "@/lib/tutor-filter-mapping";
+import { edututorApi, type Subject } from "@/lib/edututor-api";
+import { TUTOR_CATEGORIES, type TutorCategoryItem } from "@/lib/tutor-filter-mapping";
 
-// Duplicate items 3 times for infinite loop
-const INFINITE_ITEMS = [...TUTOR_CATEGORIES, ...TUTOR_CATEGORIES, ...TUTOR_CATEGORIES];
 const CARD_HOLD_MS = 1000;
 const SLIDE_TRANSITION_MS = 300;
+const DEFAULT_SUBJECT_IMAGE = "/assets/sub-toantuduy.png";
+
+function subjectImage(slug: string) {
+  if (slug.includes("tieng-anh")) return "/assets/sub-tienganh.png";
+  if (slug.includes("ielts")) return "/assets/sub-ielts.png";
+  if (slug.includes("ngu-van") || slug.includes("van")) return "/assets/sub-nguvan.png";
+  if (slug.includes("vat-ly") || slug.includes("vat-li")) return "/assets/sub-vatly.png";
+  if (slug.includes("hoa")) return "/assets/sub-hoahoc.png";
+  if (slug.includes("toan")) return "/assets/sub-toantuduy.png";
+  return DEFAULT_SUBJECT_IMAGE;
+}
+
+function toCategory(subject: Subject): TutorCategoryItem {
+  const metadata = TUTOR_CATEGORIES.find((item) => item.filterSubjectSlug === subject.slug);
+  const tutorCount = subject.tutor_count ?? 0;
+  return {
+    id: `subject-${subject.id}`,
+    slug: subject.slug,
+    title: metadata?.title ?? `Gia sư ${subject.name}`,
+    imageSrc: metadata?.imageSrc ?? subjectImage(subject.slug),
+    filterSubjectSlug: subject.slug,
+    bullets: metadata?.bullets ?? [
+      tutorCount > 0 ? `${tutorCount.toLocaleString("vi-VN")} gia sư đang hoạt động` : "Đang cập nhật gia sư",
+      subject.level ? `Hỗ trợ ${subject.level}` : "Đa dạng cấp học",
+      "Học online và trực tiếp",
+    ],
+  };
+}
 
 export function TutorCategories() {
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [tutorCount, setTutorCount] = useState<number | null>(null);
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
@@ -25,28 +56,30 @@ export function TutorCategories() {
   const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Initialize position to the middle set for bidirectional infinite scroll
   useEffect(() => {
-    const container = scrollRef.current;
-    if (container) {
-      // Set to middle set on mount
-      const oneSetWidth = container.scrollWidth / 3;
-      container.scrollLeft = oneSetWidth;
-    }
+    let isCurrent = true;
+    edututorApi.subjects({ page_size: 100 })
+      .then((page) => {
+        if (isCurrent) {
+          setSubjects(page.results);
+          setIsLoadingSubjects(false);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setLoadError(true);
+          setIsLoadingSubjects(false);
+        }
+      });
+    edututorApi.tutors({ page_size: 1 })
+      .then((page) => {
+        if (isCurrent) setTutorCount(page.count);
+      })
+      .catch(() => undefined);
+    return () => { isCurrent = false; };
   }, []);
 
-  // Infinite scroll loop checker on scroll
-  const handleScrollWrap = () => {
-    const container = scrollRef.current;
-    if (!container) return;
-
-    const oneSetWidth = container.scrollWidth / 3;
-    if (container.scrollLeft >= oneSetWidth * 2) {
-      container.scrollLeft -= oneSetWidth;
-    } else if (container.scrollLeft <= 5) {
-      container.scrollLeft += oneSetWidth;
-    }
-  };
+  const categories = useMemo(() => subjects.map(toCategory), [subjects]);
 
   const getCardStep = useCallback(() => {
     const container = scrollRef.current;
@@ -170,7 +203,9 @@ export function TutorCategories() {
               Đội ngũ gia sư tại EduTutor
             </h2>
             <p className="text-sm sm:text-base text-slate-500 mt-2">
-              Hơn 3.000+ gia sư kinh nghiệm, đa dạng môn học và cấp học
+              {tutorCount === null
+                ? "Đội ngũ gia sư được cập nhật trực tiếp từ hệ thống Admin."
+                : `${tutorCount.toLocaleString("vi-VN")} gia sư kinh nghiệm, đa dạng môn học và cấp học`}
             </p>
           </div>
 
@@ -199,7 +234,6 @@ export function TutorCategories() {
         <div className="tutor-carousel-shell relative -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <div
             ref={scrollRef}
-            onScroll={handleScrollWrap}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUpOrLeave}
@@ -209,9 +243,9 @@ export function TutorCategories() {
             className="no-scrollbar flex cursor-grab snap-x snap-mandatory gap-5 overflow-x-auto pb-4 pt-2 select-none active:cursor-grabbing"
             style={{ scrollBehavior: "auto" }}
           >
-            {INFINITE_ITEMS.map((cat, idx) => (
+            {categories.map((cat) => (
               <Link
-                key={`${cat.id}-${idx}`}
+                key={cat.id}
                 href={`/tutors?subject=${encodeURIComponent(cat.filterSubjectSlug)}`}
                 className="tutor-category-card group flex w-[280px] shrink-0 snap-start select-none flex-col justify-between rounded-3xl border border-blue-100 bg-white p-5 shadow-xs transition-all duration-300 focus-visible:border-blue-500 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 sm:w-[320px]"
               >
@@ -250,6 +284,16 @@ export function TutorCategories() {
               </div>
               </Link>
             ))}
+            {isLoadingSubjects && categories.length === 0 && (
+              <p className="w-full py-12 text-center text-sm text-slate-500">
+                Đang tải danh sách môn học...
+              </p>
+            )}
+            {loadError && categories.length === 0 && (
+              <p className="w-full py-12 text-center text-sm text-slate-500">
+                Chưa tải được danh sách môn học từ Admin.
+              </p>
+            )}
           </div>
         </div>
 

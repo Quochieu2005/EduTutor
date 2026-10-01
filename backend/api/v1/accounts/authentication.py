@@ -8,7 +8,8 @@ from django.conf import settings
 from rest_framework import authentication, exceptions
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
-from accounts.documents import User
+from accounts.documents import Admin, User
+from tutors.documents import Tutor
 
 
 @dataclass
@@ -51,7 +52,39 @@ class MongoJWTAuthentication(authentication.BaseAuthentication):
         except jwt.PyJWTError as error:
             raise exceptions.AuthenticationFailed('Access token không hợp lệ.') from error
 
-        if payload.get('token_type') != 'access' or not ObjectId.is_valid(payload.get('sub', '')):
+        if payload.get('token_type') != 'access':
+            raise exceptions.AuthenticationFailed('Access token không hợp lệ.')
+
+        if payload.get('actor') == 'admin':
+            try:
+                admin_id = int(payload.get('sub', ''))
+            except (TypeError, ValueError) as error:
+                raise exceptions.AuthenticationFailed('Access token không hợp lệ.') from error
+            admin = Admin.objects(id=admin_id, status=Admin.STATUS_ACTIVE).first()
+            if admin is None:
+                raise exceptions.AuthenticationFailed('Tài khoản quản trị viên không còn hoạt động.')
+            if payload.get('ver', 1) != (admin.session_version or 1):
+                raise exceptions.AuthenticationFailed('Phiên đăng nhập không còn hiệu lực.')
+            return MongoUserPrincipal(admin), payload
+
+        # The lessons workflow is shared by students and tutors. Unified
+        # login issues tutor tokens whose subject is the numeric tutor id,
+        # so accept that actor here instead of treating it as a User ObjectId.
+        if payload.get('actor') == 'tutor':
+            try:
+                tutor_id = int(payload.get('sub', ''))
+            except (TypeError, ValueError) as error:
+                raise exceptions.AuthenticationFailed('Access token gia sư không hợp lệ.') from error
+            tutor = Tutor.objects(id=tutor_id).first()
+            if tutor is None:
+                raise exceptions.AuthenticationFailed('Tài khoản gia sư không còn tồn tại.')
+            if tutor.status != Tutor.STATUS_ACTIVE:
+                raise exceptions.AuthenticationFailed('Tài khoản gia sư đã bị vô hiệu hóa.')
+            if payload.get('ver', 1) != (tutor.token_version or 1):
+                raise exceptions.AuthenticationFailed('Phiên đăng nhập không còn hiệu lực.')
+            return MongoUserPrincipal(tutor), payload
+
+        if not ObjectId.is_valid(payload.get('sub', '')):
             raise exceptions.AuthenticationFailed('Access token không hợp lệ.')
 
         user = User.objects(id=payload['sub']).first()

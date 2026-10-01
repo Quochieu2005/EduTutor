@@ -9,10 +9,10 @@ def domain_documents():
     """Import every domain document so MongoEngine can resolve references."""
     from accounts.documents import Admin, AuthToken, Parent, Student, User
     from core.documents import (
-        AuditLog, Banner, BlogCategory, BlogPost, Complaint, Contact, Invoice, Payment,
+        AdminNotification, AuditLog, Banner, BlogCategory, BlogPost, Complaint, Contact, Invoice, Payment,
         NotificationDelivery, PaymentItem, SystemNotification, Transaction,
     )
-    from lessons.documents import LearningRequest, Lesson, Message, Review
+    from lessons.documents import LearningRequest, Lesson, Message, Review, TutorQuestion
     from tutors.documents import (
         District, JobApplication, JobPosting, Province, Subject, Tutor, Ward,
         TutorApplication, TutorSubject, TutorTeachingArea,
@@ -21,9 +21,9 @@ def domain_documents():
     return (
         User, Student, Parent, Tutor, Admin, Subject, Province, District, Ward,
         TutorSubject, TutorTeachingArea, LearningRequest, Lesson, Review,
-        Message, Payment, PaymentItem, BlogCategory, BlogPost, Complaint, Contact, Banner,
+        Message, TutorQuestion, Payment, PaymentItem, BlogCategory, BlogPost, Complaint, Contact, Banner,
         TutorApplication, JobPosting, JobApplication, AuthToken, Transaction,
-        Invoice, AuditLog, SystemNotification, NotificationDelivery,
+        Invoice, AuditLog, SystemNotification, NotificationDelivery, AdminNotification,
     )
 
 

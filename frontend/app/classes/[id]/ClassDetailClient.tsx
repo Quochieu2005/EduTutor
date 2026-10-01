@@ -2,14 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEduUser, useEduClerk } from "@/lib/auth";
 
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { edututorApi } from "@/lib/edututor-api";
+import { toast } from "@/lib/toast";
 import type { ClassListing, ClassComment } from "@/lib/home-mock-data";
 import {
-  isApprovedTutor,
   addEnrollmentRequest,
   getEnrollmentRequests,
   getTutorPhoneForClass,
@@ -24,10 +24,10 @@ interface ClassDetailClientProps {
 export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
   const { isSignedIn, user } = useEduUser();
   const { openSignIn } = useEduClerk();
-  const router = useRouter();
 
   const [classItem] = useState<ClassListing>(initialClass);
   const [isApplied, setIsApplied] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
   const [applyNotification, setApplyNotification] = useState<string | null>(null);
 
   // State các yêu cầu ghi danh từ portal-store
@@ -129,21 +129,25 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
   const isBooked = !!userEnrollment;
 
   // Luồng gia sư nhận lớp (dành cho lớp needing)
-  const handleApply = () => {
+  const handleApply = async () => {
+    if (classItem.postedByType === "admin") return;
     if (!isSignedIn) {
       openSignIn({
         fallbackRedirectUrl: typeof window !== "undefined" ? window.location.href : undefined,
       });
       return;
     }
-    if (!isApprovedTutor(user?.id)) {
-      setApplyNotification("Bạn cần đăng ký và được Admin duyệt hồ sơ gia sư trước khi nhận lớp.");
-      router.push("/tutors/register?required=take-class");
-      return;
+    setIsApplying(true);
+    try {
+      await edututorApi.applyForTutorJob(classItem.id, {});
+      setIsApplied(true);
+      toast.success("Đã gửi đề nghị nhận lớp thành công.");
+    } catch {
+      setApplyNotification("Không thể gửi đề nghị lúc này. Vui lòng thử lại sau.");
+      toast.error("Không thể gửi đề nghị nhận lớp lúc này.");
+    } finally {
+      setIsApplying(false);
     }
-    setIsApplied(true);
-    setApplyNotification(`Bạn đã đăng ký nhận lớp ${classItem.code} thành công! Trung tâm EduTutor sẽ sớm liên hệ xác nhận hồ sơ của bạn.`);
-    setTimeout(() => setApplyNotification(null), 6000);
   };
 
   // Luồng liên hệ gia sư (chỉ dành cho học viên / phụ huynh, không yêu cầu làm gia sư)
@@ -457,11 +461,11 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
               <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
                 {classItem.fee}
               </span>
-              {classItem.status === "needing" ? (
+              {classItem.status === "needing" && classItem.postedByType !== "admin" ? (
                 <div className="mt-2">
                   <button
                     type="button"
-                    disabled={isApplied}
+                    disabled={isApplied || isApplying}
                     onClick={handleApply}
                     className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
                       isApplied
@@ -469,9 +473,11 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
                         : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white active:scale-98 cursor-pointer"
                     }`}
                   >
-                    {isApplied ? "✓ Đã đăng ký nhận lớp" : "Đăng ký nhận lớp ngay"}
+                    {isApplied ? "✓ Đã gửi đề nghị" : isApplying ? "Đang gửi..." : "Đề nghị dạy lớp này"}
                   </button>
                 </div>
+              ) : classItem.postedByType === "admin" ? (
+                <p className="mt-2 text-xs font-semibold text-slate-500">Tin tuyển dụng do Admin đăng · xem thông tin tại trang Tuyển dụng</p>
               ) : (
                 <div className="mt-2">
                   {classStatus === "paused" ? (
@@ -1007,6 +1013,8 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
           </div>
         )}
 
+        {classItem.tutorId && (
+          <>
         {/* 10. PHẦN ĐÁNH GIÁ */}
         <section aria-labelledby="reviews-heading" className="bg-white rounded-2xl p-6 sm:p-8 shadow-xs border border-gray-200 space-y-6">
           <div className="flex items-center justify-between pb-4 border-b border-gray-100">
@@ -1111,7 +1119,7 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
                 placeholder={
                   isSignedIn
                     ? "Nhập câu hỏi hoặc trao đổi về thời gian học, mức học phí..."
-                    : "Đăng nhập với Clerk để bình luận..."
+                    : "Đăng nhập để bình luận..."
                 }
                 className="w-full p-3 rounded-xl border border-gray-200 text-xs text-gray-900 placeholder-gray-400 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-colors"
               />
@@ -1223,6 +1231,8 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
             )}
           </div>
         </section>
+          </>
+        )}
       </main>
 
       <Footer />

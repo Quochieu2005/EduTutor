@@ -1,5 +1,5 @@
 from core.documents import Complaint
-from lessons.documents import Review
+from lessons.documents import Review, TutorQuestion
 
 
 def review_payload(review):
@@ -9,6 +9,15 @@ def review_payload(review):
         'rating': review.rating, 'comment': review.comment,
         'admin_reply': review.admin_reply,
         'created_at': getattr(review, 'created_at', None),
+    }
+
+
+def question_payload(question):
+    return {
+        'id': int(question.id), 'tutor': question.tutor.name,
+        'student': question.student.name, 'content': question.content,
+        'answer': question.answer,
+        'created_at': question.created_at, 'answered_at': question.answered_at,
     }
 
 

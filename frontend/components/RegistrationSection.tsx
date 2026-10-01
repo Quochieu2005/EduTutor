@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   SafetyCertificateFilled,
   CheckCircleFilled,
@@ -10,7 +10,9 @@ import {
   PhoneOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { addEnrollmentRequest } from "@/lib/portal-store";
+import { edututorApi, type Subject } from "@/lib/edututor-api";
+import { useEduUser } from "@/lib/auth";
+import { toast } from "@/lib/toast";
 
 const GRADE_OPTIONS = [
   "Lớp 1",
@@ -29,36 +31,55 @@ const GRADE_OPTIONS = [
   "Luyện thi Chứng chỉ quốc tế",
 ];
 
-const SUBJECT_OPTIONS = [
-  "Toán học",
-  "Tiếng Anh",
-  "Luyện thi IELTS",
-  "Toán tư duy",
-  "Ngữ Văn",
-  "Vật Lý",
-  "Hóa Học",
-  "Sinh Học",
-  "Tin học / Lập trình",
-  "Các môn Tiểu học",
-];
-
 export function RegistrationSection() {
   const [formData, setFormData] = useState({
     parentName: "",
+    email: "",
     phoneNumber: "",
     grade: "",
-    subject: "",
+    subjectId: "",
+    provinceId: "",
+    wardId: "",
     notes: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [provinces, setProvinces] = useState<Array<{ id: number; slug: string; name: string }>>([]);
+  const [wards, setWards] = useState<Array<{ id: number; slug: string; name: string; type: string }>>([]);
+  const { isSignedIn } = useEduUser();
+
+  useEffect(() => {
+    Promise.all([edututorApi.subjects({ page_size: 50 }), edututorApi.provinces()])
+      .then(([page, areas]) => {
+        setSubjects(page.results);
+        setProvinces(areas);
+      })
+      .catch(() => setErrors({ form: "Chưa tải được danh sách môn học. Vui lòng thử lại." }));
+  }, []);
+
+  const loadWards = async (provinceId: string) => {
+    const province = provinces.find((item) => String(item.id) === provinceId);
+    if (!province) {
+      setWards([]);
+      return;
+    }
+    try {
+      setWards(await edututorApi.wards(province.slug));
+    } catch {
+      setWards([]);
+    }
+  };
 
   const validate = () => {
     const err: Record<string, string> = {};
     if (!formData.parentName.trim()) {
       err.parentName = "Vui lòng nhập họ và tên phụ huynh.";
+    }
+    if (!/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
+      err.email = "Vui lòng nhập email hợp lệ để EduTutor phản hồi.";
     }
     const phoneRegex = /^[0-9+.\s-]{9,15}$/;
     if (!formData.phoneNumber.trim()) {
@@ -69,9 +90,11 @@ export function RegistrationSection() {
     if (!formData.grade) {
       err.grade = "Vui lòng chọn khối lớp học.";
     }
-    if (!formData.subject) {
+    if (!formData.subjectId) {
       err.subject = "Vui lòng chọn môn học cần gia sư.";
     }
+    if (isSignedIn && !formData.provinceId) err.province = "Vui lòng chọn tỉnh/thành.";
+    if (isSignedIn && !formData.wardId) err.ward = "Vui lòng chọn xã/phường.";
     setErrors(err);
     return Object.keys(err).length === 0;
   };
@@ -83,34 +106,41 @@ export function RegistrationSection() {
     setIsSubmitting(true);
 
     try {
-      // Simulate network request & save to portal store
-      await new Promise((r) => setTimeout(r, 600));
-
-      addEnrollmentRequest({
-        userId: "trial-guest-" + Date.now(),
-        userEmail: "guest@edututor.vn",
-        tutorId: "tut-demo",
-        tutorName: "Trung tâm EduTutor",
-        classId: `trial-${Date.now().toString(36)}`,
-        classTitle: `Đăng ký học thử: ${formData.subject} - ${formData.grade}`,
-        subject: formData.subject,
-        grade: formData.grade,
-        teachingMode: "both",
-        schedule: "Thỏa thuận theo lịch học sinh",
-        address: "Theo yêu cầu phụ huynh",
-        studentName: `Con của ${formData.parentName.trim()}`,
-        gender: "other",
-        age: 12,
-        parentPhone: formData.phoneNumber.trim(),
-        studentPhone: formData.phoneNumber.trim(),
-      });
+      const selectedSubject = subjects.find((subject) => String(subject.id) === formData.subjectId);
+      if (isSignedIn) {
+        const province = provinces.find((item) => String(item.id) === formData.provinceId);
+        await edututorApi.createTutorRequest({
+          subject_id: Number(formData.subjectId),
+          province_id: Number(formData.provinceId),
+          ward_id: Number(formData.wardId),
+          title: `Tìm gia sư ${selectedSubject?.name ?? ""} ${formData.grade}`,
+          description: [`Nhu cầu học ${selectedSubject?.name ?? ""} cho ${formData.grade}.`, formData.notes.trim(), `Khu vực: ${province?.name ?? ""}`].filter(Boolean).join(" "),
+          grade: formData.grade,
+        });
+      } else {
+        await edututorApi.sendContact({
+          parent_name: formData.parentName.trim(),
+          email: formData.email.trim(),
+          phone: formData.phoneNumber.trim(),
+          grade: formData.grade,
+          subject_id: Number(formData.subjectId),
+          needs_description: [
+            `Nhu cầu học thử ${selectedSubject?.name ?? ""} cho ${formData.grade}.`,
+            formData.notes.trim(),
+          ].filter(Boolean).join(" "),
+        });
+      }
 
       setSubmitSuccess(true);
+      toast.success(isSignedIn ? "Đã đăng yêu cầu tìm gia sư. Gia sư phù hợp có thể gửi đề nghị dạy." : "Đã gửi yêu cầu tư vấn thành công. EduTutor sẽ sớm liên hệ với bạn.");
       setFormData({
         parentName: "",
+        email: "",
         phoneNumber: "",
         grade: "",
-        subject: "",
+        subjectId: "",
+        provinceId: "",
+        wardId: "",
         notes: "",
       });
       setErrors({});
@@ -233,6 +263,23 @@ export function RegistrationSection() {
                   </div>
                 </div>
 
+                <div>
+                  <label htmlFor="contactEmail" className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Email nhận phản hồi <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    id="contactEmail"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="phuhuynh@example.com"
+                    className={`w-full p-3 rounded-xl border text-sm text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 transition-all ${
+                      errors.email ? "border-rose-300 focus:ring-rose-200 bg-rose-50/20" : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
+                    }`}
+                  />
+                  {errors.email && <p className="text-xs text-rose-600 mt-1 font-medium">{errors.email}</p>}
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Lớp học */}
                   <div>
@@ -268,8 +315,8 @@ export function RegistrationSection() {
                     </label>
                     <select
                       id="subjectSelect"
-                      value={formData.subject}
-                      onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                      value={formData.subjectId}
+                      onChange={(e) => setFormData({ ...formData, subjectId: e.target.value })}
                       className={`w-full p-3 rounded-xl border text-sm text-slate-900 focus:outline-hidden focus:ring-2 transition-all cursor-pointer ${
                         errors.subject
                           ? "border-rose-300 focus:ring-rose-200 bg-rose-50/20"
@@ -277,9 +324,9 @@ export function RegistrationSection() {
                       }`}
                     >
                       <option value="">Chọn môn học</option>
-                      {SUBJECT_OPTIONS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
+                      {subjects.map((subject) => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.name}
                         </option>
                       ))}
                     </select>
@@ -288,6 +335,46 @@ export function RegistrationSection() {
                     )}
                   </div>
                 </div>
+
+                {isSignedIn && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="requestProvince" className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Tỉnh/thành <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        id="requestProvince"
+                        value={formData.provinceId}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setFormData({ ...formData, provinceId: value, wardId: "" });
+                          void loadWards(value);
+                        }}
+                        className="w-full p-3 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      >
+                        <option value="">Chọn tỉnh/thành</option>
+                        {provinces.map((province) => <option key={province.id} value={province.id}>{province.name}</option>)}
+                      </select>
+                      {errors.province && <p className="text-xs text-rose-600 mt-1 font-medium">{errors.province}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="requestWard" className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Xã/phường <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        id="requestWard"
+                        value={formData.wardId}
+                        onChange={(e) => setFormData({ ...formData, wardId: e.target.value })}
+                        disabled={!formData.provinceId || wards.length === 0}
+                        className="w-full p-3 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+                      >
+                        <option value="">Chọn xã/phường</option>
+                        {wards.map((ward) => <option key={ward.id} value={ward.id}>{ward.name}</option>)}
+                      </select>
+                      {errors.ward && <p className="text-xs text-rose-600 mt-1 font-medium">{errors.ward}</p>}
+                    </div>
+                  </div>
+                )}
 
                 {/* Ghi chú thêm */}
                 <div>

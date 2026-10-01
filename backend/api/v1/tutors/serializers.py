@@ -49,6 +49,32 @@ class TutorAccountSerializer(serializers.Serializer):
     must_change_password = serializers.BooleanField()
 
 
+class PublicTutorSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    slug = serializers.CharField()
+    name = serializers.CharField()
+    avatar = serializers.CharField(allow_null=True)
+    headline = serializers.CharField(allow_null=True)
+    bio = serializers.CharField(allow_null=True)
+    education_level = serializers.CharField(allow_null=True)
+    experience_years = serializers.IntegerField()
+    hourly_rate_min = serializers.IntegerField(allow_null=True)
+    hourly_rate_max = serializers.IntegerField(allow_null=True)
+    teaching_mode = serializers.CharField()
+    rating_avg = serializers.FloatField()
+    rating_count = serializers.IntegerField()
+    subjects = serializers.ListField(child=serializers.DictField())
+    teaching_areas = serializers.ListField(child=serializers.DictField())
+
+
+class PublicTutorQuerySerializer(serializers.Serializer):
+    subject = serializers.SlugField(required=False, max_length=180)
+    province = serializers.SlugField(required=False, max_length=180)
+    ward = serializers.SlugField(required=False, max_length=180)
+    teaching_mode = serializers.ChoiceField(choices=('online', 'offline', 'both'), required=False)
+    search = serializers.CharField(max_length=150, required=False)
+
+
 class TutorTokenPairSerializer(serializers.Serializer):
     access = serializers.CharField()
     refresh = serializers.CharField()
@@ -118,6 +144,10 @@ class RecruitmentQuerySerializer(serializers.Serializer):
     search = serializers.CharField(required=False, max_length=150)
     subject = serializers.SlugField(required=False, max_length=180)
     province = serializers.SlugField(required=False, max_length=180)
+    ward = serializers.SlugField(required=False, max_length=180)
+    # ``admin`` is the public recruitment board. ``parent`` is the board of
+    # real tutor-finding requests created from the learning-request flow.
+    posted_by = serializers.ChoiceField(required=False, choices=('admin', 'parent'))
 
 
 class RecruitmentReferenceSerializer(serializers.Serializer):
@@ -132,6 +162,7 @@ class RecruitmentWardSerializer(RecruitmentReferenceSerializer):
 
 class RecruitmentJobSerializer(serializers.Serializer):
     slug = serializers.CharField()
+    posted_by_type = serializers.CharField()
     title = serializers.CharField()
     subject = RecruitmentReferenceSerializer()
     province = RecruitmentReferenceSerializer()
@@ -147,10 +178,34 @@ class RecruitmentJobSerializer(serializers.Serializer):
     updated_at = serializers.DateTimeField()
 
 
+class TutorRequestCreateSerializer(serializers.Serializer):
+    """Payload for a signed-in student/parent tutor-finding request."""
+
+    subject_id = serializers.IntegerField(min_value=1)
+    province_id = serializers.IntegerField(min_value=1)
+    ward_id = serializers.IntegerField(min_value=1)
+    title = serializers.CharField(max_length=250)
+    description = serializers.CharField(max_length=5000)
+    grade = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    budget_min = serializers.IntegerField(min_value=0, required=False, allow_null=True)
+    budget_max = serializers.IntegerField(min_value=0, required=False, allow_null=True)
+    schedule_expect = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        minimum = attrs.get('budget_min')
+        maximum = attrs.get('budget_max')
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise serializers.ValidationError({'budget_max': 'Ngân sách tối đa phải lớn hơn hoặc bằng tối thiểu.'})
+        if not attrs.get('title', '').strip() or not attrs.get('description', '').strip():
+            raise serializers.ValidationError('Tiêu đề và mô tả nhu cầu không được để trống.')
+        return attrs
+
+
 class TutorApplicationSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=150)
     email = serializers.EmailField(max_length=254)
     phone = serializers.RegexField(r'^\+?[0-9 () .-]{7,20}$', max_length=20)
+    job_slug = serializers.CharField(max_length=180, required=False, allow_blank=True)
     cover_letter = serializers.CharField(max_length=3000, required=False, allow_blank=True)
     cv_file = serializers.FileField(required=False, allow_null=True)
     id_card_file = serializers.FileField(required=False, allow_null=True)

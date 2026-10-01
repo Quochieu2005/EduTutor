@@ -18,6 +18,20 @@ class ReviewSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(allow_null=True)
 
 
+class TutorQuestionCreateSerializer(serializers.Serializer):
+    content = serializers.CharField(min_length=3, max_length=3000)
+
+
+class TutorQuestionSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    tutor = serializers.CharField()
+    student = serializers.CharField()
+    content = serializers.CharField()
+    answer = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField(allow_null=True)
+    answered_at = serializers.DateTimeField(allow_null=True)
+
+
 class ComplaintCreateSerializer(serializers.Serializer):
     target_type = serializers.ChoiceField(choices=('lesson', 'tutor', 'student', 'payment', 'other'))
     target_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)

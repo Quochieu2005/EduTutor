@@ -3,7 +3,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from accounts.documents import Student
+from accounts.documents import Parent, Student
 from lessons.documents import LearningRequest, Lesson
 from tutors.documents import Subject, Tutor, TutorSubject
 
@@ -24,6 +24,11 @@ def actor_for_user(user):
         raise LessonWorkflowError('Email đang liên kết với cả học viên và gia sư.')
     if student:
         return 'student', student
+    parent = Parent.objects(email=email).first()
+    if parent:
+        child = Student.objects(parent=parent, status='active').first()
+        if child:
+            return 'student', child
     if tutor:
         return 'tutor', tutor
     raise LessonWorkflowError('Tài khoản chưa có hồ sơ học viên hoặc gia sư đang hoạt động.')

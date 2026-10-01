@@ -27,6 +27,14 @@ class LearningRequestCreateSerializer(serializers.Serializer):
         return attrs
 
 
+class TutorInvitationSerializer(serializers.Serializer):
+    contact_name = serializers.CharField(max_length=150)
+    contact_phone = serializers.RegexField(r'^\+?[0-9 () .-]{7,20}$', max_length=20)
+    student_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    grade_subject = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    message = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+
+
 class LearningRequestStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(
         choices=('accepted', 'declined', 'cancelled', 'completed', 'no_show')

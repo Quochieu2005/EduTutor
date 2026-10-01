@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -17,19 +17,16 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { TutorProfileModal } from "@/components/TutorProfileModal";
 import {
-  MOCK_FEATURED_TUTORS,
-  CITIES,
   type Tutor,
   getTutorCode,
   getTutorRoleTitle,
   getTutorInstitution,
   getTutorMajor,
-  getTutorGender,
 } from "@/lib/home-mock-data";
-import {
-  TUTOR_SUBJECT_FILTERS,
-  getSubjectFilterByQuery,
-} from "@/lib/tutor-filter-mapping";
+import { edututorApi, type Province, type Ward } from "@/lib/edututor-api";
+import { toTutorPresentation } from "@/lib/tutor-presenter";
+import { getProvinceSlug, getSubjectSlug, getSubjectFilterByQuery } from "@/lib/tutor-filter-mapping";
+import { toast } from "@/lib/toast";
 
 function TutorsListContent() {
   const router = useRouter();
@@ -40,7 +37,7 @@ function TutorsListContent() {
   const paramGrade = searchParams.get("grade") || "all";
   const paramMode = searchParams.get("mode") || "all";
   const paramCity = searchParams.get("city") || "all";
-  const paramGender = searchParams.get("gender") || "all";
+  const paramWard = searchParams.get("ward") || "all";
   const paramTutorId = searchParams.get("tutorId");
 
   const activeSubjectFilter = useMemo(
@@ -58,14 +55,14 @@ function TutorsListContent() {
   const [filterGrade, setFilterGrade] = useState(paramGrade);
   const [filterMode, setFilterMode] = useState(paramMode);
   const [filterCity, setFilterCity] = useState(paramCity);
-  const [filterGender, setFilterGender] = useState(paramGender);
+  const [filterWard, setFilterWard] = useState(paramWard);
 
   const [prevParams, setPrevParams] = useState({
     paramSubject,
     paramGrade,
     paramMode,
     paramCity,
-    paramGender,
+    paramWard,
   });
 
   if (
@@ -73,21 +70,102 @@ function TutorsListContent() {
     prevParams.paramGrade !== paramGrade ||
     prevParams.paramMode !== paramMode ||
     prevParams.paramCity !== paramCity ||
-    prevParams.paramGender !== paramGender
+    prevParams.paramWard !== paramWard
   ) {
-    setPrevParams({ paramSubject, paramGrade, paramMode, paramCity, paramGender });
+    setPrevParams({ paramSubject, paramGrade, paramMode, paramCity, paramWard });
     setFilterSubject(resolvedSubjectValue);
     setFilterGrade(paramGrade);
     setFilterMode(paramMode);
     setFilterCity(paramCity);
-    setFilterGender(paramGender);
+    setFilterWard(paramWard);
   }
 
-  // Selected tutor for modal derived directly from URL
+  const [tutors, setTutors] = useState<Tutor[]>([]);
+  const [apiSubjects, setApiSubjects] = useState<Array<{ slug: string; name: string }>>([]);
+  const [apiProvinces, setApiProvinces] = useState<Province[]>([]);
+  const [apiWardsState, setApiWardsState] = useState<{ provinceSlug: string | null; wards: Ward[] }>({
+    provinceSlug: null,
+    wards: [],
+  });
+  const [referenceLoadError, setReferenceLoadError] = useState<string | null>(null);
+  const [isLoadingTutors, setIsLoadingTutors] = useState(true);
+  const [tutorsLoadError, setTutorsLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+    Promise.all([edututorApi.subjects({ page_size: 100 }), edututorApi.provinces()])
+      .then(([subjectPage, provinces]) => {
+        if (!isCurrent) return;
+        setApiSubjects(subjectPage.results.map((subject) => ({ slug: subject.slug, name: subject.name })));
+        setApiProvinces(provinces);
+      })
+      .catch(() => {
+        if (isCurrent) setReferenceLoadError("Không thể tải môn học và khu vực từ Admin.");
+      });
+    return () => { isCurrent = false; };
+  }, []);
+
+  useEffect(() => {
+    const provinceSlug = getProvinceSlug(paramCity);
+    if (!provinceSlug) {
+      return;
+    }
+    let isCurrent = true;
+    edututorApi.wards(provinceSlug)
+      .then((wards) => {
+        if (isCurrent) setApiWardsState({ provinceSlug, wards });
+      })
+      .catch(() => {
+        if (isCurrent) setApiWardsState({ provinceSlug, wards: [] });
+      });
+    return () => { isCurrent = false; };
+  }, [paramCity]);
+
+  const provinceSlug = getProvinceSlug(paramCity);
+  const apiWards = apiWardsState.provinceSlug === provinceSlug ? apiWardsState.wards : [];
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadTutors() {
+      setIsLoadingTutors(true);
+      setTutorsLoadError(null);
+      try {
+        const page = await edututorApi.tutors({
+          page_size: 100,
+          subject: getSubjectSlug(paramSubject),
+          province: getProvinceSlug(paramCity),
+          ward: paramWard !== "all" ? paramWard : undefined,
+          teaching_mode: paramMode === "online" || paramMode === "offline" || paramMode === "both"
+            ? paramMode
+            : undefined,
+        });
+        if (isCurrent) setTutors(page.results.map(toTutorPresentation));
+      } catch {
+        if (isCurrent) {
+          setTutors([]);
+          setTutorsLoadError("Không thể tải danh sách gia sư. Vui lòng thử lại sau.");
+        }
+      } finally {
+        if (isCurrent) setIsLoadingTutors(false);
+      }
+    }
+
+    void loadTutors();
+    return () => {
+      isCurrent = false;
+    };
+  }, [activeSubjectFilter, paramCity, paramMode, paramSubject, paramWard]);
+
+  const subjectOptions = apiSubjects;
+  const provinceOptions = apiProvinces.map((province) => ({ value: province.name, label: province.name }));
+  const wardOptions = apiWards.map((ward) => ({ value: ward.slug, label: ward.name }));
+
+  // Selected tutor for modal derived directly from URL.
   const selectedTutor = useMemo(() => {
     if (!paramTutorId) return null;
-    return MOCK_FEATURED_TUTORS.find((t) => t.id === paramTutorId) || null;
-  }, [paramTutorId]);
+    return tutors.find((t) => t.id === paramTutorId) || null;
+  }, [paramTutorId, tutors]);
 
   const [triggerEl, setTriggerEl] = useState<HTMLElement | null>(null);
 
@@ -98,10 +176,11 @@ function TutorsListContent() {
     if (filterGrade !== "all") params.set("grade", filterGrade);
     if (filterMode !== "all") params.set("mode", filterMode);
     if (filterCity !== "all") params.set("city", filterCity);
-    if (filterGender !== "all") params.set("gender", filterGender);
+    if (filterWard !== "all") params.set("ward", filterWard);
 
     const qs = params.toString();
     router.push(`/tutors${qs ? `?${qs}` : ""}`);
+    toast.info("Đã áp dụng bộ lọc gia sư.");
   };
 
   // Reset filters: clear URL and reset form
@@ -110,13 +189,14 @@ function TutorsListContent() {
     setFilterGrade("all");
     setFilterMode("all");
     setFilterCity("all");
-    setFilterGender("all");
+    setFilterWard("all");
     router.push("/tutors");
+    toast.info("Đã xóa toàn bộ bộ lọc.");
   };
 
   // Filter logic
   const filteredTutors = useMemo(() => {
-    return MOCK_FEATURED_TUTORS.filter((tutor) => {
+    return tutors.filter((tutor) => {
       // 1. Môn học
       if (paramSubject !== "all") {
         if (activeSubjectFilter) {
@@ -144,15 +224,9 @@ function TutorsListContent() {
         if (tutor.city !== paramCity && !tutor.location.includes(paramCity)) return false;
       }
 
-      // 5. Giới tính
-      if (paramGender !== "all") {
-        const g = getTutorGender(tutor);
-        if (g !== paramGender) return false;
-      }
-
       return true;
     });
-  }, [activeSubjectFilter, paramSubject, paramGrade, paramMode, paramCity, paramGender]);
+  }, [tutors, activeSubjectFilter, paramSubject, paramGrade, paramMode, paramCity]);
 
   const handleOpenTutor = (tutor: Tutor, e: React.MouseEvent<HTMLElement>) => {
     setTriggerEl(e.currentTarget);
@@ -204,7 +278,7 @@ function TutorsListContent() {
         </Link>
       </div>
 
-      {/* Bộ lọc (Ảnh 2: Môn học, Cấp học, Hình thức, Khu vực, Giới tính, Nút Tìm kiếm & Xóa lọc) */}
+      {/* Bộ lọc: dữ liệu danh mục lấy từ Admin */}
       <div className="bg-white rounded-2xl p-5 border border-blue-100 shadow-sm space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
           {/* Môn học */}
@@ -219,11 +293,9 @@ function TutorsListContent() {
               className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
               <option value="all">Tất cả môn học</option>
-              {TUTOR_SUBJECT_FILTERS.map((sub) => (
-                <option key={sub.slug} value={sub.slug}>
-                  {sub.label}
-                </option>
-              ))}
+              {subjectOptions.length > 0 ? subjectOptions.map((sub) => (
+                <option key={sub.slug} value={sub.slug}>{sub.name}</option>
+              )) : <option disabled>{referenceLoadError ?? "Chưa có môn học Active trong Admin"}</option>}
             </select>
           </div>
 
@@ -271,32 +343,35 @@ function TutorsListContent() {
             <select
               id="filter-city"
               value={filterCity}
-              onChange={(e) => setFilterCity(e.target.value)}
+              onChange={(e) => {
+                setFilterCity(e.target.value);
+                setFilterWard("all");
+              }}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
               <option value="all">Tất cả tỉnh/thành</option>
-              {CITIES.filter((c) => c !== "Tất cả tỉnh/thành").map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
+              {provinceOptions.length > 0 ? provinceOptions.map((province) => (
+                <option key={province.value} value={province.value}>{province.label}</option>
+              )) : <option disabled>{referenceLoadError ?? "Chưa có khu vực trong Admin"}</option>}
             </select>
           </div>
 
-          {/* Giới tính */}
+          {/* Xã/phường */}
           <div>
-            <label htmlFor="filter-gender" className="block text-[11px] font-bold text-slate-700 mb-1">
-              Giới tính gia sư:
+            <label htmlFor="filter-ward" className="block text-[11px] font-bold text-slate-700 mb-1">
+              Xã/phường:
             </label>
             <select
-              id="filter-gender"
-              value={filterGender}
-              onChange={(e) => setFilterGender(e.target.value)}
+              id="filter-ward"
+              value={filterWard}
+              onChange={(e) => setFilterWard(e.target.value)}
+              disabled={filterCity === "all" || wardOptions.length === 0}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
-              <option value="all">Tất cả giới tính</option>
-              <option value="male">Nam</option>
-              <option value="female">Nữ</option>
+              <option value="all">Tất cả xã/phường</option>
+              {wardOptions.length > 0 ? wardOptions.map((ward) => (
+                <option key={ward.value} value={ward.value}>{ward.label}</option>
+              )) : <option disabled>{filterCity === "all" ? "Chọn tỉnh/thành trước" : "Chưa có xã/phường"}</option>}
             </select>
           </div>
         </div>
@@ -324,14 +399,18 @@ function TutorsListContent() {
       </div>
 
       {/* Kết quả rỗng (Empty State) */}
-      {filteredTutors.length === 0 ? (
+      {isLoadingTutors ? (
+        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 text-sm text-slate-500">
+          Đang tải danh sách gia sư...
+        </div>
+      ) : filteredTutors.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-3">
           <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 mx-auto flex items-center justify-center text-xl">
             <UserOutlined />
           </div>
           <h2 className="text-base font-bold text-slate-900">Không tìm thấy gia sư phù hợp</h2>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Không có gia sư nào thỏa mãn đầy đủ các tiêu chí lọc hiện tại. Vui lòng bấm &ldquo;Xóa lọc&rdquo; để xem toàn bộ danh sách hoặc thử mở rộng khu vực.
+            {tutorsLoadError ?? "Không có gia sư nào thỏa mãn đầy đủ các tiêu chí lọc hiện tại. Vui lòng bấm “Xóa lọc” để xem toàn bộ danh sách hoặc thử mở rộng khu vực."}
           </p>
           <button
             type="button"
