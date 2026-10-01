@@ -9,7 +9,7 @@ from django.utils import timezone as django_timezone
 from pymongo.errors import PyMongoError
 
 from accounts.documents import Admin
-from core.documents import Contact
+from core.documents import AdminNotification, Contact
 from lessons.documents import LearningRequest, Message
 from tutors.documents import TutorApplication
 
@@ -96,6 +96,14 @@ def _notification_items():
             'created_at': item.created_at,
             'url': reverse('chats'),
             'icon': 'message',
+        })
+    for item in AdminNotification.objects.order_by('-created_at')[:4]:
+        entries.append({
+            'title': item.title,
+            'message': item.message,
+            'created_at': item.created_at,
+            'url': item.url or reverse('management-page', kwargs={'module': 'notifications'}),
+            'icon': 'payment' if item.kind == 'payment' else 'message',
         })
     items = sorted(
         entries,

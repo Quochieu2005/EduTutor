@@ -88,7 +88,7 @@ class BannerListView(PublicView):
 
 
 def published_posts():
-    category_ids = list(BlogCategory.objects(status=1).scalar('id'))
+    category_ids = list(BlogCategory.objects(Q(status=1) | Q(status__exists=False)).scalar('id'))
     return BlogPost.objects(
         Q(category__in=category_ids) | Q(category=None),
         status='published', published_at__lte=timezone.now(),
@@ -103,7 +103,9 @@ class BlogListView(PublicView):
         query.is_valid(raise_exception=True)
         posts = published_posts().only('slug', 'title', 'excerpt', 'thumbnail', 'published_at', 'category')
         if category_slug := query.validated_data.get('category'):
-            category = BlogCategory.objects(slug=category_slug, status=1).first()
+            category = BlogCategory.objects(
+                Q(slug=category_slug) & (Q(status=1) | Q(status__exists=False)),
+            ).first()
             if category is None:
                 raise Http404
             posts = posts.filter(category=category)
@@ -127,7 +129,8 @@ class BlogDetailView(PublicView):
 class CategoryListView(PublicView):
     @extend_schema(tags=['Blog'], responses=CategorySerializer(many=True))
     def get(self, request):
-        return Response(CategorySerializer(BlogCategory.objects(status=1).order_by('name'), many=True).data)
+        categories = BlogCategory.objects(Q(status=1) | Q(status__exists=False)).order_by('name')
+        return Response(CategorySerializer(categories, many=True).data)
 
 
 class ContactSerializer(serializers.Serializer):
@@ -144,7 +147,11 @@ class ContactSerializer(serializers.Serializer):
             raise serializers.ValidationError('Có trường dữ liệu không được hỗ trợ.')
         subject_id = attrs.pop('subject_id', None)
         if subject_id is not None:
-            subject = Subject.objects(id=subject_id, status=1).first()
+            # Legacy Admin subjects may not have a persisted status field;
+            # treat a missing status as active, matching the subject API.
+            subject = Subject.objects(
+                Q(id=subject_id) & (Q(status=1) | Q(status__exists=False)),
+            ).first()
             if subject is None:
                 raise serializers.ValidationError({'subject_id': 'Môn học không tồn tại hoặc đã tắt.'})
             attrs['subject'] = subject

@@ -36,9 +36,11 @@ Tạo file `.env.local` trong thư mục `frontend`:
 ```env
 NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_publishable_key
-CLERK_SECRET_KEY=sk_test_your_secret_key
+NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID=your-google-web-client-id.apps.googleusercontent.com
+NEXT_PUBLIC_FACEBOOK_APP_ID=your-facebook-app-id
 ```
+
+Để đăng nhập Google/Facebook không qua dịch vụ trung gian, dùng cùng Google Client ID và Facebook App ID đã cấu hình ở backend. Facebook App Secret chỉ được đặt ở backend, tuyệt đối không đưa sang frontend.
 
 ## Chạy môi trường phát triển
 

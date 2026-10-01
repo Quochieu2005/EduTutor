@@ -25,8 +25,9 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
+        // Avatar, banner and blog images uploaded by EduTutor admin.
         protocol: "https",
-        hostname: "img.clerk.com",
+        hostname: "res.cloudinary.com",
         port: "",
         pathname: "/**",
       },

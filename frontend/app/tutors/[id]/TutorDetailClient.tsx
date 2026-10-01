@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useEduUser, useEduClerk } from "@/lib/auth";
@@ -19,12 +19,9 @@ import {
   LoadingOutlined,
   CloseOutlined,
 } from "@ant-design/icons";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
 import {
   type Tutor,
   type TutorOpenClass,
-  type TutorComment,
   getTutorCode,
   getTutorRoleTitle,
   getTutorInstitution,
@@ -36,11 +33,12 @@ import {
   getTutorDegree,
   getTutorAvailability,
 } from "@/lib/home-mock-data";
+import { edututorApi, type TutorQuestion, type TutorReview } from "@/lib/edututor-api";
+import { toast } from "@/lib/toast";
 import {
   addEnrollmentRequest,
   getEnrollmentRequestsForUser,
   getTutorPhone,
-  addTutorDirectRequest,
 } from "@/lib/portal-store";
 
 interface TutorDetailClientProps {
@@ -86,6 +84,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
   });
   const [isSubmittingDirect, setIsSubmittingDirect] = useState(false);
   const [directSuccess, setDirectSuccess] = useState(false);
+  const [directSuccessMessage, setDirectSuccessMessage] = useState("");
   const [directError, setDirectError] = useState<string | null>(null);
 
   // Enrollment form for open classes
@@ -99,9 +98,13 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
   const [bookingNotification, setBookingNotification] = useState<string | null>(null);
 
   // Comments
-  const [comments, setComments] = useState<TutorComment[]>(tutor.comments || []);
-  const [newCommentText, setNewCommentText] = useState("");
-  const commentIdCounter = useRef(200);
+  const [reviews, setReviews] = useState<TutorReview[]>([]);
+  const [questions, setQuestions] = useState<TutorQuestion[]>([]);
+  const [newQuestionText, setNewQuestionText] = useState("");
+  const [isSubmittingQuestion, setIsSubmittingQuestion] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackLoadedTutorId, setFeedbackLoadedTutorId] = useState<string | null>(null);
+  const [feedbackErrorTutorId, setFeedbackErrorTutorId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -120,6 +123,53 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
     }, 0);
     return () => window.clearTimeout(initialLoad);
   }, [user]);
+
+  useEffect(() => {
+    if (!isSignedIn || !user || !["student", "parent"].includes(String(user.publicMetadata?.role ?? "student"))) return;
+    let cancelled = false;
+    edututorApi.accountProfile().then((profile) => {
+      if (cancelled) return;
+      const actor = profile.student ?? profile.parent ?? profile.account ?? {};
+      const name = String(actor.name ?? profile.account?.display_name ?? user.fullName ?? "");
+      const phone = String(actor.phone ?? "");
+      setDirectForm((current) => ({ ...current, parentName: current.parentName || name, phoneNumber: current.phoneNumber || phone }));
+      setEnrollmentForm((current) => ({ ...current, studentName: current.studentName || name, parentPhone: current.parentPhone || phone, studentPhone: current.studentPhone || phone }));
+    }).catch(() => {
+      // The form remains usable when profile loading fails.
+    });
+    return () => { cancelled = true; };
+  }, [isSignedIn, user]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    Promise.all([
+      edututorApi.tutorReviews(tutor.id, { page_size: 100 }),
+      edututorApi.tutorQuestions(tutor.id, { page_size: 100 }),
+    ])
+      .then(([reviewPage, questionPage]) => {
+        if (!isCurrent) return;
+        setReviews(reviewPage.results);
+        setQuestions(questionPage.results);
+        setFeedbackLoadedTutorId(tutor.id);
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setFeedbackErrorTutorId(tutor.id);
+          setFeedbackError("Chưa tải được đánh giá và hỏi đáp từ hệ thống.");
+        }
+      });
+    return () => { isCurrent = false; };
+  }, [tutor.id]);
+
+  const isLoadingFeedback = feedbackLoadedTutorId !== tutor.id && feedbackErrorTutorId !== tutor.id;
+  const visibleFeedbackError = feedbackErrorTutorId === tutor.id ? feedbackError : null;
+  const ratingBreakdown = [5, 4, 3, 2, 1].map((rating) => ({
+    rating,
+    count: reviews.filter((review) => review.rating === rating).length,
+  }));
+  const averageRating = reviews.length
+    ? Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10
+    : 0;
 
   const code = getTutorCode(tutor);
   const roleTitle = getTutorRoleTitle(tutor);
@@ -143,20 +193,15 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
     setDirectError(null);
 
     try {
-      await new Promise((r) => setTimeout(r, 600));
-
-      addTutorDirectRequest({
-        type: activeActionModal === "hire" ? "hire" : "consult",
-        tutorId: tutor.id,
-        tutorName: tutor.name,
-        contactName: directForm.parentName.trim(),
-        contactPhone: directForm.phoneNumber.trim(),
-        studentName: directForm.studentName.trim() || undefined,
-        grade: directForm.grade || tutor.grades,
-        subject: directForm.subject || tutor.subject,
-        notes: directForm.notes.trim() || undefined,
+      const result = await edututorApi.inviteTutor(tutor.id, {
+        contact_name: directForm.parentName.trim(),
+        contact_phone: directForm.phoneNumber.trim(),
+        student_name: directForm.studentName.trim(),
+        grade_subject: directForm.grade || `${tutor.grades} - ${tutor.subject}`,
+        message: [activeActionModal === "consult" ? "Yêu cầu tư vấn trước khi mời dạy." : "", directForm.notes.trim()].filter(Boolean).join(" "),
       });
 
+      setDirectSuccessMessage(result.message);
       setDirectSuccess(true);
     } catch {
       setDirectError("Không thể gửi thông tin lúc này. Vui lòng thử lại!");
@@ -193,28 +238,32 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
     setBookingNotification(`Đăng ký thành công lớp "${selectedClass.title}".`);
   };
 
-  const handleAddComment = (e: React.FormEvent) => {
+  const handleAddQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCommentText.trim()) return;
-
-    const newComment: TutorComment = {
-      id: `cm-${commentIdCounter.current++}`,
-      author: user?.fullName || "Khách",
-      initials: (user?.fullName || "KH").slice(0, 2).toUpperCase(),
-      avatarColor: "from-blue-600 to-indigo-600",
-      content: newCommentText.trim(),
-      date: "Vừa xong",
-    };
-
-    setComments((prev) => [newComment, ...prev]);
-    setNewCommentText("");
+    if (!isSignedIn) {
+      openSignIn();
+      return;
+    }
+    const content = newQuestionText.trim();
+    if (!content) return;
+    setIsSubmittingQuestion(true);
+    try {
+      const question = await edututorApi.createTutorQuestion(tutor.id, { content });
+      setQuestions((current) => [question, ...current]);
+      setNewQuestionText("");
+      setFeedbackError(null);
+      setFeedbackErrorTutorId(null);
+      toast.success("Đã gửi câu hỏi cho gia sư.");
+    } catch {
+      setFeedbackErrorTutorId(tutor.id);
+      setFeedbackError("Không thể gửi câu hỏi lúc này. Vui lòng thử lại.");
+    } finally {
+      setIsSubmittingQuestion(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      <Header />
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="text-xs text-slate-500">
           <ol className="flex items-center gap-1.5 flex-wrap">
@@ -464,6 +513,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
               <button
                 type="button"
                 onClick={() => {
+                  if (!isSignedIn) { openSignIn({ forceRedirectUrl: `/tutors/${tutor.id}` }); return; }
                   setActiveActionModal("consult");
                   setDirectSuccess(false);
                   setDirectError(null);
@@ -475,6 +525,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
               <button
                 type="button"
                 onClick={() => {
+                  if (!isSignedIn) { openSignIn({ forceRedirectUrl: `/tutors/${tutor.id}` }); return; }
                   setActiveActionModal("hire");
                   setDirectSuccess(false);
                   setDirectError(null);
@@ -589,38 +640,93 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
           </section>
         )}
 
-        {/* 3. BÌNH LUẬN & ĐÁNH GIÁ */}
-        <section className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-slate-200 space-y-6">
-          <h2 className="text-lg font-bold text-slate-900">
-            Hỏi đáp & Đánh giá từ học viên ({comments.length})
-          </h2>
+        {/* 3. ĐÁNH GIÁ VÀ HỎI ĐÁP THEO TỪNG GIA SƯ */}
+        <section aria-labelledby="reviews-heading" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-5">
+            <div>
+              <h2 id="reviews-heading" className="text-lg font-bold text-slate-900">Đánh giá từ phụ huynh &amp; học sinh</h2>
+              <p className="mt-1 text-xs text-slate-500">Nhận xét thực tế về chất lượng giảng dạy và sự tiến bộ của học viên</p>
+            </div>
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{reviews.length} đánh giá</span>
+          </div>
 
-          <form onSubmit={handleAddComment} className="space-y-3">
-            <textarea
-              rows={3}
-              value={newCommentText}
-              onChange={(e) => setNewCommentText(e.target.value)}
-              placeholder="Đặt câu hỏi cho gia sư hoặc chia sẻ trải nghiệm học tập..."
-              className="w-full p-3.5 rounded-2xl border border-slate-200 text-xs bg-slate-50 focus:bg-white focus:outline-hidden focus:border-blue-500 resize-none"
-            />
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer"
-            >
-              Gửi câu hỏi / đánh giá
-            </button>
-          </form>
-
-          <div className="space-y-4 pt-4 border-t border-slate-100">
-            {comments.map((cm) => (
-              <div key={cm.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900">{cm.author}</span>
-                  <span className="text-[11px] text-slate-400">{cm.date}</span>
+          {isLoadingFeedback ? (
+            <p className="py-8 text-center text-xs text-slate-500">Đang tải đánh giá...</p>
+          ) : (
+            <>
+              <div className="mt-5 grid items-center gap-5 rounded-2xl border border-slate-100 bg-slate-50 p-5 md:grid-cols-[220px_1fr]">
+                <div className="border-b border-slate-200 pb-4 text-center md:border-b-0 md:border-r md:pb-0">
+                  <div className="text-4xl font-black text-slate-950">{averageRating}</div>
+                  <div className="mt-1 text-base tracking-wide text-amber-400" aria-label={`${averageRating} trên 5 sao`}>
+                    {"★".repeat(Math.floor(averageRating))}{averageRating % 1 !== 0 ? "½" : ""}{"☆".repeat(Math.max(0, 5 - Math.ceil(averageRating)))}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">Dựa trên {reviews.length} lượt đánh giá</p>
                 </div>
-                <p className="text-slate-700">{cm.content}</p>
+                <div className="space-y-2 text-xs">
+                  {ratingBreakdown.map(({ rating, count }) => {
+                    const percentage = reviews.length ? (count / reviews.length) * 100 : 0;
+                    return (
+                      <div key={rating} className="flex items-center gap-2">
+                        <span className="w-12 font-medium text-slate-600">{rating} sao</span>
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${percentage}%` }} /></div>
+                        <span className="w-5 text-right text-slate-500">{count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
+
+              {reviews.length === 0 ? (
+                <p className="py-7 text-center text-xs text-slate-500">Chưa có đánh giá được công khai.</p>
+              ) : (
+                <div className="mt-3 divide-y divide-slate-100">
+                  {reviews.map((review) => {
+                    const initials = review.student.trim().slice(0, 1).toUpperCase() || "H";
+                    const date = review.created_at ? new Intl.DateTimeFormat("vi-VN").format(new Date(review.created_at)) : "";
+                    return (
+                      <article key={review.id} className="flex gap-3 py-5 text-xs">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700">{initials}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-semibold text-slate-900">{review.student}</span>
+                            <span className="text-[11px] text-slate-400">{date}</span>
+                          </div>
+                          <div className="mt-1 text-amber-400" aria-label={`${review.rating} sao`}>{"★".repeat(review.rating)}</div>
+                          {review.comment && <p className="mt-2 leading-6 text-slate-700">{review.comment}</p>}
+                          {review.admin_reply && <p className="mt-2 rounded-xl bg-blue-50 p-2.5 text-blue-700">Phản hồi từ EduTutor: {review.admin_reply}</p>}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        <section aria-labelledby="questions-heading" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
+          <div className="border-b border-slate-100 pb-5">
+            <h2 id="questions-heading" className="text-lg font-bold text-slate-900">Bình luận &amp; Hỏi đáp về lớp học</h2>
+            <p className="mt-1 text-xs text-slate-500">Học sinh và gia sư có thể trao đổi về yêu cầu lớp tại đây</p>
+          </div>
+          <form onSubmit={handleAddQuestion} className="mt-5 space-y-3">
+            <label htmlFor="question-input" className="block text-xs font-semibold text-slate-700">Để lại bình luận của bạn:</label>
+            <textarea id="question-input" rows={3} value={newQuestionText} onChange={(e) => setNewQuestionText(e.target.value)} placeholder={isSignedIn ? "Nhập câu hỏi hoặc trao đổi..." : "Đăng nhập để bình luận..."} className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-[11px] italic text-slate-400">* Nội dung sẽ được kiểm duyệt trước khi hiển thị công khai.</span>
+              <button type="submit" disabled={isSubmittingQuestion || !newQuestionText.trim()} className="self-end rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{isSubmittingQuestion ? "Đang gửi..." : "Gửi bình luận"}</button>
+            </div>
+          </form>
+          {visibleFeedbackError && <p className="mt-3 text-xs text-rose-600">{visibleFeedbackError}</p>}
+          <div className="mt-4 divide-y divide-slate-100">
+            {questions.map((question) => (
+              <article key={question.id} className="py-4 text-xs">
+                <div className="flex items-center justify-between gap-3"><span className="font-bold text-slate-900">{question.student}</span><span className="text-[11px] text-slate-400">{question.created_at ? new Intl.DateTimeFormat("vi-VN").format(new Date(question.created_at)) : ""}</span></div>
+                <p className="mt-1 leading-6 text-slate-700">{question.content}</p>
+                {question.answer && <p className="mt-2 rounded-xl bg-blue-50 p-2.5 text-blue-700">Trả lời: {question.answer}</p>}
+              </article>
             ))}
+            {!isLoadingFeedback && questions.length === 0 && <p className="py-6 text-center text-xs text-slate-500">Chưa có bình luận nào. Hãy là người đầu tiên đặt câu hỏi!</p>}
           </div>
         </section>
 
@@ -663,7 +769,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
                     </div>
                     <h4 className="text-sm font-bold text-emerald-900">Gửi thông tin thành công!</h4>
                     <p className="leading-relaxed">
-                      EduTutor đã tiếp nhận yêu cầu của quý phụ huynh. Đội ngũ tư vấn sẽ liên hệ lại qua số điện thoại cung cấp trong vòng 30 phút.
+                      {directSuccessMessage || "EduTutor đã tiếp nhận yêu cầu, gửi thông báo tới gia sư và chuyển yêu cầu cho Admin xử lý."}
                     </p>
                     <button
                       type="button"
@@ -845,7 +951,5 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
         )}
       </main>
 
-      <Footer />
-    </div>
   );
 }

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EduTutor Admin</title>
-    <link rel="stylesheet" href="{% static 'admin_ui/css/dashboard.css' %}?v=19">
+    <link rel="stylesheet" href="{% static 'admin_ui/css/dashboard.css' %}?v=20">
 </head>
 <body>
     <div class="admin-shell">
@@ -13,18 +13,19 @@
         <div class="admin-main">
             {% include "layouts/header.html" %}
 
-            <main id="admin-dashboard">
+            <main id="admin-dashboard"{% if request.GET.finance_period %} data-dashboard-default-tab="finance"{% endif %}>
                 {% include "dashboard/dashboard-heading.html" %}
                 {% include "dashboard/dashboard-stats.html" %}
                 {% include "dashboard/dashboard-overview.html" %}
                 {% include "dashboard/dashboard-analytics.html" %}
+                {% include "dashboard/dashboard-finance.html" %}
             </main>
         </div>
     </div>
     {% include "dashboard/dashboard-notification.html" %}
 
     <script src="{% static 'admin_ui/js/collapsible.js' %}?v=2"></script>
-    <script src="{% static 'admin_ui/js/dashboard.js' %}?v=14"></script>
+    <script src="{% static 'admin_ui/js/dashboard.js' %}?v=15"></script>
     <script src="{% static 'admin_ui/js/dashboard-notification.js' %}?v=7"></script>
 </body>
 </html>

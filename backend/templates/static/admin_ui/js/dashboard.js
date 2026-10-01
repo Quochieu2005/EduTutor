@@ -104,7 +104,8 @@
 		}
 	};
 
-	setDashboardTab(savedTab || 'overview');
+        const forcedDashboardTab = document.querySelector('[data-dashboard-default-tab]')?.dataset.dashboardDefaultTab;
+        setDashboardTab(forcedDashboardTab || savedTab || 'overview');
 
 	trafficChart?.addEventListener('mousemove', (event) => {
 		const bounds = trafficChart.getBoundingClientRect();

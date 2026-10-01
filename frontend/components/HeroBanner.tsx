@@ -1,6 +1,7 @@
 "use client";
 
-import Image from "next/image";
+import { useEffect, useState } from "react";
+import { edututorApi, type Banner } from "@/lib/edututor-api";
 import {
   TeamOutlined,
   ClockCircleOutlined,
@@ -38,24 +39,46 @@ const BENEFIT_CARDS: BenefitCard[] = [
 ];
 
 export function HeroBanner() {
+  const [banner, setBanner] = useState<Banner | null>(null);
+  const [isLoadingBanner, setIsLoadingBanner] = useState(true);
+
+  useEffect(() => {
+    let isCurrent = true;
+    edututorApi.banners()
+      .then((items) => {
+        if (isCurrent) setBanner(items[0] ?? null);
+      })
+      .catch(() => {
+        if (isCurrent) setBanner(null);
+      })
+      .finally(() => {
+        if (isCurrent) setIsLoadingBanner(false);
+      });
+    return () => { isCurrent = false; };
+  }, []);
+
+  const bannerContent = banner ? (
+    <div className="relative w-full aspect-[16/7] sm:aspect-[21/9] min-h-[260px] sm:min-h-[380px] lg:min-h-[460px]">
+      {/* Banner comes only from the public API, never from a bundled mock image. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={banner.image} alt={banner.title || "Banner EduTutor"} className="h-full w-full object-cover object-center" />
+      <div className="absolute inset-0 bg-blue-950/5 pointer-events-none" />
+    </div>
+  ) : (
+    <div className="flex min-h-[260px] items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-6 text-center sm:min-h-[380px]">
+      <div className="max-w-md space-y-2">
+        <p className="text-base font-bold text-slate-800">{isLoadingBanner ? "Đang tải banner..." : "Chưa có banner đang hiển thị"}</p>
+        {!isLoadingBanner && <p className="text-sm text-slate-500">Quản trị viên cần tạo banner có trạng thái Active và nằm trong thời gian hiển thị.</p>}
+      </div>
+    </div>
+  );
+
   return (
     <section id="hero" className="relative w-full bg-slate-50 pt-2 pb-12 sm:pb-16 overflow-hidden">
       {/* Banner Container: Full width, preserves aspect ratio, responsive */}
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl shadow-blue-900/10 border border-blue-100 bg-white">
-          {/* EduTutor hero banner */}
-          <div className="relative w-full aspect-[16/7] sm:aspect-[21/9] min-h-[260px] sm:min-h-[380px] lg:min-h-[460px]">
-            <Image
-              src="/assets/edututor-hero-banner.png"
-              alt="Gia sư EduTutor đồng hành cùng học sinh"
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 1280px"
-              className="object-cover object-center"
-            />
-            {/* Soft blue overlay for brand consistency */}
-            <div className="absolute inset-0 bg-blue-950/5 pointer-events-none" />
-          </div>
+          {banner?.link_url ? <a href={banner.link_url}>{bannerContent}</a> : bannerContent}
         </div>
 
         {/* 4 Benefit Cards: Overlapping / Positioned underneath banner */}

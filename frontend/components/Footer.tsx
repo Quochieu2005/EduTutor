@@ -99,9 +99,14 @@ export function Footer() {
                 </a>
               </li>
               <li>
-                <a href="#articles" className="text-slate-400 hover:text-white transition-colors">
-                  Bài viết chia sẻ
-                </a>
+                <Link href="/recruitment" className="text-slate-400 hover:text-white transition-colors">
+                  Tuyển dụng gia sư
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog" className="text-slate-400 hover:text-white transition-colors">
+                  Blog EduTutor
+                </Link>
               </li>
             </ul>
           </div>

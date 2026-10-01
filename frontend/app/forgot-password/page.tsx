@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { recoveryError, requestPasswordReset } from "@/lib/password-reset-api";
+import { toast } from "@/lib/toast";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -25,8 +26,10 @@ export default function ForgotPasswordPage() {
     try {
       setMessage(await requestPasswordReset(email));
       setRemaining(60);
+      toast.success("Đã gửi liên kết đặt lại mật khẩu. Hãy kiểm tra cả thư mục Spam.");
     } catch (requestError) {
       setError(recoveryError(requestError));
+      toast.error(recoveryError(requestError));
     } finally {
       setLoading(false);
     }

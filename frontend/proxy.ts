@@ -1,28 +1,8 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { isClerkConfigured } from "./lib/clerk-config";
 
-// Routes that strictly require user authentication
-const isProtectedRoute = createRouteMatcher([
-  "/profile(.*)",
-  "/lessons(.*)",
-]);
-
-const clerkProxy = clerkMiddleware(async (auth, req) => {
-  // Never interfere with /admin routes — they are completely handled by Django backend
-  if (req.nextUrl.pathname.startsWith("/admin")) {
-    return;
-  }
-
-  // Protect private user routes like /profile
-  if (isProtectedRoute(req)) {
-    await auth.protect();
-  }
-});
-
-const proxy = isClerkConfigured ? clerkProxy : function authNotConfigured() {
+function proxy() {
   return NextResponse.next();
-};
+}
 
 export { proxy };
 export default proxy;

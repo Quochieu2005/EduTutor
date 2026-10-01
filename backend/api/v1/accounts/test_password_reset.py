@@ -13,7 +13,7 @@ from .services import (
     PasswordResetTokenError, request_user_password_reset, reset_user_password,
     token_pair_for,
 )
-from .views import ForgotPasswordView, ResetPasswordView
+from .views import ForgotPasswordView, ResetPasswordView, UnifiedLoginView
 from accounts.documents import User, UserPasswordResetToken
 
 
@@ -67,6 +67,32 @@ class PasswordResetApiTests(SimpleTestCase):
         ))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data['detail'], 'Liên kết đã hết hạn.')
+
+    @patch('api.v1.accounts.views.Student.objects')
+    @patch('api.v1.accounts.views.token_pair_for')
+    @patch('api.v1.accounts.views.login_user')
+    @patch('tutors.documents.Tutor.objects')
+    @patch('api.v1.accounts.views.User.objects')
+    def test_shared_login_detects_a_website_account(
+        self, users, tutors, login, token_pair, students,
+    ):
+        users.return_value.first.return_value = object()
+        tutors.return_value.first.return_value = None
+        login.return_value = SimpleNamespace(id='user-id', email='user@example.com')
+        students.return_value.first.return_value = None
+        token_pair.return_value = {
+            'access': 'access', 'refresh': 'refresh', 'token_type': 'Bearer',
+            'expires_in': 900, 'user': {'id': 'user-id', 'email': 'user@example.com'},
+        }
+
+        response = UnifiedLoginView.as_view()(self.factory.post(
+            '/api/v1/accounts/login/unified/',
+            {'email': 'user@example.com', 'password': 'mat-khau-moi'}, format='json',
+        ))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['actor_type'], 'user')
+        self.assertEqual(response.data['account']['id'], 'user-id')
 
 
 @override_settings(

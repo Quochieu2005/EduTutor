@@ -20,18 +20,17 @@ import {
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import {
-  MOCK_ALL_CLASSES,
-  SUBJECTS,
-  CITIES,
   type ClassListing,
 } from "@/lib/home-mock-data";
-import {
-  addClassApplication,
-  hasUserAppliedForClass,
-  PORTAL_STORE_EVENT,
-} from "@/lib/portal-store";
+import { edututorApi, type Province, type Subject, type Ward } from "@/lib/edututor-api";
+import { toClassPresentation } from "@/lib/class-presenter";
+import { getProvinceSlug, getSubjectSlug } from "@/lib/tutor-filter-mapping";
+import { toast } from "@/lib/toast";
 
-function ClassesListContent() {
+export function ClassesListContent({ recruitmentMode = false }: { recruitmentMode?: boolean } = {}) {
+  // The two public boards intentionally use different JobPosting sources:
+  // recruitment = admin announcements, classes = parent/student requests.
+  const canPropose = !recruitmentMode;
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isSignedIn, user } = useEduUser();
@@ -41,25 +40,29 @@ function ClassesListContent() {
   const paramSubject = searchParams.get("subject") || "all";
   const paramMode = searchParams.get("mode") || "all";
   const paramCity = searchParams.get("city") || "all";
+  const paramWard = searchParams.get("ward") || "all";
   const paramKeyword = searchParams.get("keyword") || "";
 
   // Local filter states
-  const [filterSubject, setFilterSubject] = useState(paramSubject);
+  const [filterSubject, setFilterSubject] = useState(getSubjectSlug(paramSubject) ?? "all");
   const [filterMode, setFilterMode] = useState(paramMode);
   const [filterCity, setFilterCity] = useState(paramCity);
+  const [filterWard, setFilterWard] = useState(paramWard);
   const [filterKeyword, setFilterKeyword] = useState(paramKeyword);
 
-  const [prevParams, setPrevParams] = useState({ paramSubject, paramMode, paramCity, paramKeyword });
+  const [prevParams, setPrevParams] = useState({ paramSubject, paramMode, paramCity, paramWard, paramKeyword });
   if (
     prevParams.paramSubject !== paramSubject ||
     prevParams.paramMode !== paramMode ||
     prevParams.paramCity !== paramCity ||
+    prevParams.paramWard !== paramWard ||
     prevParams.paramKeyword !== paramKeyword
   ) {
-    setPrevParams({ paramSubject, paramMode, paramCity, paramKeyword });
-    setFilterSubject(paramSubject);
+    setPrevParams({ paramSubject, paramMode, paramCity, paramWard, paramKeyword });
+    setFilterSubject(getSubjectSlug(paramSubject) ?? "all");
     setFilterMode(paramMode);
     setFilterCity(paramCity);
+    setFilterWard(paramWard);
     setFilterKeyword(paramKeyword);
   }
 
@@ -69,10 +72,12 @@ function ClassesListContent() {
     if (filterSubject !== "all") params.set("subject", filterSubject);
     if (filterMode !== "all") params.set("mode", filterMode);
     if (filterCity !== "all") params.set("city", filterCity);
+    if (filterWard !== "all") params.set("ward", filterWard);
     if (filterKeyword.trim()) params.set("keyword", filterKeyword.trim());
 
     const qs = params.toString();
-    router.push(`/classes${qs ? `?${qs}` : ""}`);
+    router.push(`${recruitmentMode ? "/recruitment" : "/classes"}${qs ? `?${qs}` : ""}`);
+    toast.info("Đã áp dụng bộ lọc lớp học.");
   };
 
   // Reset filters
@@ -80,8 +85,10 @@ function ClassesListContent() {
     setFilterSubject("all");
     setFilterMode("all");
     setFilterCity("all");
+    setFilterWard("all");
     setFilterKeyword("");
-    router.push("/classes");
+    router.push(recruitmentMode ? "/recruitment" : "/classes");
+    toast.info("Đã xóa toàn bộ bộ lọc.");
   };
 
   // State for apply dialog
@@ -90,22 +97,88 @@ function ClassesListContent() {
   const [isSubmittingApply, setIsSubmittingApply] = useState(false);
   const [applySuccess, setApplySuccess] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
-  const [, setApplicationStoreVersion] = useState(0);
+  const [classes, setClasses] = useState<ClassListing[]>([]);
+  const [apiSubjects, setApiSubjects] = useState<Subject[]>([]);
+  const [apiProvinces, setApiProvinces] = useState<Province[]>([]);
+  const [apiWardsState, setApiWardsState] = useState<{ provinceSlug: string | null; wards: Ward[] }>({
+    provinceSlug: null,
+    wards: [],
+  });
+  const [referenceLoadError, setReferenceLoadError] = useState<string | null>(null);
+  const [isLoadingClasses, setIsLoadingClasses] = useState(true);
+  const [classesLoadError, setClassesLoadError] = useState<string | null>(null);
+  const [appliedClassIds, setAppliedClassIds] = useState<string[]>([]);
 
   useEffect(() => {
-    const handleStoreChange = () => setApplicationStoreVersion((v) => v + 1);
-    window.addEventListener(PORTAL_STORE_EVENT, handleStoreChange);
-    return () => window.removeEventListener(PORTAL_STORE_EVENT, handleStoreChange);
+    let isCurrent = true;
+    Promise.all([edututorApi.subjects({ page_size: 100 }), edututorApi.provinces()])
+      .then(([subjectPage, provinces]) => {
+        if (!isCurrent) return;
+        setApiSubjects(subjectPage.results);
+        setApiProvinces(provinces);
+      })
+      .catch(() => {
+        if (isCurrent) setReferenceLoadError("Không thể tải môn học và khu vực từ Admin.");
+      });
+    return () => { isCurrent = false; };
   }, []);
+
+  useEffect(() => {
+    const provinceSlug = getProvinceSlug(paramCity);
+    if (!provinceSlug) {
+      return;
+    }
+    let isCurrent = true;
+    edututorApi.wards(provinceSlug)
+      .then((wards) => {
+        if (isCurrent) setApiWardsState({ provinceSlug, wards });
+      })
+      .catch(() => {
+        if (isCurrent) setApiWardsState({ provinceSlug, wards: [] });
+      });
+    return () => { isCurrent = false; };
+  }, [paramCity]);
+
+  const provinceSlug = getProvinceSlug(paramCity);
+  const apiWards = apiWardsState.provinceSlug === provinceSlug ? apiWardsState.wards : [];
+
+  useEffect(() => {
+    let isCurrent = true;
+    async function loadClasses() {
+      setIsLoadingClasses(true);
+      setClassesLoadError(null);
+      try {
+        const page = await edututorApi.tutorJobs({
+          page_size: 100,
+          posted_by: recruitmentMode ? "admin" : "parent",
+          subject: getSubjectSlug(paramSubject),
+          province: getProvinceSlug(paramCity),
+          ward: paramWard !== "all" ? paramWard : undefined,
+          search: paramKeyword.trim() || undefined,
+        });
+        if (isCurrent) setClasses(page.results.map(toClassPresentation));
+      } catch {
+        if (isCurrent) {
+          setClasses([]);
+          setClassesLoadError("Không thể tải danh sách lớp từ hệ thống. Vui lòng thử lại sau.");
+        }
+      } finally {
+        if (isCurrent) setIsLoadingClasses(false);
+      }
+    }
+    void loadClasses();
+    return () => { isCurrent = false; };
+  }, [paramCity, paramKeyword, paramSubject, paramWard, recruitmentMode]);
+
+  const subjectOptions = apiSubjects;
+  const provinceOptions = apiProvinces.map((province) => ({ value: province.name, label: province.name }));
+  const wardOptions = apiWards.map((ward) => ({ value: ward.slug, label: ward.name }));
 
   // Filtered classes logic
   const filteredClasses = useMemo(() => {
-    return MOCK_ALL_CLASSES.filter((cls) => {
+    return classes.filter((cls) => {
       // 1. Môn học
-      if (
-        paramSubject !== "all" &&
-        !cls.subject.toLowerCase().includes(paramSubject.toLowerCase())
-      ) {
+      if (paramSubject !== "all" && getSubjectSlug(cls.subject) !== getSubjectSlug(paramSubject)) {
         return false;
       }
 
@@ -132,7 +205,7 @@ function ClassesListContent() {
 
       return true;
     });
-  }, [paramSubject, paramMode, paramCity, paramKeyword]);
+  }, [classes, paramSubject, paramMode, paramCity, paramKeyword]);
 
   // Click "Đề nghị dạy" handler
   const handleStartApply = (cls: ClassListing) => {
@@ -154,20 +227,11 @@ function ClassesListContent() {
     setApplyError(null);
 
     try {
-      await new Promise((r) => setTimeout(r, 600));
-
-      addClassApplication({
-        classId: applyingClass.id,
-        classCode: applyingClass.code,
-        classTitle: applyingClass.title,
-        userId: user.id,
-        userName: user.fullName || "Gia sư",
-        userEmail: user.primaryEmailAddress?.emailAddress || "",
-        userPhone: user.primaryPhoneNumber?.phoneNumber || "0912 345 678",
-        note: applyNote.trim() || undefined,
-      });
+      await edututorApi.applyForTutorJob(applyingClass.id, { cover_letter: applyNote.trim() || undefined });
+      setAppliedClassIds((current) => current.includes(applyingClass.id) ? current : [...current, applyingClass.id]);
 
       setApplySuccess(true);
+      toast.success("Đã gửi đề nghị nhận lớp thành công.");
     } catch {
       setApplyError("Không thể gửi đề nghị dạy lúc này. Vui lòng thử lại!");
     } finally {
@@ -194,12 +258,18 @@ function ClassesListContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            DANH SÁCH LỚP MỚI
+            {recruitmentMode ? "TUYỂN DỤNG GIA SƯ" : "DANH SÁCH LỚP MỚI"}
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-1">
-            Tổng cộng{" "}
-            <span className="font-bold text-blue-600 text-base">{filteredClasses.length}</span> lớp
-            học đang cần tuyển gia sư trên toàn quốc, cập nhật liên tục mỗi ngày.
+            {recruitmentMode
+              ? "Các thông báo tuyển dụng gia sư đang mở, được cập nhật trực tiếp từ Admin."
+              : <>Tổng cộng{" "}</>}
+            {!recruitmentMode && (
+              <>
+                <span className="font-bold text-blue-600 text-base">{filteredClasses.length}</span> lớp
+                học đang cần gia sư do phụ huynh/học viên gửi, cập nhật liên tục mỗi ngày.
+              </>
+            )}
           </p>
         </div>
 
@@ -213,7 +283,7 @@ function ClassesListContent() {
 
       {/* Bộ lọc (Ảnh 5: Môn học, Hình thức dạy, Khu vực, Ô tìm kiếm theo mã lớp/địa chỉ, Nút Tìm kiếm & Xóa lọc) */}
       <div className="bg-white rounded-2xl p-5 border border-blue-100 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
           {/* Môn học */}
           <div>
             <label htmlFor="filter-class-subject" className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -226,11 +296,9 @@ function ClassesListContent() {
               className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
               <option value="all">Tất cả môn học</option>
-              {SUBJECTS.filter((s) => s !== "Tất cả môn").map((sub) => (
-                <option key={sub} value={sub}>
-                  {sub}
-                </option>
-              ))}
+              {subjectOptions.length > 0 ? subjectOptions.map((sub) => (
+                <option key={sub.slug} value={sub.slug}>{sub.name}</option>
+              )) : <option disabled>{referenceLoadError ?? "Chưa có môn học Active trong Admin"}</option>}
             </select>
           </div>
 
@@ -259,15 +327,35 @@ function ClassesListContent() {
             <select
               id="filter-class-city"
               value={filterCity}
-              onChange={(e) => setFilterCity(e.target.value)}
+              onChange={(e) => {
+                setFilterCity(e.target.value);
+                setFilterWard("all");
+              }}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
               <option value="all">Tất cả tỉnh/thành</option>
-              {CITIES.filter((c) => c !== "Tất cả tỉnh/thành").map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
+              {provinceOptions.length > 0 ? provinceOptions.map((province) => (
+                <option key={province.value} value={province.value}>{province.label}</option>
+              )) : <option disabled>{referenceLoadError ?? "Chưa có khu vực trong Admin"}</option>}
+            </select>
+          </div>
+
+          {/* Xã/phường */}
+          <div>
+            <label htmlFor="filter-class-ward" className="block text-[11px] font-bold text-slate-700 mb-1">
+              Xã/phường:
+            </label>
+            <select
+              id="filter-class-ward"
+              value={filterWard}
+              onChange={(e) => setFilterWard(e.target.value)}
+              disabled={filterCity === "all" || wardOptions.length === 0}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="all">Tất cả xã/phường</option>
+              {wardOptions.length > 0 ? wardOptions.map((ward) => (
+                <option key={ward.value} value={ward.value}>{ward.label}</option>
+              )) : <option disabled>{filterCity === "all" ? "Chọn tỉnh/thành trước" : "Chưa có xã/phường"}</option>}
             </select>
           </div>
 
@@ -310,14 +398,20 @@ function ClassesListContent() {
       </div>
 
       {/* Kết quả rỗng */}
-      {filteredClasses.length === 0 ? (
+      {isLoadingClasses ? (
+        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 text-sm text-slate-500">
+          Đang tải danh sách lớp mới...
+        </div>
+      ) : filteredClasses.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-3">
           <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 mx-auto flex items-center justify-center text-xl">
             <BookOutlined />
           </div>
           <h2 className="text-base font-bold text-slate-900">Không tìm thấy lớp học phù hợp</h2>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Không có lớp nào thỏa mãn bộ lọc hiện tại. Vui lòng bấm &ldquo;Xóa lọc&rdquo; để xem toàn bộ danh sách lớp mới.
+            {classesLoadError ?? (classes.length === 0
+              ? "Hiện chưa có yêu cầu tìm gia sư ở trạng thái Open. Hãy tạo hoặc chuyển tin tuyển dụng sang Open trong Admin để lớp xuất hiện tại đây."
+              : "Không có lớp nào thỏa mãn bộ lọc hiện tại. Vui lòng bấm “Xóa lọc” để xem toàn bộ danh sách lớp mới.")}
           </p>
           <button
             type="button"
@@ -338,12 +432,12 @@ function ClassesListContent() {
                   <th className="py-4 px-5 w-44">Mã lớp & Ngày</th>
                   <th className="py-4 px-5">Thông tin lớp học</th>
                   <th className="py-4 px-5 w-44">Học phí tháng</th>
-                  <th className="py-4 px-5 w-60">Phí giao lớp & Đề nghị</th>
+                  <th className="py-4 px-5 w-60">{canPropose ? "Phí giao lớp & Đề nghị" : "Thông tin tuyển dụng"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
                 {filteredClasses.map((cls) => {
-                  const hasApplied = hasUserAppliedForClass(user?.id, cls.id);
+                  const hasApplied = appliedClassIds.includes(cls.id);
                   const postedDate = cls.postedDate || "Hôm nay";
                   const contractFee = cls.contractFee || "25% - 30%";
                   const applicationsCount = cls.applicationsCount ?? 2;
@@ -353,7 +447,7 @@ function ClassesListContent() {
                       {/* Cột 1: Mã lớp & Ngày đăng */}
                       <td className="py-5 px-5 align-top space-y-1.5">
                         <Link
-                          href={`/classes/${cls.id}`}
+                          href={recruitmentMode ? `/recruitment/${cls.id}` : `/classes/${cls.id}`}
                           className="inline-block px-2.5 py-1 rounded-md bg-blue-100/80 text-blue-800 font-extrabold text-xs hover:bg-blue-200 transition-colors"
                         >
                           {cls.code}
@@ -362,7 +456,7 @@ function ClassesListContent() {
                           <CalendarOutlined className="text-slate-400" />
                           <span>{postedDate}</span>
                         </p>
-                        <div>
+                        {canPropose ? <div>
                           {cls.status === "needing" ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold">
                               ● Cần gia sư
@@ -372,14 +466,18 @@ function ClassesListContent() {
                               ✓ Đã có gia sư
                             </span>
                           )}
-                        </div>
+                        </div> : (
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                            Tin tuyển dụng do Admin đăng. Gia sư xem chi tiết để nắm thông tin; đề nghị dạy chỉ thực hiện trên bảng Nhận lớp.
+                          </p>
+                        )}
                       </td>
 
                       {/* Cột 2: Thông tin lớp học */}
                       <td className="py-5 px-5 align-top space-y-2">
                         <div>
                           <h2 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                            <Link href={`/classes/${cls.id}`}>
+                            <Link href={recruitmentMode ? `/recruitment/${cls.id}` : `/classes/${cls.id}`}>
                               {cls.title}
                             </Link>
                           </h2>
@@ -441,7 +539,7 @@ function ClassesListContent() {
                           </p>
                         </div>
 
-                        <div>
+                        {canPropose ? <div>
                           {hasApplied ? (
                             <button
                               type="button"
@@ -461,7 +559,11 @@ function ClassesListContent() {
                               <span>Đề nghị dạy</span>
                             </button>
                           )}
-                        </div>
+                        </div> : (
+                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                            Tin tuyển dụng do Admin đăng. Gia sư xem chi tiết; đề nghị dạy chỉ thực hiện trên bảng Nhận lớp.
+                          </p>
+                        )}
                       </td>
                     </tr>
                   );
@@ -473,7 +575,7 @@ function ClassesListContent() {
           {/* DANH SÁCH MOBILE (Ảnh 5: Chuyển dạng card) */}
           <div className="lg:hidden space-y-4">
             {filteredClasses.map((cls) => {
-              const hasApplied = hasUserAppliedForClass(user?.id, cls.id);
+              const hasApplied = appliedClassIds.includes(cls.id);
               const postedDate = cls.postedDate || "Hôm nay";
               const contractFee = cls.contractFee || "25% - 30%";
               const applicationsCount = cls.applicationsCount ?? 2;
@@ -492,7 +594,7 @@ function ClassesListContent() {
 
                   <div>
                     <h2 className="font-extrabold text-slate-900 text-base leading-snug">
-                      <Link href={`/classes/${cls.id}`} className="hover:text-blue-600">
+                      <Link href={recruitmentMode ? `/recruitment/${cls.id}` : `/classes/${cls.id}`} className="hover:text-blue-600">
                         {cls.title}
                       </Link>
                     </h2>
@@ -532,7 +634,7 @@ function ClassesListContent() {
                     </div>
                   </div>
 
-                  <div>
+                  {canPropose && <div>
                     {hasApplied ? (
                       <button
                         type="button"
@@ -552,7 +654,7 @@ function ClassesListContent() {
                         <span>Đề nghị dạy lớp này</span>
                       </button>
                     )}
-                  </div>
+                  </div>}
                 </div>
               );
             })}

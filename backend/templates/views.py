@@ -3,6 +3,7 @@ import logging
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.cache import cache
@@ -18,6 +19,7 @@ from mongoengine.connection import ConnectionFailure
 from pymongo.errors import PyMongoError
 
 from accounts.documents import Admin, AuthToken, Student, User
+from accounts.email_registry import assert_email_available
 from accounts.cloudinary_media import (
     delete_asset, upload_admin_avatar, upload_banner_image, upload_blog_thumbnail,
     upload_tutor_avatar,
@@ -42,6 +44,7 @@ from core.admin_notifications import (
 from core.admin_header_notifications import mark_admin_notifications_read
 from core.admin_reviews_complaints import (
     COMPLAINT_STATUS_LABELS,
+    QUESTION_STATUS_LABELS,
     REVIEW_STATUS_LABELS,
     review_complaint_update,
     reviews_complaints_page_config,
@@ -86,6 +89,7 @@ from tutors.documents import (
 
 
 logger = logging.getLogger(__name__)
+VIETNAM_TIME_ZONE = ZoneInfo('Asia/Ho_Chi_Minh')
 
 ADMIN_RESET_OTP_TTL_MINUTES = 2
 ADMIN_RESET_OTP_MAX_ATTEMPTS = 5
@@ -477,6 +481,38 @@ def _format_currency(amount):
     return f'{amount:,.0f}'.replace(',', '.') + ' VNĐ'
 
 
+def _vietnam_datetime(value):
+    """Format stored UTC Mongo values for a financial record in GMT+7."""
+    if value is None:
+        return '—'
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(VIETNAM_TIME_ZONE).strftime('%H:%M:%S · %d/%m/%Y (GMT+7)')
+
+
+def _finance_period_window(now, period):
+    """Return an inclusive operational range using Vietnam calendar dates."""
+    local_now = now.astimezone(VIETNAM_TIME_ZONE)
+    today = local_now.date()
+    if period == 'day':
+        start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        label = f'Hôm nay · {today.strftime("%d/%m/%Y")}'
+    elif period == 'week':
+        monday = today - timedelta(days=today.weekday())
+        start = datetime.combine(monday, datetime.min.time(), tzinfo=VIETNAM_TIME_ZONE)
+        label = f'Tuần {monday.strftime("%d/%m")}–{today.strftime("%d/%m/%Y")}'
+    else:
+        start = datetime.combine(today.replace(day=1), datetime.min.time(), tzinfo=VIETNAM_TIME_ZONE)
+        label = f'Tháng {today.strftime("%m/%Y")}'
+    return {
+        'key': period,
+        'label': label,
+        'start': start.astimezone(timezone.utc),
+        'end': local_now.astimezone(timezone.utc),
+        'updated_at': _vietnam_datetime(local_now),
+    }
+
+
 def _recruitment_budget(job):
     if job.budget_min is None and job.budget_max is None:
         return 'Thỏa thuận'
@@ -560,12 +596,14 @@ def _recruitment_page_config(module):
             'description': 'Đăng và quản lý các nhu cầu tìm gia sư theo môn học, khu vực và lịch học.',
             'columns': [
                 ('title', 'Tiêu đề'), ('subject', 'Môn học'), ('area', 'Khu vực'),
-                ('budget', 'Ngân sách'), ('schedule', 'Lịch mong muốn'), ('status', 'Trạng thái'),
+                ('budget', 'Ngân sách'), ('schedule', 'Lịch mong muốn'), ('source', 'Nguồn yêu cầu'), ('status', 'Trạng thái'),
             ],
             'statuses': ['Open', 'Closed'],
             'rows': [(
                 job.title, _recruitment_reference_name(job.subject), _recruitment_area(job),
-                _recruitment_budget(job), job.schedule_expect or '-', _recruitment_status(job.status),
+                _recruitment_budget(job), job.schedule_expect or '-',
+                'Admin' if job.posted_by_type == 'admin' else 'Phụ huynh / học viên',
+                _recruitment_status(job.status),
             ) for job in jobs],
             'records': jobs,
         }
@@ -576,12 +614,14 @@ def _recruitment_page_config(module):
             'title': 'Ứng viên gia sư', 'group': 'Tuyển dụng', 'singular': 'ứng viên',
             'description': 'Theo dõi hồ sơ ứng tuyển và tiến độ tuyển dụng của các ứng viên gia sư.',
             'columns': [
-                ('candidate', 'Ứng viên'), ('email', 'Email'), ('phone', 'Số điện thoại'),
+                ('candidate', 'Ứng viên'), ('email', 'Email'), ('phone', 'Số điện thoại'), ('job', 'Tin tuyển dụng'),
                 ('applied', 'Ngày ứng tuyển'), ('status', 'Trạng thái'),
             ],
             'statuses': ['Pending', 'Reviewing', 'Approved', 'Rejected'],
             'rows': [(
-                item.name, item.email, item.phone, _recruitment_date(item.created_at),
+                item.name, item.email, item.phone,
+                item.job_posting.title if item.job_posting else 'Đăng ký chung',
+                _recruitment_date(item.created_at),
                 _recruitment_status(item.status),
             ) for item in applications],
         }
@@ -591,12 +631,13 @@ def _recruitment_page_config(module):
             'title': 'Duyệt hồ sơ gia sư', 'group': 'Tuyển dụng', 'singular': 'hồ sơ gia sư',
             'description': 'Kiểm tra hồ sơ, giấy tờ và đưa ra quyết định phê duyệt ứng viên.',
             'columns': [
-                ('applicant', 'Ứng viên'), ('documents', 'Tài liệu'), ('submitted', 'Ngày gửi'),
+                ('applicant', 'Ứng viên'), ('job', 'Tin tuyển dụng'), ('documents', 'Tài liệu'), ('submitted', 'Ngày gửi'),
                 ('reviewed', 'Duyệt lúc'), ('status', 'Trạng thái'),
             ],
             'statuses': ['Pending', 'Reviewing', 'Approved', 'Rejected'],
             'rows': [(
                 item.name,
+                item.job_posting.title if item.job_posting else 'Đăng ký chung',
                 ' / '.join(label for label, url in (
                     ('CV', item.cv_file), ('CCCD', item.id_card_file), ('Bằng cấp', item.education_proof_file),
                 ) if url) or 'Chưa đính kèm',
@@ -1433,6 +1474,7 @@ def tutor_create(request):
         return redirect('management-page', module='tutors')
     try:
         values = _tutor_form_values(request)
+        assert_email_available(values['email'])
         tutor = Tutor(slug=_catalogue_slug(Tutor, values['name'], 'tutor'))
         for field in ('name', 'email', 'phone', 'headline', 'bio', 'education_level', 'experience_years', 'hourly_rate_min', 'hourly_rate_max', 'teaching_mode', 'status', 'is_verified'):
             setattr(tutor, field, values[field])
@@ -1480,6 +1522,7 @@ def tutor_edit(request, slug):
         return _tutor_redirect(request, 'Không tìm thấy gia sư.', error=True)
     try:
         values = _tutor_form_values(request, tutor)
+        assert_email_available(values['email'], exclude_kind='tutor', exclude_id=tutor.id)
         old_public_id = tutor.avatar_public_id
         for field in ('name', 'email', 'phone', 'headline', 'bio', 'education_level', 'experience_years', 'hourly_rate_min', 'hourly_rate_max', 'teaching_mode', 'status', 'is_verified'):
             setattr(tutor, field, values[field])
@@ -1798,13 +1841,11 @@ def management_page(request, module):
                 'role': feedback['kind'],
                 'edit_url': reverse('review-complaint-update', kwargs={'record_key': feedback['key']}),
                 'form_values': json.dumps({
-                    'status': (
-                        getattr(feedback['record'], 'status', 'visible')
-                        if feedback['kind'] == 'review' else feedback['record'].status
-                    ),
+                    'status': getattr(feedback['record'], 'status', 'visible'),
                     'response_message': (
                         getattr(feedback['record'], 'admin_reply', '') or ''
-                        if feedback['kind'] == 'review' else feedback['record'].response_message or ''
+                        if feedback['kind'] == 'review'
+                        else getattr(feedback['record'], 'answer', '') or getattr(feedback['record'], 'response_message', '') or ''
                     ),
                 }),
                 'can_edit': True,
@@ -2040,7 +2081,11 @@ def management_page(request, module):
                 'select_choices': True,
                 'choices': [
                     {'value': value, 'label': label}
-                    for value, label in {**COMPLAINT_STATUS_LABELS, **REVIEW_STATUS_LABELS}.items()
+                    for value, label in {
+                        **COMPLAINT_STATUS_LABELS,
+                        **REVIEW_STATUS_LABELS,
+                        **QUESTION_STATUS_LABELS,
+                    }.items()
                 ],
             },
             {
@@ -2271,8 +2316,7 @@ def administrator_create(request):
     password_confirmation = request.POST.get('password_confirmation', '')
     try:
         values = _admin_form_values(request)
-        if Admin.objects(email=values['email']).first():
-            raise ValueError('Email này đã được sử dụng bởi quản trị viên khác.')
+        assert_email_available(values['email'])
         if len(password) < 8:
             raise ValueError('Mật khẩu phải có ít nhất 8 ký tự.')
         if password != password_confirmation:
@@ -2312,9 +2356,7 @@ def administrator_edit(request, slug):
 
     try:
         values = _admin_form_values(request)
-        duplicate = Admin.objects(email=values['email'], id__ne=admin.id).first()
-        if duplicate:
-            raise ValueError('Email này đã được sử dụng bởi quản trị viên khác.')
+        assert_email_available(values['email'], exclude_kind='admin', exclude_id=admin.id)
         # Role, permissions, manager and status are never self-editable.
         values['role'] = admin.role
         values['status'] = admin.status
@@ -2465,16 +2507,63 @@ def administrator_avatar(request, slug):
     return response
 
 
-def _dashboard_data(today, week_end):
+def _dashboard_data(today, week_end, *, finance_period='month', now=None):
     """Build a short-lived shared dashboard snapshot for Atlas-backed admin."""
-    paid_payments = Payment.objects(status='paid')
+    now = now or datetime.now(timezone.utc)
+    paid_payments = list(Payment.objects(status='paid').select_related())
     revenue = sum(payment.total_amount or 0 for payment in paid_payments)
     upcoming_lessons = list(
         Lesson.objects(session_date__gte=today, session_date__lte=week_end)
         .order_by('session_date', 'start_time').limit(6).select_related()
     )
     recent_applications = list(TutorApplication.objects.order_by('-created_at').limit(5))
-    paid_count = paid_payments.count()
+    paid_count = len(paid_payments)
+    finance_window = _finance_period_window(now, finance_period)
+    paid_in_period = list(Payment.objects(
+        status='paid', paid_at__gte=finance_window['start'], paid_at__lte=finance_window['end'],
+    ).order_by('-paid_at').select_related())
+    pending_in_period = list(Payment.objects(
+        status='pending', created_at__gte=finance_window['start'], created_at__lte=finance_window['end'],
+    ).select_related())
+    pending_total = sum(payment.total_amount or 0 for payment in pending_in_period)
+    payout_due = sum(
+        payment.tutor_payout_amount or 0 for payment in paid_in_period
+        if payment.tutor_payout_status == 'pending'
+    )
+    payout_paid = sum(
+        payment.tutor_payout_amount or 0 for payment in Payment.objects(
+            status='paid', tutor_payout_status='paid',
+            tutor_paid_at__gte=finance_window['start'], tutor_paid_at__lte=finance_window['end'],
+        )
+    )
+    recent_payments = paid_in_period[:8]
+
+    def finance_payment_row(payment):
+        return {
+            'code': f"HP-{(payment.billing_month or payment.created_at.strftime('%Y-%m')).replace('-', '')}-{int(payment.id):05d}",
+            'student': _recruitment_reference_name(payment.student),
+            'tutor': _recruitment_reference_name(payment.tutor),
+            'amount': _format_currency(payment.total_amount),
+            'payout': _format_currency(payment.tutor_payout_amount),
+            'status': 'Đã thanh toán' if payment.status == 'paid' else 'Chờ thanh toán',
+            'paid_at': _vietnam_datetime(payment.paid_at),
+        }
+
+    # Show the three calendar windows together. They are separate cards rather
+    # than one changing list so an administrator can compare cash flow at a
+    # glance without accidentally losing the month view.
+    finance_reports = {}
+    for key in ('day', 'week', 'month'):
+        window = _finance_period_window(now, key)
+        records = paid_in_period if key == finance_period else list(Payment.objects(
+            status='paid', paid_at__gte=window['start'], paid_at__lte=window['end'],
+        ).order_by('-paid_at').select_related())
+        finance_reports[key] = {
+            'label': window['label'],
+            'total': _format_currency(sum(payment.total_amount or 0 for payment in records)),
+            'count': len(records),
+            'payments': [finance_payment_row(payment) for payment in records[:4]],
+        }
 
     return {
         'today_label': today.strftime('%d/%m/%Y'),
@@ -2497,16 +2586,32 @@ def _dashboard_data(today, week_end):
             {'name': application.name, 'email': application.email, 'created': _recruitment_date(application.created_at), 'status': _recruitment_status(application.status)}
             for application in recent_applications
         ],
+        'finance': {
+            'period': finance_window['key'],
+            'period_label': finance_window['label'],
+            'updated_at': finance_window['updated_at'],
+            'received_total': _format_currency(sum(payment.total_amount or 0 for payment in paid_in_period)),
+            'pending_total': _format_currency(pending_total),
+            'payout_due': _format_currency(payout_due),
+            'payout_paid': _format_currency(payout_paid),
+            'reports': finance_reports,
+        },
     }
 
 
 def dashboard(request):
     welcome_email = request.session.pop('dashboard_welcome_email', '')
-    today = datetime.now(timezone.utc).date()
-    cache_key = f'admin-dashboard:v2:{today.isoformat()}'
+    finance_period = request.GET.get('finance_period', 'month').lower()
+    if finance_period not in ('day', 'week', 'month'):
+        finance_period = 'month'
+    now = datetime.now(timezone.utc)
+    today = now.astimezone(VIETNAM_TIME_ZONE).date()
+    cache_key = f'admin-dashboard:v4:{today.isoformat()}:{finance_period}'
     dashboard_data = cache.get(cache_key)
     if dashboard_data is None:
-        dashboard_data = _dashboard_data(today, today + timedelta(days=7))
+        dashboard_data = _dashboard_data(
+            today, today + timedelta(days=7), finance_period=finance_period, now=now,
+        )
         cache.set(cache_key, dashboard_data, 30)
     return render(request, 'admin/dashboard.html', {
         'welcome_email': welcome_email,
@@ -2615,10 +2720,12 @@ def account_settings(request):
                 'form_error': 'Email đăng nhập không được để trống.',
             }, status=400)
 
-        if Admin.objects(email=email, id__ne=admin.id).first():
+        try:
+            assert_email_available(email, exclude_kind='admin', exclude_id=admin.id)
+        except ValueError as error:
             return render(request, 'admin/setting/account.html', {
                 'account': {**_account_data(admin), 'email': email},
-                'form_error': 'Email này đã được một tài khoản Admin khác sử dụng.',
+                'form_error': str(error),
             }, status=409)
 
         admin.email = email

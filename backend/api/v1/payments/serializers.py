@@ -11,7 +11,9 @@ class PaymentTransactionSerializer(serializers.Serializer):
     amount = serializers.IntegerField()
     status = serializers.CharField()
     gateway_transaction_id = serializers.CharField(allow_null=True)
+    payment_reference = serializers.CharField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
+    reused = serializers.BooleanField(required=False)
 
 
 class PaymentItemSerializer(serializers.Serializer):
@@ -59,3 +61,18 @@ class TutorPayoutSerializer(serializers.Serializer):
     tuition_status = serializers.CharField()
     payout_status = serializers.CharField()
     paid_at = serializers.DateTimeField(allow_null=True)
+
+
+class PaymentWebhookSerializer(serializers.Serializer):
+    """Normalized payload accepted from a payment-gateway adapter."""
+
+    event = serializers.CharField(max_length=80, required=False, default='payment.succeeded')
+    transaction_id = serializers.CharField(max_length=255)
+    reference = serializers.CharField(max_length=80)
+    amount = serializers.IntegerField(min_value=1)
+    method = serializers.ChoiceField(
+        choices=('bank_transfer', 'momo', 'zalopay', 'vnpay'),
+        required=False,
+        default='bank_transfer',
+    )
+    paid_at = serializers.DateTimeField(required=False)

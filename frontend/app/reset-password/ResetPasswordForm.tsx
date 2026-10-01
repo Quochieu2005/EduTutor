@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { recoveryError, resetPassword } from "@/lib/password-reset-api";
+import { toast } from "@/lib/toast";
 
 function PasswordInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   const [visible, setVisible] = useState(false);
@@ -45,6 +46,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
     if (loading) return;
     if (password !== confirmation) {
       setError("Mật khẩu xác nhận không trùng khớp.");
+      toast.error("Mật khẩu xác nhận không trùng khớp.");
       return;
     }
     setLoading(true);
@@ -53,8 +55,10 @@ export function ResetPasswordForm({ token }: { token: string }) {
       setMessage(await resetPassword({ token, new_password: password, confirm_password: confirmation }));
       setPassword("");
       setConfirmation("");
+      toast.success("Đổi mật khẩu thành công. Bạn có thể đăng nhập lại.");
     } catch (requestError) {
       setError(recoveryError(requestError));
+      toast.error(recoveryError(requestError));
     } finally {
       setLoading(false);
     }

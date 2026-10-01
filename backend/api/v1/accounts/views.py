@@ -12,17 +12,20 @@ from rest_framework.views import APIView
 from .authentication import MongoJWTAuthentication
 from .serializers import (
     AccountProfileSerializer, AccountProfileUpdateSerializer,
+    ClerkExchangeSerializer,
     ForgotPasswordSerializer, LoginSerializer, MessageSerializer, RefreshSerializer,
     RegisterSerializer, ResetPasswordSerializer, SocialLoginResponseSerializer,
-    SocialLoginSerializer, TokenPairSerializer, UserSerializer,
+    SocialLoginSerializer, TokenPairSerializer, UnifiedLoginResponseSerializer,
+    UnifiedLoginSerializer, UserSerializer,
 )
 from accounts.cloudinary_media import delete_asset, upload_user_avatar
-from accounts.documents import Student, User
+from accounts.documents import Parent, Student, User
+from accounts.email_registry import ACCOUNT_LABELS, email_owners
 from mongoengine.errors import NotUniqueError
 from .services import (
-    PasswordResetTokenError, SocialTokenError, login_user, refresh_token_pair,
+    PasswordResetTokenError, SocialTokenError, admin_token_pair, clerk_exchange, login_user, refresh_token_pair,
     register_user, request_user_password_reset, reset_user_password, social_login,
-    token_pair_for, user_payload, verify_facebook_access_token, verify_google_id_token,
+    token_pair_for, user_payload, verify_clerk_session_token, verify_facebook_access_token, verify_google_id_token,
 )
 
 logger = logging.getLogger(__name__)
@@ -121,6 +124,132 @@ class LoginView(PublicAuthView):
         return Response(token_pair_for(user))
 
 
+class UnifiedLoginView(PublicAuthView):
+    """Authenticate a website user or tutor from one shared login form."""
+
+    throttle_classes = [LoginThrottle]
+
+    @extend_schema(
+        tags=['Tài khoản'], request=UnifiedLoginSerializer,
+        responses={200: UnifiedLoginResponseSerializer},
+    )
+    def post(self, request):
+        serializer = UnifiedLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        email = values['email'].strip().lower()
+        account_type = values.get('account_type', 'auto')
+
+        # The tutor collection has a separate password and JWT actor.  Keep
+        # those boundaries intact while providing one predictable endpoint.
+        from tutors.documents import Tutor
+        from api.v1.tutors.services import TutorAuthError, login_tutor, tutor_token_pair
+
+        owners = email_owners(email)
+        owner_types = list(dict.fromkeys(owner['kind'] for owner in owners))
+        has_user = any(kind in {'user', 'student', 'parent'} for kind in owner_types)
+        has_tutor = 'tutor' in owner_types
+        has_admin = 'admin' in owner_types
+        if account_type == 'auto' and has_admin:
+            from accounts.documents import Admin
+            admin = Admin.objects(email=email).first()
+            if admin is None or not admin.check_password(values['password']):
+                return Response({'detail': 'Email hoặc mật khẩu không chính xác.'}, status=status.HTTP_401_UNAUTHORIZED)
+            if admin.status != Admin.STATUS_ACTIVE:
+                return Response({'detail': 'Tài khoản quản trị viên đã bị vô hiệu hóa.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(admin_token_pair(admin), headers={'Cache-Control': 'no-store'})
+
+        requested_matches = (
+            account_type in owner_types
+            or (account_type == 'user' and has_user)
+        )
+        if account_type != 'auto' and owner_types and not requested_matches:
+            actual = ', '.join(ACCOUNT_LABELS[kind] for kind in owner_types)
+            return Response({
+                'detail': f'Email này thuộc tài khoản {actual}, không phải loại đã chọn.',
+                'code': 'account_type_mismatch',
+                'available_account_types': owner_types,
+            }, status=status.HTTP_409_CONFLICT)
+
+        try:
+            if account_type == 'tutor' or (account_type == 'auto' and has_tutor):
+                tutor = login_tutor(email=email, password=values['password'])
+                payload = tutor_token_pair(tutor)
+                payload['actor_type'] = 'tutor'
+                payload['account'] = payload.pop('tutor')
+                return Response(payload, headers={'Cache-Control': 'no-store'})
+
+            user = login_user(email=email, password=values['password'])
+            resolved_type = _account_type_for(user)
+            if account_type in {'student', 'parent'} and resolved_type != account_type:
+                return Response({
+                    'detail': f'Email này không phải tài khoản {account_type}.',
+                    'code': 'account_type_mismatch',
+                }, status=status.HTTP_409_CONFLICT)
+            payload = token_pair_for(user)
+            payload['actor_type'] = resolved_type
+            payload['account'] = payload.pop('user')
+            return Response(payload, headers={'Cache-Control': 'no-store'})
+        except (SocialTokenError, TutorAuthError) as error:
+            return Response({'detail': str(error)}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class ClerkExchangeView(PublicAuthView):
+    """Exchange a verified Clerk browser session for a Django API JWT pair."""
+
+    throttle_classes = [LoginThrottle]
+
+    @extend_schema(tags=['Tài khoản'], request=ClerkExchangeSerializer, responses={200: TokenPairSerializer})
+    def post(self, request):
+        serializer = ClerkExchangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        try:
+            claims = verify_clerk_session_token(values['clerk_token'])
+            email = (str(claims.get('email') or '') or values['email']).strip().lower()
+
+            # Tutor accounts are issued by Admin and live in their own
+            # collection. A Clerk login with that verified email must receive
+            # a tutor JWT instead of silently creating a student User.
+            from tutors.documents import Tutor
+            from api.v1.tutors.services import tutor_token_pair
+
+            from accounts.documents import Admin
+            admin = Admin.objects(email=email).first()
+            if admin is not None:
+                if admin.status != Admin.STATUS_ACTIVE:
+                    return Response(
+                        {'detail': 'Tài khoản quản trị viên đã bị vô hiệu hóa.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                return Response(admin_token_pair(admin), headers={'Cache-Control': 'no-store'})
+
+            tutor = Tutor.objects(email=email).first()
+            if tutor is not None:
+                if tutor.status != Tutor.STATUS_ACTIVE:
+                    return Response(
+                        {'detail': 'Tài khoản gia sư đã bị vô hiệu hóa.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                payload = tutor_token_pair(tutor)
+                payload['actor_type'] = 'tutor'
+                payload['account'] = payload.pop('tutor')
+                return Response(payload, headers={'Cache-Control': 'no-store'})
+
+            user, _created = clerk_exchange(
+                claims=claims,
+                email=email,
+                display_name=values.get('display_name', ''),
+                avatar=values.get('avatar', ''),
+            )
+        except SocialTokenError as error:
+            return Response({'detail': str(error)}, status=status.HTTP_401_UNAUTHORIZED)
+        payload = token_pair_for(user)
+        payload['actor_type'] = _account_type_for(user)
+        payload['account'] = payload.pop('user')
+        return Response(payload, headers={'Cache-Control': 'no-store'})
+
+
 class SocialLoginView(PublicAuthView):
     provider = None
 
@@ -138,6 +267,8 @@ class SocialLoginView(PublicAuthView):
         except SocialTokenError as error:
             return Response({'detail': str(error)}, status=status.HTTP_401_UNAUTHORIZED)
         payload = token_pair_for(user)
+        payload['actor_type'] = _account_type_for(user)
+        payload['account'] = payload.pop('user')
         payload['created'] = created
         return Response(payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
@@ -172,21 +303,40 @@ class MeView(APIView):
         return Response(user_payload(request.user.user), headers={'Cache-Control': 'no-store'})
 
 
+def _account_type_for(user):
+    account_type = getattr(user, 'account_type', None)
+    if account_type in {'student', 'parent'}:
+        return account_type
+    email = (user.email or '').strip().lower()
+    if Student.objects(email=email, status='active').first() is not None:
+        return 'student'
+    if Parent.objects(email=email).first() is not None:
+        return 'parent'
+    return 'user'
+
+
 def _account_profile_payload(user):
-    student = Student.objects(email=user.email.strip().lower()).first()
+    email = user.email.strip().lower()
+    student = Student.objects(email=email).first()
+    parent = Parent.objects(email=email).first()
+    role = _account_type_for(user)
     return {
         'account': user_payload(user),
-        'role': 'student' if student else 'user',
+        'role': role,
         'student': ({
             'id': int(student.id), 'slug': student.slug, 'name': student.name,
             'email': student.email, 'phone': student.phone, 'avatar': student.avatar,
             'status': student.status,
         } if student else None),
+        'parent': ({
+            'id': int(parent.id), 'slug': parent.slug, 'name': parent.name,
+            'email': parent.email, 'phone': parent.phone, 'avatar': parent.avatar,
+        } if parent else None),
     }
 
 
 class AccountProfileView(APIView):
-    """Profile for local, Google, and Facebook website accounts."""
+    """Profile for student/parent website accounts and their OAuth identities."""
 
     authentication_classes = [MongoJWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -208,6 +358,7 @@ class AccountProfileView(APIView):
         serializer.is_valid(raise_exception=True)
         user = request.user.user
         student = Student.objects(email=user.email.strip().lower()).first()
+        parent = Parent.objects(email=user.email.strip().lower()).first()
         values = serializer.validated_data
         old_public_ids = set()
         if 'username' in values and values['username'] != user.username:
@@ -218,8 +369,12 @@ class AccountProfileView(APIView):
             user.display_name = values['display_name']
             if student:
                 student.name = values['display_name']
+            if parent:
+                parent.name = values['display_name']
         if student and 'phone' in values:
             student.phone = values['phone'] or None
+        if parent and 'phone' in values:
+            parent.phone = values['phone'] or None
         upload = values.get('avatar')
         if upload is not None:
             try:
@@ -235,10 +390,17 @@ class AccountProfileView(APIView):
                     old_public_ids.add(student.avatar_public_id)
                 student.avatar = asset['secure_url']
                 student.avatar_public_id = asset['public_id']
+            if parent:
+                if parent.avatar_public_id:
+                    old_public_ids.add(parent.avatar_public_id)
+                parent.avatar = asset['secure_url']
+                parent.avatar_public_id = asset['public_id']
         try:
             user.save()
             if student:
                 student.save()
+            if parent:
+                parent.save()
         except NotUniqueError:
             return Response({'detail': 'Không thể cập nhật do thông tin bị trùng.'}, status=409)
         for public_id in old_public_ids - {user.avatar_public_id}:

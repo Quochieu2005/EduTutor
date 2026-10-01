@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
+import { useEffect, useState } from "react";
 import {
   CalendarOutlined,
   ArrowRightOutlined,
   CloseOutlined,
   BookOutlined,
 } from "@ant-design/icons";
+import { edututorApi } from "@/lib/edututor-api";
 
 interface Article {
   id: string;
@@ -66,6 +66,33 @@ Tùy vào mục tiêu cụ thể và tính cách của con, trung tâm EduTutor 
 export function ArticlesSection() {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [showAllArticles, setShowAllArticles] = useState(false);
+  const [articles, setArticles] = useState<Article[]>(ARTICLES);
+
+  useEffect(() => {
+    edututorApi.blogs({ page_size: 24 }).then((page) => {
+      if (!page.results.length) return;
+      setArticles(page.results.map((post) => ({
+        id: post.slug,
+        title: post.title,
+        date: post.published_at ? new Intl.DateTimeFormat("vi-VN", { dateStyle: "full" }).format(new Date(`${post.published_at}T00:00:00`)) : "Mới cập nhật",
+        imageSrc: post.thumbnail || "/assets/article-1.jpg",
+        excerpt: post.excerpt || "Xem nội dung bài viết từ EduTutor.",
+        content: "",
+      })));
+    }).catch(() => {
+      // Keep local editorial content readable if the public API is temporarily unavailable.
+    });
+  }, []);
+
+  const openArticle = async (article: Article) => {
+    setSelectedArticle(article);
+    try {
+      const detail = await edututorApi.blog(article.id);
+      setSelectedArticle((current) => current?.id === article.id ? { ...current, content: detail.content } : current);
+    } catch {
+      // The preview data remains available as a fallback.
+    }
+  };
 
   return (
     <section id="articles" className="py-16 sm:py-24 bg-slate-50 border-t border-blue-50">
@@ -85,7 +112,7 @@ export function ArticlesSection() {
 
         {/* Article Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 items-stretch">
-          {ARTICLES.map((art) => (
+          {articles.slice(0, 3).map((art) => (
             <article
               key={art.id}
               className="rounded-3xl border border-blue-100/80 bg-white overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-300 transition-all duration-300 flex flex-col justify-between group"
@@ -93,13 +120,8 @@ export function ArticlesSection() {
               <div>
                 {/* Article Image */}
                 <div className="relative w-full h-48 bg-slate-100 overflow-hidden">
-                  <Image
-                    src={art.imageSrc}
-                    alt={art.title}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 380px"
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={art.imageSrc} alt={art.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
                 </div>
 
                 <div className="p-6">
@@ -125,7 +147,7 @@ export function ArticlesSection() {
               <div className="px-6 pb-6 pt-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedArticle(art)}
+                  onClick={() => openArticle(art)}
                   className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer group-hover:translate-x-1 duration-200"
                 >
                   <span>Xem chi tiết</span>
@@ -181,12 +203,8 @@ export function ArticlesSection() {
             </div>
 
             <div className="relative w-full h-56 rounded-2xl overflow-hidden bg-slate-100">
-              <Image
-                src={selectedArticle.imageSrc}
-                alt={selectedArticle.title}
-                fill
-                className="object-cover"
-              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={selectedArticle.imageSrc} alt={selectedArticle.title} className="h-full w-full object-cover" />
             </div>
 
             <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
@@ -233,17 +251,18 @@ export function ArticlesSection() {
             </div>
 
             <div className="space-y-4">
-              {ARTICLES.map((item) => (
+              {articles.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => {
                     setShowAllArticles(false);
-                    setSelectedArticle(item);
+                    openArticle(item);
                   }}
                   className="p-4 rounded-2xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/40 transition-all flex flex-col sm:flex-row gap-4 items-center cursor-pointer group"
                 >
                   <div className="relative w-full sm:w-36 h-24 rounded-xl overflow-hidden shrink-0 bg-slate-100">
-                    <Image src={item.imageSrc} alt={item.title} fill className="object-cover" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.imageSrc} alt={item.title} className="h-full w-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <span className="text-[11px] text-blue-600 font-semibold">{item.date}</span>

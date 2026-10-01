@@ -32,9 +32,13 @@ class User(Document):
     avatar = StringField(max_length=1000, null=True)
     avatar_public_id = StringField(max_length=1000, null=True)
     password_hash = StringField(required=True)
+    # Website accounts are authenticated in this collection.  The selected
+    # profile (student/parent) is stored separately in its own collection.
+    # Keep this nullable for legacy accounts that predate profile selection.
+    account_type = StringField(choices=('student', 'parent'), null=True)
     # Local accounts keep ``local``. OAuth accounts are identified by the
-    # immutable subject supplied by Google/Facebook, never by a client value.
-    oauth_provider = StringField(choices=('local', 'google', 'facebook'), default='local')
+    # immutable subject supplied by Google/Facebook/Clerk, never by a client value.
+    oauth_provider = StringField(choices=('local', 'google', 'facebook', 'clerk'), default='local')
     oauth_uid = StringField(max_length=255, null=True)
     # Incrementing this value invalidates every JWT issued before a password reset.
     token_version = IntField(default=1, min_value=1)
@@ -106,7 +110,7 @@ class AccountDocument(Document):
     phone = StringField(max_length=20, null=True)
     avatar = StringField(max_length=1000, null=True)
     avatar_public_id = StringField(max_length=1000, null=True)
-    oauth_provider = StringField(choices=('local', 'google', 'facebook'), null=True)
+    oauth_provider = StringField(choices=('local', 'google', 'facebook', 'clerk'), null=True)
     oauth_uid = StringField(max_length=255, null=True)
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))

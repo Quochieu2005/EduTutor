@@ -26,12 +26,14 @@ ACTION_LABELS = {
     'toggle_status': 'Đổi trạng thái', 'change_password': 'Đổi mật khẩu',
     'reset_password': 'Đặt lại mật khẩu', 'update_email': 'Đổi email',
     'update_profile': 'Cập nhật hồ sơ',
+    'reconcile_payment': 'Đối soát học phí tự động',
 }
 TARGET_LABELS = {
     'admins': 'Quản trị viên', 'banners': 'Slides', 'blog_posts': 'Bài viết',
     'blog_categories': 'Danh mục Blog', 'job_postings': 'Tin tuyển gia sư',
     'contacts': 'Liên hệ', 'system_notifications': 'Thông báo hệ thống',
     'subjects': 'Môn học & chuyên môn', 'lessons': 'Lịch học',
+    'payments': 'Thanh toán & Hoa hồng',
 }
 
 
@@ -70,6 +72,33 @@ def record_admin_activity(request, action, target, *, actor=None):
         ).save(force_insert=True)
     except Exception:
         logger.exception('Could not persist admin audit event: action=%s actor_id=%s', action, actor.id)
+
+
+def record_system_payment_reconciliation(payment, invoice, transaction):
+    """Append an immutable financial audit event after a verified receipt."""
+    try:
+        AuditLog(
+            # Keep this in the Admin audit stream so the existing permission
+            # model still lets Super Admin review every money event.
+            actor_type='admin', actor_id=None,
+            action='reconcile_payment',
+            target_type='payments', target_id=int(payment.id),
+            description=(
+                f'Đối soát tự động — Hóa đơn {invoice.invoice_no}: '
+                f'{payment.total_amount:,.0f} VNĐ, giao dịch {transaction.gateway_transaction_id}'
+            ).replace(',', '.'),
+            metadata={
+                'actor_name': 'Hệ thống đối soát',
+                'actor_email': '',
+                'invoice_no': invoice.invoice_no,
+                'transaction_id': transaction.gateway_transaction_id,
+                'amount': payment.total_amount,
+                'student_id': int(payment.student.id),
+                'tutor_id': int(payment.tutor.id),
+            },
+        ).save(force_insert=True)
+    except Exception:
+        logger.exception('Could not persist system payment audit: payment_id=%s', payment.id)
 
 
 @require_safe

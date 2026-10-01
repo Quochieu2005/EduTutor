@@ -7,11 +7,8 @@ import { useEduUser, useEduClerk } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CITIES, SUBJECTS } from "@/lib/home-mock-data";
-import {
-  getTutorApplicationForUser,
-  saveTutorApplication,
-  type TutorApplication,
-} from "@/lib/portal-store";
+import { edututorApi } from "@/lib/edututor-api";
+import { toast } from "@/lib/toast";
 
 export default function TutorRegisterPage() {
   const { isSignedIn, user } = useEduUser();
@@ -25,29 +22,30 @@ export default function TutorRegisterPage() {
     teachingMode: "both",
     experience: "3",
     desiredFee: "200.000đ/buổi",
+    phone: "",
     bio: "",
   });
 
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [existingApplication, setExistingApplication] = useState<TutorApplication | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [cvFile, setCvFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    const initialLoad = window.setTimeout(() => {
-      const existing = getTutorApplicationForUser(user.id) ?? null;
-      setExistingApplication(existing);
-      setFormData((current) => ({
-        ...current,
-        fullName: current.fullName || user.fullName || "",
-      }));
-    }, 0);
-    return () => window.clearTimeout(initialLoad);
+    // Dữ liệu tài khoản API được tải bất đồng bộ; điền sẵn vào biểu mẫu.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFormData((current) => ({
+      ...current,
+      fullName: current.fullName || user.fullName || "",
+      phone: current.phone || user.primaryPhoneNumber?.phoneNumber || "",
+    }));
   }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Yêu cầu đăng nhập Clerk trước khi gửi form
+    // Yêu cầu đăng nhập EduTutor trước khi gửi form.
     if (!isSignedIn) {
       openSignIn();
       return;
@@ -55,20 +53,46 @@ export default function TutorRegisterPage() {
 
     if (!user) return;
 
-    const application = saveTutorApplication({
-      userId: user.id,
-      userEmail: user.primaryEmailAddress?.emailAddress || "",
-      fullName: formData.fullName || user.fullName || "Ứng viên",
-      subject: formData.subject,
-      grades: formData.grades,
-      city: formData.city,
-      teachingMode: formData.teachingMode as "online" | "offline" | "both",
-      experience: Number(formData.experience),
-      desiredFee: formData.desiredFee,
-      bio: formData.bio,
-    });
-    setExistingApplication(application);
-    setIsSubmitted(true);
+    const email = user.primaryEmailAddress?.emailAddress;
+    if (!email) {
+      setSubmitError("Tài khoản chưa có email chính để gửi hồ sơ.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      if (cvFile && cvFile.size > 10 * 1024 * 1024) {
+        setSubmitError("CV phải có dung lượng không quá 10MB.");
+        setIsSubmitting(false);
+        return;
+      }
+      const payload = new FormData();
+      payload.set("name", formData.fullName || user.fullName || "Ứng viên");
+      payload.set("email", email);
+      payload.set("phone", formData.phone);
+      payload.set(
+        "cover_letter",
+        [
+          `Môn dạy: ${formData.subject}`,
+          `Cấp/lớp: ${formData.grades}`,
+          `Khu vực: ${formData.city}`,
+          `Hình thức: ${formData.teachingMode}`,
+          `Kinh nghiệm: ${formData.experience} năm`,
+          `Học phí mong muốn: ${formData.desiredFee}`,
+          "",
+          formData.bio,
+        ].join("\n")
+      );
+      if (cvFile) payload.set("cv_file", cvFile);
+      await edututorApi.submitTutorApplication(payload);
+      setIsSubmitted(true);
+      toast.success("Đã gửi hồ sơ gia sư thành công. Hồ sơ đang chờ EduTutor kiểm duyệt.");
+    } catch {
+      setSubmitError("Không thể gửi hồ sơ lúc này. Hãy kiểm tra kết nối và đăng nhập lại trước khi thử lại.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -105,18 +129,6 @@ export default function TutorRegisterPage() {
             </p>
           </div>
 
-          {existingApplication && !isSubmitted && existingApplication.status !== "rejected" && (
-            <div className={`p-4 rounded-xl border text-xs ${
-              existingApplication.status === "approved"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : "bg-amber-50 border-amber-200 text-amber-800"
-            }`}>
-              Hồ sơ hiện tại: <strong>{existingApplication.status === "approved" ? "Đã duyệt" : "Đang chờ Admin duyệt"}</strong>.
-              {existingApplication.status === "approved" && " Bạn đã có thể đăng ký nhận lớp."}
-            </div>
-          )}
-
-          {/* Trạng thái xác nhận giả lập sau khi gửi thành công */}
           {isSubmitted ? (
             <div className="py-10 text-center space-y-4 animate-in fade-in">
               <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center text-2xl">
@@ -124,7 +136,7 @@ export default function TutorRegisterPage() {
               </div>
               <h2 className="text-xl font-bold text-gray-900">Đăng ký thành công!</h2>
               <p className="text-xs text-gray-600 max-w-md mx-auto leading-relaxed">
-                Hồ sơ gia sư của bạn (<strong>{formData.fullName || user?.fullName || "Ứng viên"}</strong>) đã được ghi nhận trên hệ thống thử nghiệm EduTutor. Ban quản lý sẽ liên hệ kiểm duyệt chứng chỉ và kết nối lớp học phù hợp.
+                Hồ sơ gia sư của bạn (<strong>{formData.fullName || user?.fullName || "Ứng viên"}</strong>) đã được gửi tới hệ thống EduTutor. Ban quản lý sẽ kiểm duyệt và liên hệ theo thông tin bạn đã cung cấp.
               </p>
               <div className="flex justify-center gap-3 pt-2">
                 <button
@@ -143,20 +155,21 @@ export default function TutorRegisterPage() {
               </div>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {submitError && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-700">{submitError}</p>}
               {/* Cảnh báo đăng nhập nếu chưa đăng nhập */}
               {!isSignedIn && (
                 <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <strong className="block font-bold">Yêu cầu đăng nhập tài khoản:</strong>
-                    <span>Bạn cần đăng nhập với Clerk trước khi gửi hồ sơ đăng ký gia sư.</span>
+                    <span>Bạn cần đăng nhập EduTutor trước khi gửi hồ sơ đăng ký gia sư.</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => openSignIn()}
                     className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 shrink-0 self-start sm:self-auto shadow-xs"
                   >
-                    Đăng nhập Clerk ngay
+                    Đăng nhập ngay
                   </button>
                 </div>
               )}
@@ -209,6 +222,35 @@ export default function TutorRegisterPage() {
                     className="w-full p-2.5 rounded-lg border border-gray-200 text-xs text-gray-900 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="reg-phone" className="block text-xs font-semibold text-gray-700 mb-1">
+                  Số điện thoại liên hệ *
+                </label>
+                <input
+                  id="reg-phone"
+                  type="tel"
+                  required
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="Ví dụ: 0901 234 567"
+                  className="w-full p-2.5 rounded-lg border border-gray-200 text-xs text-gray-900 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="reg-cv" className="block text-xs font-semibold text-gray-700 mb-1">
+                  CV / hồ sơ gia sư (PDF, DOC, DOCX)
+                </label>
+                <input
+                  id="reg-cv"
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => setCvFile(e.target.files?.[0] ?? null)}
+                  className="block w-full p-2.5 rounded-lg border border-dashed border-gray-300 bg-gray-50 text-xs text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                />
+                <p className="mt-1 text-[11px] text-gray-500">Không bắt buộc ở form đăng ký chung · tối đa 10MB.</p>
               </div>
 
               {/* 3. Khu vực + Hình thức dạy */}
@@ -300,9 +342,10 @@ export default function TutorRegisterPage() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98"
+                  disabled={isSubmitting}
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs active:scale-98 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Nộp hồ sơ đăng ký gia sư
+                  {isSubmitting ? "Đang gửi hồ sơ..." : "Nộp hồ sơ đăng ký gia sư"}
                 </button>
               </div>
             </form>

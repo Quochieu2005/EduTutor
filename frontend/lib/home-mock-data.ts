@@ -41,6 +41,7 @@ export interface ClassComment {
 
 export interface ClassListing {
   id: string;
+  postedByType?: "admin" | "parent";
   code: string;
   title: string;
   status: "needing" | "with";

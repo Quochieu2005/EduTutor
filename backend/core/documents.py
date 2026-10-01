@@ -45,12 +45,18 @@ class Payment(BaseDocument):
     )
     tutor_paid_at = DateTimeField(null=True)
     note = StringField(null=True)
+    # These fields form an atomic, recoverable reconciliation claim.  Only one
+    # verified provider receipt can claim a pending payment.
+    reconciliation_receipt_id = StringField(max_length=255, null=True)
+    reconciliation_started_at = DateTimeField(null=True)
+    reconciled_at = DateTimeField(null=True)
 
     meta = {
         'collection': 'payments',
         'indexes': [
             'payer_type', 'payer_id', 'tutor', 'student', 'billing_month',
             'status', 'tutor_payout_status', '-created_at',
+            'reconciliation_receipt_id',
         ],
     }
 
@@ -67,12 +73,34 @@ class Transaction(BaseDocument):
     payment = ReferenceField(Payment, required=True, db_field='payment_id')
     method = StringField(required=True, choices=('cash', 'bank_transfer', 'momo', 'zalopay', 'vnpay'))
     gateway_transaction_id = StringField(max_length=255, null=True)
+    # The immutable invoice/payment code the payer must put in the transfer
+    # description.  It is deliberately separate from the provider receipt id.
+    payment_reference = StringField(max_length=80, null=True)
+    # Idempotency key supplied by the client when an initial payment attempt is
+    # created. It makes POST retries after a dropped response safe.
+    idempotency_key = StringField(max_length=128, null=True)
     amount = IntField(required=True, min_value=0)
     status = StringField(required=True, choices=('pending', 'success', 'failed', 'timeout', 'cancelled'), default='pending')
     failure_reason = StringField(max_length=500, null=True)
     raw_response = DictField(null=True)
+    received_at = DateTimeField(null=True)
+    reconciled_at = DateTimeField(null=True)
 
-    meta = {'collection': 'transactions', 'indexes': ['payment', 'method', 'gateway_transaction_id', 'status', '-created_at']}
+    meta = {
+        'collection': 'transactions',
+        'indexes': [
+            'payment', 'method', 'payment_reference',
+            'status', '-created_at',
+            {
+                'fields': ['gateway_transaction_id'], 'unique': True, 'sparse': True,
+                'name': 'gateway_transaction_id_unique',
+            },
+            {
+                'fields': ['payment', 'idempotency_key'], 'unique': True, 'sparse': True,
+                'name': 'payment_idempotency_key_unique',
+            },
+        ],
+    }
 
 
 class Invoice(BaseDocument):
@@ -161,7 +189,9 @@ class SystemNotification(BaseDocument):
     message = StringField(required=True, max_length=3000)
     audience = StringField(required=True, choices=AUDIENCE_CHOICES)
     status = StringField(required=True, choices=STATUS_CHOICES, default=STATUS_DRAFT)
-    created_by = ReferenceField('Admin', required=True, db_field='created_by_admin_id')
+    # System-generated events (for example a learner inviting a tutor) do not
+    # have an Admin author, while broadcasts created in the back office do.
+    created_by = ReferenceField('Admin', null=True, db_field='created_by_admin_id')
     sent_at = DateTimeField(null=True)
     recipient_count = IntField(required=True, default=0, min_value=0)
 
@@ -186,6 +216,25 @@ class NotificationDelivery(BigIntDocument):
             'notification', 'recipient_type', 'recipient_id', '-delivered_at',
             {'fields': ['notification', 'recipient_type', 'recipient_id'], 'unique': True},
         ],
+    }
+
+
+class AdminNotification(BaseDocument):
+    """An operational event displayed in the back-office notification menu.
+
+    Unlike ``SystemNotification`` this is not broadcast to learners.  It is a
+    compact audit-friendly inbox for every active administrator.
+    """
+
+    title = StringField(required=True, max_length=250)
+    message = StringField(required=True, max_length=1000)
+    kind = StringField(required=True, choices=('payment', 'payout', 'system'), default='system')
+    url = StringField(max_length=500, null=True)
+    payment = ReferenceField(Payment, null=True, db_field='payment_id')
+
+    meta = {
+        'collection': 'admin_notifications',
+        'indexes': ['kind', 'payment', '-created_at'],
     }
 
 

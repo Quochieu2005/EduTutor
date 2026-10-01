@@ -564,6 +564,55 @@ button {
   font-size: 14px;
   font-weight: 500;
 }
+.dashboard-finance-periods {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--muted);
+}
+.dashboard-finance-periods a {
+  padding: 5px 9px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.dashboard-finance-periods a:hover,
+.dashboard-finance-periods a.is-active {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+}
+.dashboard-finance-summary {
+  grid-column: 1 / -1;
+}
+.dashboard-finance-recent-grid {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.dashboard-finance-recent-panel {
+  min-height: 300px;
+}
+.dashboard-finance-recent-panel .dashboard-panel__header > a {
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.dashboard-finance-recent-panel .dashboard-sales-list {
+  gap: 16px;
+}
+.dashboard-finance-recent-panel .dashboard-sales-list > p {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
 .dashboard-analytics-panel {
   margin-top: 20px;
 }
@@ -1524,6 +1573,13 @@ html[data-theme="dark"] .admin-icon--moon {
   .dashboard-chart-panel,
   .dashboard-sales-panel {
     grid-column: auto;
+  }
+  .dashboard-finance-summary,
+  .dashboard-finance-recent-grid {
+    grid-column: 1 / -1;
+  }
+  .dashboard-finance-recent-grid {
+    grid-template-columns: 1fr;
   }
   .dashboard-analytics-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));

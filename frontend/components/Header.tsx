@@ -35,13 +35,14 @@ export function Header() {
   const isHome = pathname === "/" || pathname === "/Home";
   const isClasses = pathname === "/classes" || pathname.startsWith("/classes/");
   const isTutors = pathname === "/tutors" || pathname.startsWith("/tutors/");
+  const isRecruitment = pathname === "/recruitment" || pathname.startsWith("/recruitment/");
 
   const navLinks = [
     { label: "Trang chủ", href: isHome ? "#hero" : "/", isActive: isHome, isAnchor: isHome },
     { label: "Đội ngũ gia sư", href: "/tutors", isActive: isTutors, isAnchor: false },
     { label: "Nhận lớp", href: "/classes", isActive: isClasses, isAnchor: false },
     { label: "Quy trình", href: isHome ? "#timeline" : "/#timeline", isActive: false, isAnchor: isHome },
-    { label: "Bài viết", href: isHome ? "#articles" : "/#articles", isActive: false, isAnchor: isHome },
+    { label: "Tuyển dụng", href: "/recruitment", isActive: isRecruitment, isAnchor: false },
     { label: "Liên hệ", href: isHome ? "#contact" : "/#contact", isActive: false, isAnchor: isHome },
   ];
 
@@ -107,16 +108,15 @@ export function Header() {
     },
     {
       label: "Blog",
-      href: isHome ? "#articles" : "/#articles",
+      href: "/blog",
       icon: <FileTextOutlined className="text-blue-600" />,
-      action: (e: React.MouseEvent<HTMLAnchorElement>) => {
-        handleScrollOrNav(e, isHome ? "#articles" : "/#articles");
+      action: () => {
         setMoreMenuOpen(false);
       },
     },
     {
       label: "Tuyển dụng",
-      href: "/tutors/register",
+      href: "/recruitment",
       icon: <TeamOutlined className="text-blue-600" />,
       action: () => setMoreMenuOpen(false),
     },

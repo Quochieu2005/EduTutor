@@ -35,7 +35,7 @@ class ContentApiTests(SimpleTestCase):
         subject.objects.return_value.first.return_value = None
         serializer = ContactSerializer(data={**self.payload, 'subject_id': 1})
         self.assertFalse(serializer.is_valid())
-        subject.objects.assert_called_once_with(id=1, status=1)
+        subject.objects.assert_called_once()
 
     def test_contact_inbox_not_public(self):
         response = ContactCreateView.as_view()(self.factory.get('/api/v1/contacts/'))

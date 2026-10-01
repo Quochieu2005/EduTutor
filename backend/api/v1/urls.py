@@ -10,7 +10,10 @@ urlpatterns = [
     path('accounts/', include('api.v1.accounts.urls')),
     path('feedback/', include('api.v1.feedback.urls')),
     path('geography/', include('api.v1.geography.urls')),
+    path('invoices/', include('api.v1.invoices.urls')),
     path('lessons/', include('api.v1.lessons.urls')),
+    path('notifications/', include('api.v1.notifications.urls')),
     path('payments/', include('api.v1.payments.urls')),
+    path('subjects/', include('api.v1.subjects.urls')),
     path('tutors/', include('api.v1.tutors.urls')),
 ]

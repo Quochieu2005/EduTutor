@@ -1,5 +1,6 @@
 from django.http import Http404
 from drf_spectacular.utils import extend_schema
+from mongoengine.queryset.visitor import Q
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -7,6 +8,10 @@ from rest_framework.views import APIView
 from tutors.documents import JobPosting, Province, Subject, Tutor, TutorSubject, TutorTeachingArea, Ward
 
 from .serializers import AreaDetailSerializer, ProvinceSerializer, WardSerializer
+
+
+def _active_subject_ids():
+    return set(Subject.objects(Q(status=1) | Q(status__exists=False)).scalar('id'))
 
 
 class PublicGeographyView(APIView):
@@ -25,6 +30,19 @@ class ProvinceListView(PublicGeographyView):
     @extend_schema(tags=['Địa giới hành chính'], responses={200: ProvinceSerializer(many=True)})
     def get(self, request):
         provinces = list(Province.objects.order_by('name'))
+        # Public filter dropdowns only need the reference fields. The count
+        # aggregates are opt-in because scanning every ward, tutor area and
+        # open request makes this endpoint unnecessarily slow.
+        if request.query_params.get('include_stats', '').lower() not in {'1', 'true', 'yes'}:
+            return Response([
+                {
+                    'id': int(province.id), 'slug': province.slug,
+                    'code': province.code, 'name': province.name,
+                    'ward_count': 0, 'tutor_count': 0,
+                    'teaching_request_count': 0,
+                }
+                for province in provinces
+            ])
         active_tutor_ids = set(Tutor.objects(status=Tutor.STATUS_ACTIVE).scalar('id'))
         tutor_ids_by_province = {}
         for area in TutorTeachingArea.objects.select_related():
@@ -35,7 +53,7 @@ class ProvinceListView(PublicGeographyView):
         for ward in Ward.objects.only('province'):
             ward_count_by_province[int(ward.province.id)] = ward_count_by_province.get(int(ward.province.id), 0) + 1
         request_count_by_province = {}
-        active_subject_ids = set(Subject.objects(status=1).scalar('id'))
+        active_subject_ids = _active_subject_ids()
         for job in JobPosting.objects(status='open').only('province', 'subject'):
             if int(job.subject.id) in active_subject_ids:
                 province_id = int(job.province.id)
@@ -67,7 +85,7 @@ class ProvinceWardListView(PublicGeographyView):
             if tutor_id in active_tutor_ids:
                 tutor_ids_by_ward.setdefault(int(area.ward.id), set()).add(tutor_id)
         request_count_by_ward = {}
-        active_subject_ids = set(Subject.objects(status=1).scalar('id'))
+        active_subject_ids = _active_subject_ids()
         for job in JobPosting.objects(province=province, status='open', ward__ne=None).only('ward', 'subject'):
             if int(job.subject.id) in active_subject_ids:
                 ward_id = int(job.ward.id)
@@ -103,7 +121,7 @@ class AreaDetailView(PublicGeographyView):
         if tutors:
             for link in TutorSubject.objects(tutor__in=[tutor.id for tutor in tutors]).select_related():
                 subject_map.setdefault(int(link.tutor.id), []).append(link.subject.name)
-        active_subject_ids = list(Subject.objects(status=1).scalar('id'))
+        active_subject_ids = list(_active_subject_ids())
         jobs = (
             job_query.filter(subject__in=active_subject_ids).select_related()
             if active_subject_ids else []
