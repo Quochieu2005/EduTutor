@@ -23,9 +23,19 @@ class RecruitmentApiTests(SimpleTestCase):
         subjects.objects.return_value.scalar.return_value = [2, 4]
         ordered = jobs.objects.return_value.order_by.return_value
         self.assertIs(open_recruitment_jobs(), ordered)
-        subjects.objects.assert_called_once_with(status=1)
+        # Older subjects without an explicit status remain publicly visible.
+        subjects.objects.assert_called_once()
         jobs.objects.assert_called_once_with(status='open', subject__in=[2, 4])
         jobs.objects.return_value.order_by.assert_called_once_with('-created_at', '-id')
+
+    @patch('api.v1.tutors.views.JobPosting')
+    @patch('api.v1.tutors.views.Subject')
+    def test_requester_board_includes_parent_and_student_posts(self, subjects, jobs):
+        subjects.objects.return_value.scalar.return_value = [2]
+        open_recruitment_jobs('requester')
+        jobs.objects.assert_called_once_with(
+            status='open', subject__in=[2], posted_by_type__in=('parent', 'student'),
+        )
 
     @patch('api.v1.tutors.views.open_recruitment_jobs', return_value=[])
     def test_list_is_public_and_paginated(self, open_jobs):
@@ -52,10 +62,10 @@ class RecruitmentApiTests(SimpleTestCase):
         ward = SimpleNamespace(id=3, slug='tan-dong-hiep', name='Tân Đông Hiệp', type='ward')
         now = datetime.now(timezone.utc)
         job = SimpleNamespace(
-            slug='gia-su-toan-12', title='Gia sư Toán lớp 12', subject=subject,
+            slug='gia-su-toan-12', posted_by_type='admin', title='Gia sư Toán lớp 12', subject=subject,
             province=province, district=None, ward=ward, grade='Lớp 12',
             description='Ôn thi tốt nghiệp', budget_min=200000, budget_max=250000,
-            schedule_expect='Tối thứ 2, 4, 6', status='open', created_at=now, updated_at=now,
+            schedule_expect='Tối thứ 2, 4, 6', teaching_mode='both', status='open', created_at=now, updated_at=now,
         )
         open_jobs.return_value.filter.return_value.first.return_value = job
         response = RecruitmentJobDetailView.as_view()(

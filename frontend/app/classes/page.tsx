@@ -26,11 +26,13 @@ import { edututorApi, type Province, type Subject, type Ward } from "@/lib/edutu
 import { toClassPresentation } from "@/lib/class-presenter";
 import { getProvinceSlug, getSubjectSlug } from "@/lib/tutor-filter-mapping";
 import { toast } from "@/lib/toast";
+import { getAuthSession } from "@/lib/auth-session";
 
 export function ClassesListContent({ recruitmentMode = false }: { recruitmentMode?: boolean } = {}) {
   // The two public boards intentionally use different JobPosting sources:
   // recruitment = admin announcements, classes = parent/student requests.
-  const canPropose = !recruitmentMode;
+  const actorType = getAuthSession()?.actorType;
+  const canPropose = !recruitmentMode && actorType === "tutor";
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isSignedIn, user } = useEduUser();
@@ -150,11 +152,12 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
       try {
         const page = await edututorApi.tutorJobs({
           page_size: 100,
-          posted_by: recruitmentMode ? "admin" : "parent",
+          posted_by: recruitmentMode ? "admin" : "requester",
           subject: getSubjectSlug(paramSubject),
           province: getProvinceSlug(paramCity),
           ward: paramWard !== "all" ? paramWard : undefined,
           search: paramKeyword.trim() || undefined,
+          teaching_mode: paramMode === "online" || paramMode === "offline" || paramMode === "both" ? paramMode : undefined,
         });
         if (isCurrent) setClasses(page.results.map(toClassPresentation));
       } catch {
@@ -168,7 +171,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
     }
     void loadClasses();
     return () => { isCurrent = false; };
-  }, [paramCity, paramKeyword, paramSubject, paramWard, recruitmentMode]);
+  }, [paramCity, paramKeyword, paramMode, paramSubject, paramWard, recruitmentMode]);
 
   const subjectOptions = apiSubjects;
   const provinceOptions = apiProvinces.map((province) => ({ value: province.name, label: province.name }));
@@ -211,6 +214,10 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
   const handleStartApply = (cls: ClassListing) => {
     if (!isSignedIn) {
       openSignIn();
+      return;
+    }
+    if (actorType !== "tutor") {
+      toast.info("Chỉ gia sư đã được cấp tài khoản mới có thể đề nghị dạy lớp này.");
       return;
     }
     setApplyingClass(cls);
@@ -271,13 +278,16 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
               </>
             )}
           </p>
+          {!recruitmentMode && isSignedIn && actorType !== "tutor" && (
+            <p className="mt-2 text-xs text-slate-500">Bạn có thể đăng nhu cầu học; chỉ gia sư mới có thể gửi đề nghị dạy.</p>
+          )}
         </div>
 
         <Link
-          href="/tutors/register"
+          href={recruitmentMode ? "/tutors/register" : "/classes/create"}
           className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition-all self-start sm:self-auto"
         >
-          <span>+ Đăng ký hồ sơ gia sư</span>
+          <span>{recruitmentMode ? "+ Đăng ký hồ sơ gia sư" : "+ Đăng lớp tìm gia sư"}</span>
         </Link>
       </div>
 

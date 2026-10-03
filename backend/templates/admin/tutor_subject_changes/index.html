@@ -1,0 +1,64 @@
+{% extends "admin/management/base.html" %}
+
+{% block extra_styles %}
+<style>
+  .subject-review__filters { display:flex; gap:10px; margin:22px 0; flex-wrap:wrap; }
+  .subject-review__filters a { border:1px solid #dbe5f0; border-radius:10px; color:#41536d; padding:9px 13px; text-decoration:none; font-weight:600; }
+  .subject-review__filters a.is-active { background:#155eef; color:#fff; border-color:#155eef; }
+  .subject-review__table { width:100%; border:1px solid #dbe5f0; border-radius:14px; border-collapse:separate; border-spacing:0; overflow:hidden; background:#fff; }
+  .subject-review__table th, .subject-review__table td { padding:14px 16px; border-bottom:1px solid #edf2f7; text-align:left; vertical-align:top; }
+  .subject-review__table th { background:#f7faff; color:#41536d; font-size:13px; }
+  .subject-review__table tr:last-child td { border-bottom:0; }
+  .subject-review__tag { display:inline-flex; padding:5px 9px; border-radius:999px; background:#e8f1ff; color:#155eef; font-weight:700; font-size:12px; }
+  .subject-review__note { color:#667085; font-size:13px; max-width:270px; white-space:pre-wrap; }
+  .subject-review__form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .subject-review__form input { min-width:180px; padding:9px 10px; border:1px solid #dbe5f0; border-radius:8px; }
+  .subject-review__form button { border:0; border-radius:8px; cursor:pointer; padding:9px 12px; font-weight:700; }
+  .subject-review__approve { background:#155eef; color:#fff; }
+  .subject-review__reject { background:#fff0f0; color:#b42318; }
+  .subject-review__empty { padding:42px; color:#667085; text-align:center; border:1px dashed #cbd5e1; border-radius:14px; background:#fff; }
+  @media (max-width: 900px) { .subject-review__table { display:block; overflow-x:auto; } }
+</style>
+{% endblock %}
+
+{% block resource_content %}
+  <header class="users-heading">
+    <div><h1>{{ page.title }}</h1><p>{{ page.description }}</p></div>
+  </header>
+  {% if messages %}{% for message in messages %}<p class="form-message form-message--{{ message.tags }}">{{ message }}</p>{% endfor %}{% endif %}
+  <nav class="subject-review__filters" aria-label="Lọc trạng thái">
+    {% for code, label in status_labels.items %}
+      <a href="{% url 'admin-tutor-subject-changes' %}?status={{ code }}" class="{% if active_status == code %}is-active{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  {% if rows %}
+    <table class="subject-review__table">
+      <thead><tr><th>Gia sư</th><th>Yêu cầu</th><th>Môn / cấp độ</th><th>Học phí dự kiến</th><th>Ghi chú</th><th>Thời gian</th>{% if active_status == 'pending' %}<th>Xử lý</th>{% else %}<th>Kết quả</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><strong>{{ row.change.tutor.name }}</strong><br><small>{{ row.change.tutor.email }}</small></td>
+          <td><span class="subject-review__tag">{{ row.action_label }}</span></td>
+          <td><strong>{{ row.change.subject.name }}</strong><br><small>{{ row.change.level|default:"Chưa nêu cấp độ" }}</small></td>
+          <td>{% if row.change.price_per_hour is not None %}{{ row.change.price_per_hour }} VNĐ/giờ{% else %}—{% endif %}</td>
+          <td class="subject-review__note">{{ row.change.note|default:"—" }}</td>
+          <td>{{ row.created_at }}</td>
+          <td>
+            {% if active_status == 'pending' %}
+              <form class="subject-review__form" method="post" action="{% url 'admin-tutor-subject-change-review' row.change.id %}">
+                {% csrf_token %}<input name="review_note" maxlength="1000" placeholder="Ghi chú cho gia sư (không bắt buộc)" />
+                <button class="subject-review__approve" name="decision" value="approve" type="submit">Duyệt</button>
+                <button class="subject-review__reject" name="decision" value="reject" type="submit">Từ chối</button>
+              </form>
+            {% else %}
+              <strong>{% if row.change.status == 'approved' %}Đã duyệt{% else %}Từ chối{% endif %}</strong><br><small>{{ row.change.review_note|default:"Không có ghi chú" }}</small>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  {% else %}<div class="subject-review__empty">Không có yêu cầu môn dạy ở trạng thái này.</div>{% endif %}
+{% endblock %}
+
+{% block resource_modal %}{% endblock %}

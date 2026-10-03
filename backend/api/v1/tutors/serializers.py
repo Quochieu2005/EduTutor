@@ -54,9 +54,15 @@ class PublicTutorSerializer(serializers.Serializer):
     slug = serializers.CharField()
     name = serializers.CharField()
     avatar = serializers.CharField(allow_null=True)
+    birth_year = serializers.IntegerField(allow_null=True)
+    gender = serializers.CharField(allow_null=True)
+    hometown = serializers.CharField(allow_null=True)
+    voice = serializers.CharField(allow_null=True)
     headline = serializers.CharField(allow_null=True)
     bio = serializers.CharField(allow_null=True)
     education_level = serializers.CharField(allow_null=True)
+    major = serializers.CharField(allow_null=True)
+    institution = serializers.CharField(allow_null=True)
     experience_years = serializers.IntegerField()
     hourly_rate_min = serializers.IntegerField(allow_null=True)
     hourly_rate_max = serializers.IntegerField(allow_null=True)
@@ -92,9 +98,15 @@ class TutorProfileUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=150, required=False)
     phone = serializers.RegexField(r'^\+?[0-9 () .-]{7,20}$', max_length=20, required=False, allow_blank=True)
     avatar = serializers.ImageField(required=False, allow_null=True)
+    birth_year = serializers.IntegerField(min_value=1900, max_value=2100, required=False, allow_null=True)
+    gender = serializers.ChoiceField(choices=('male', 'female', 'other'), required=False, allow_null=True)
+    hometown = serializers.CharField(max_length=250, required=False, allow_blank=True)
+    voice = serializers.CharField(max_length=150, required=False, allow_blank=True)
     headline = serializers.CharField(max_length=250, required=False, allow_blank=True)
     bio = serializers.CharField(max_length=5000, required=False, allow_blank=True)
     education_level = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    major = serializers.CharField(max_length=250, required=False, allow_blank=True)
+    institution = serializers.CharField(max_length=350, required=False, allow_blank=True)
     experience_years = serializers.IntegerField(min_value=0, required=False)
     hourly_rate_min = serializers.IntegerField(min_value=0, required=False, allow_null=True)
     hourly_rate_max = serializers.IntegerField(min_value=0, required=False, allow_null=True)
@@ -124,9 +136,15 @@ class TutorProfileSerializer(serializers.Serializer):
     email = serializers.EmailField()
     phone = serializers.CharField(allow_null=True)
     avatar = serializers.CharField(allow_null=True)
+    birth_year = serializers.IntegerField(allow_null=True)
+    gender = serializers.CharField(allow_null=True)
+    hometown = serializers.CharField(allow_null=True)
+    voice = serializers.CharField(allow_null=True)
     headline = serializers.CharField(allow_null=True)
     bio = serializers.CharField(allow_null=True)
     education_level = serializers.CharField(allow_null=True)
+    major = serializers.CharField(allow_null=True)
+    institution = serializers.CharField(allow_null=True)
     experience_years = serializers.IntegerField()
     hourly_rate_min = serializers.IntegerField(allow_null=True)
     hourly_rate_max = serializers.IntegerField(allow_null=True)
@@ -145,9 +163,13 @@ class RecruitmentQuerySerializer(serializers.Serializer):
     subject = serializers.SlugField(required=False, max_length=180)
     province = serializers.SlugField(required=False, max_length=180)
     ward = serializers.SlugField(required=False, max_length=180)
-    # ``admin`` is the public recruitment board. ``parent`` is the board of
-    # real tutor-finding requests created from the learning-request flow.
-    posted_by = serializers.ChoiceField(required=False, choices=('admin', 'parent'))
+    # ``admin`` is the recruitment board. ``requester`` combines parent and
+    # student postings on the separate public class board.
+    posted_by = serializers.ChoiceField(
+        required=False,
+        choices=('admin', 'parent', 'student', 'requester'),
+    )
+    teaching_mode = serializers.ChoiceField(required=False, choices=('online', 'offline', 'both'))
 
 
 class RecruitmentReferenceSerializer(serializers.Serializer):
@@ -173,6 +195,7 @@ class RecruitmentJobSerializer(serializers.Serializer):
     budget_min = serializers.IntegerField(allow_null=True)
     budget_max = serializers.IntegerField(allow_null=True)
     schedule_expect = serializers.CharField(allow_null=True)
+    teaching_mode = serializers.ChoiceField(choices=('online', 'offline', 'both'))
     status = serializers.CharField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
@@ -190,6 +213,11 @@ class TutorRequestCreateSerializer(serializers.Serializer):
     budget_min = serializers.IntegerField(min_value=0, required=False, allow_null=True)
     budget_max = serializers.IntegerField(min_value=0, required=False, allow_null=True)
     schedule_expect = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    teaching_mode = serializers.ChoiceField(
+        choices=('online', 'offline', 'both'),
+        required=False,
+        default='both',
+    )
 
     def validate(self, attrs):
         minimum = attrs.get('budget_min')
@@ -242,6 +270,33 @@ class TutorAvailabilityUpdateSerializer(serializers.Serializer):
 class TutorAvailabilityResponseSerializer(serializers.Serializer):
     tutor = RecruitmentReferenceSerializer()
     slots = TutorAvailabilitySlotSerializer(many=True)
+
+
+class TutorSubjectChangeRequestSerializer(serializers.Serializer):
+    subject_id = serializers.IntegerField(min_value=1)
+    action = serializers.ChoiceField(choices=('add', 'remove'))
+    level = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    price_per_hour = serializers.IntegerField(min_value=0, required=False, allow_null=True)
+    note = serializers.CharField(max_length=1000, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if attrs['action'] == 'add' and attrs.get('price_per_hour') is None:
+            # The fee is optional in the database, but requiring it here gives
+            # Admin enough information to approve a new teaching subject.
+            raise serializers.ValidationError({'price_per_hour': 'Vui lòng nhập học phí dự kiến cho môn muốn thêm.'})
+        return attrs
+
+
+class TutorSubjectChangeRequestResponseSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    subject = RecruitmentReferenceSerializer()
+    action = serializers.CharField()
+    level = serializers.CharField(allow_null=True)
+    price_per_hour = serializers.IntegerField(allow_null=True)
+    note = serializers.CharField(allow_null=True)
+    status = serializers.CharField()
+    review_note = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
 
 
 class ClassApplicationSerializer(serializers.Serializer):

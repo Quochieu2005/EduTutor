@@ -15,12 +15,12 @@ def domain_documents():
     from lessons.documents import LearningRequest, Lesson, Message, Review, TutorQuestion
     from tutors.documents import (
         District, JobApplication, JobPosting, Province, Subject, Tutor, Ward,
-        TutorApplication, TutorSubject, TutorTeachingArea,
+        TutorApplication, TutorSubject, TutorSubjectChangeRequest, TutorTeachingArea,
     )
 
     return (
         User, Student, Parent, Tutor, Admin, Subject, Province, District, Ward,
-        TutorSubject, TutorTeachingArea, LearningRequest, Lesson, Review,
+        TutorSubject, TutorSubjectChangeRequest, TutorTeachingArea, LearningRequest, Lesson, Review,
         Message, TutorQuestion, Payment, PaymentItem, BlogCategory, BlogPost, Complaint, Contact, Banner,
         TutorApplication, JobPosting, JobApplication, AuthToken, Transaction,
         Invoice, AuditLog, SystemNotification, NotificationDelivery, AdminNotification,

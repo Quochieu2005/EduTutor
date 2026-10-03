@@ -154,7 +154,7 @@ export default function LessonsPage() {
                 lesson={lesson}
                 userRole={currentUser?.role}
                 onAccept={(id) => handleStatusChange(id, "accepted")}
-                onReject={(id) => handleStatusChange(id, "rejected")}
+                onReject={(id) => handleStatusChange(id, "declined")}
                 onComplete={(id) => handleStatusChange(id, "completed")}
                 onCancel={(id) => handleStatusChange(id, "cancelled")}
                 onCounterProposal={handleCounterProposal}

@@ -152,12 +152,15 @@ def _required_reference(request, field_name, document_class, label):
 
 
 def _offline_location(request):
-    """Resolve an offline lesson location from the official admin catalogue."""
+    """Resolve a precise in-person lesson location from the official catalogue."""
     province = _required_reference(request, 'province_id', Province, 'tỉnh/thành phố')
     ward = _required_reference(request, 'ward_id', Ward, 'xã/phường/đặc khu')
     if _reference_id(ward.province) != str(province.id):
         raise ValueError('Xã/phường/đặc khu không thuộc tỉnh/thành phố đã chọn.')
-    return province, ward, f'{ward.name}, {province.name}'
+    address = request.POST.get('location_detail', '').strip()
+    if not address:
+        raise ValueError('Buổi học trực tiếp cần nhập địa chỉ cụ thể.')
+    return province, ward, f'{address}, {ward.name}, {province.name}'
 
 
 def _required_date(raw_value):
@@ -327,9 +330,7 @@ def _lesson_values(request, lesson=None, session_date=None, mode_override=None):
 
 
 def schedule_create(request):
-    messages.error(request, 'Lịch học phải do học viên đề xuất và gia sư xác nhận.')
-    return redirect('management-page', module='schedules')
-    if request.method != 'POST':  # pragma: no cover - legacy code kept below temporarily
+    if request.method != 'POST':
         return redirect('management-page', module='schedules')
     try:
         session_dates = _recurrence_dates(request)
@@ -358,9 +359,7 @@ def schedule_create(request):
 
 
 def schedule_edit(request, lesson_id):
-    messages.error(request, 'Admin chỉ theo dõi; lịch học do gia sư và học viên thống nhất.')
-    return redirect('management-page', module='schedules')
-    if request.method != 'POST':  # pragma: no cover - legacy code kept below temporarily
+    if request.method != 'POST':
         return redirect('management-page', module='schedules')
     lesson = Lesson.objects(id=lesson_id).first()
     if lesson is None:
@@ -413,11 +412,14 @@ def schedule_edit(request, lesson_id):
 
 
 def schedule_delete(request, lesson_id):
+    # A scheduled lesson is an audit record shared by tutor and learner.
+    # Admin can arrange or correct it, but should not erase it from either
+    # person's history; cancellation is the recoverable alternative.
     return JsonResponse({
         'ok': False,
-        'message': 'Admin chỉ theo dõi; không thể xóa lịch đã được hai bên thống nhất.',
+        'message': 'Không thể xóa lịch học. Hãy cập nhật trạng thái sang Đã hủy nếu buổi học không diễn ra.',
     }, status=403)
-    if request.method != 'POST':  # pragma: no cover - legacy code kept below temporarily
+    if request.method != 'POST':
         return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
     lesson = Lesson.objects(id=lesson_id).first()
     if lesson is None:

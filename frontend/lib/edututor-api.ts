@@ -4,7 +4,7 @@
  * Không hard-code host: Axios `api` lấy NEXT_PUBLIC_API_URL, nên local dùng
  * Django localhost còn Vercel dùng Render chỉ bằng biến môi trường.
  */
-import { api } from "./api";
+import { api, type EduTutorRequestConfig } from "./api";
 
 export type Page<T> = { count: number; next: string | null; previous: string | null; results: T[] };
 export type Banner = { id: number; slug: string | null; title: string | null; image: string; link_url: string | null; sort_order: number };
@@ -42,9 +42,26 @@ export type Subject = {
 export type Province = { id: number; slug: string; name: string; code?: string | null };
 export type Ward = { id: number; slug: string; name: string; code?: string | null; type: string };
 export type TutorAvailability = { tutor: { id: number; slug: string; name: string }; slots: Array<{ weekday: number; period: "morning" | "afternoon" | "evening" }> };
-export type PublicTutor = { id: number; slug: string; name: string; avatar: string | null; headline: string | null; bio: string | null; education_level: string | null; experience_years: number; hourly_rate_min: number | null; hourly_rate_max: number | null; teaching_mode: "online" | "offline" | "both"; rating_avg: number; rating_count: number; subjects: Array<{ slug: string; name: string; level?: string | null }>; teaching_areas: Array<{ province_slug: string; province_name: string; ward_slug?: string | null; ward_name?: string | null }> };
-export type TutorJob = { slug: string; posted_by_type: "admin" | "parent"; title: string; subject: { id: number; slug: string; name: string }; province: { id: number; slug: string; name: string }; district: { id: number; slug: string; name: string } | null; ward: { id: number; slug: string; name: string; type: string } | null; grade: string | null; description: string; budget_min: number | null; budget_max: number | null; schedule_expect: string | null; status: string; created_at: string; updated_at: string };
+export type TutorSubjectChangeRequest = {
+  id: number;
+  subject: { id: number; slug: string; name: string };
+  action: "add" | "remove";
+  level: string | null;
+  price_per_hour: number | null;
+  note: string | null;
+  status: "pending" | "approved" | "rejected";
+  review_note: string | null;
+  created_at: string;
+};
+export type PublicTutor = { id: number; slug: string; name: string; avatar: string | null; birth_year: number | null; gender: "male" | "female" | "other" | null; hometown: string | null; voice: string | null; headline: string | null; bio: string | null; education_level: string | null; major: string | null; institution: string | null; experience_years: number; hourly_rate_min: number | null; hourly_rate_max: number | null; teaching_mode: "online" | "offline" | "both"; rating_avg: number; rating_count: number; subjects: Array<{ slug: string; name: string; level?: string | null }>; teaching_areas: Array<{ province_slug: string; province_name: string; ward_slug?: string | null; ward_name?: string | null }> };
+export type TutorJob = { slug: string; posted_by_type: "admin" | "parent" | "student"; title: string; subject: { id: number; slug: string; name: string }; province: { id: number; slug: string; name: string }; district: { id: number; slug: string; name: string } | null; ward: { id: number; slug: string; name: string; type: string } | null; grade: string | null; description: string; budget_min: number | null; budget_max: number | null; schedule_expect: string | null; teaching_mode: "online" | "offline" | "both"; status: string; created_at: string; updated_at: string };
 export type ActorNotification = { id: number; title: string; content: string; is_read: boolean; created_at: string; type?: string };
+export type LessonSession = {
+  id: string; requestId: string; subject: string; studentName: string; studentPhone: string;
+  tutorName: string; sessionDate: string; startTime: string; endTime: string;
+  mode: "online" | "offline"; location: string; meetingUrl: string;
+  status: "scheduled" | "completed" | "cancelled" | "no_show"; seriesId: string;
+};
 
 function page<T>(data: T[] | Page<T>): Page<T> {
   return Array.isArray(data) ? { count: data.length, next: null, previous: null, results: data } : data;
@@ -77,7 +94,7 @@ export const edututorApi = {
   async wardArea(provinceSlug: string, wardSlug: string) { return (await api.get(`/v1/geography/areas/${encodeURIComponent(provinceSlug)}/${encodeURIComponent(wardSlug)}/`)).data; },
 
   // Tuyển dụng, nhận lớp và thời gian rảnh của gia sư
-  async tutorJobs(params?: { page?: number; page_size?: number; search?: string; subject?: string; province?: string; ward?: string; posted_by?: "admin" | "parent" }) {
+  async tutorJobs(params?: { page?: number; page_size?: number; search?: string; subject?: string; province?: string; ward?: string; posted_by?: "admin" | "parent" | "student" | "requester"; teaching_mode?: "online" | "offline" | "both" }) {
     return page<TutorJob>((await api.get("/v1/tutors/jobs/", { params })).data);
   },
   async tutors(params?: { page?: number; page_size?: number; subject?: string; province?: string; ward?: string; teaching_mode?: "online" | "offline" | "both"; search?: string }) {
@@ -86,7 +103,7 @@ export const edututorApi = {
   async tutor(slug: string) { return (await api.get<PublicTutor>(`/v1/tutors/${encodeURIComponent(slug)}/`)).data; },
   async tutorJob(slug: string) { return (await api.get(`/v1/tutors/jobs/${encodeURIComponent(slug)}/`)).data; },
   async applyForTutorJob(slug: string, payload: { cover_letter?: string }) { return (await api.post(`/v1/tutors/jobs/${encodeURIComponent(slug)}/apply/`, payload)).data; },
-  async createTutorRequest(payload: { subject_id: number; province_id: number; ward_id: number; title: string; description: string; grade?: string; budget_min?: number | null; budget_max?: number | null; schedule_expect?: string }) {
+  async createTutorRequest(payload: { subject_id: number; province_id: number; ward_id: number; title: string; description: string; grade?: string; budget_min?: number | null; budget_max?: number | null; schedule_expect?: string; teaching_mode?: "online" | "offline" | "both" }) {
     return (await api.post<TutorJob>("/v1/tutors/requests/", payload)).data;
   },
   async submitTutorApplication(payload: FormData) { return (await api.post("/v1/tutors/applications/", payload, { headers: { "Content-Type": "multipart/form-data" } })).data; },
@@ -95,6 +112,8 @@ export const edututorApi = {
   async refreshTutorSession(refresh: string) { return (await api.post("/v1/tutors/auth/refresh/", { refresh })).data; },
   async myTutorAvailability() { return (await api.get<TutorAvailability>("/v1/tutors/me/availability/")).data; },
   async updateMyTutorAvailability(slots: TutorAvailability["slots"]) { return (await api.put<TutorAvailability>("/v1/tutors/me/availability/", { slots })).data; },
+  async tutorSubjectChangeRequests() { return (await api.get<Array<TutorSubjectChangeRequest>>("/v1/tutors/auth/subject-change-requests/")).data; },
+  async requestTutorSubjectChange(payload: { subject_id: number; action: "add" | "remove"; level?: string; price_per_hour?: number | null; note?: string }) { return (await api.post<TutorSubjectChangeRequest>("/v1/tutors/auth/subject-change-requests/", payload)).data; },
 
   // Lịch học và hồ sơ
   async lessons() { return page((await api.get("/v1/lessons/")).data); },
@@ -102,8 +121,20 @@ export const edututorApi = {
   async inviteTutor(slug: string, payload: { contact_name: string; contact_phone: string; student_name?: string; grade_subject?: string; message?: string }) {
     return (await api.post<{ id: number; status: string; email_sent: boolean; message: string }>(`/v1/lessons/invite/${encodeURIComponent(slug)}/`, payload)).data;
   },
-  async updateLessonStatus(id: number | string, status: string) { return (await api.patch(`/v1/lessons/${id}/`, { status })).data; },
-  async proposeLesson(id: number | string, payload: Record<string, unknown>) { return (await api.put(`/v1/lessons/${id}/proposal/`, payload)).data; },
+  async updateLessonStatus(id: number | string, status: string) {
+    return (await api.patch(`/v1/lessons/${id}/`, { status }, {
+      // The tutor portal renders the API's precise workflow reason below;
+      // avoid a second generic global toast for the same failed action.
+      _edututorSilentToast: true,
+    } as EduTutorRequestConfig)).data;
+  },
+  async proposeLesson(id: number | string, payload: Record<string, unknown>) {
+    return (await api.put(`/v1/lessons/${id}/proposal/`, payload, {
+      _edututorSilentToast: true,
+    } as EduTutorRequestConfig)).data;
+  },
+  async lessonSessions() { return (await api.get<LessonSession[]>("/v1/lessons/sessions/")).data; },
+  async markLessonAttendance(id: string, status: "completed" | "no_show") { return (await api.patch<LessonSession>(`/v1/lessons/sessions/${id}/attendance/`, { status })).data; },
   async account() { return (await api.get("/v1/accounts/me/")).data; },
   async accountProfile() { return (await api.get("/v1/accounts/profile/")).data; },
   async updateAccountProfile(payload: FormData | Record<string, unknown>) { return (await api.patch("/v1/accounts/profile/", payload, payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined)).data; },
@@ -141,6 +172,12 @@ export const edututorApi = {
   },
   async createTutorQuestion(slug: string, payload: { content: string }) {
     return (await api.post<TutorQuestion>(`/v1/feedback/questions/tutors/${encodeURIComponent(slug)}/`, payload)).data;
+  },
+  async tutorQuestionInbox() {
+    return (await api.get<TutorQuestion[]>("/v1/feedback/questions/tutor/me/")).data;
+  },
+  async answerTutorQuestion(id: number, payload: { answer: string }) {
+    return (await api.patch<TutorQuestion>(`/v1/feedback/questions/tutor/me/${id}/answer/`, payload)).data;
   },
   async complaints() { return page((await api.get("/v1/feedback/complaints/me/")).data); },
   async createComplaint(payload: Record<string, unknown>) { return (await api.post("/v1/feedback/complaints/me/", payload)).data; },

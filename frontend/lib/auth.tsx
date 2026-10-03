@@ -1,20 +1,25 @@
 "use client";
 
 import { LogoutOutlined } from "@ant-design/icons";
-import { useMemo, useSyncExternalStore } from "react";
-import { AUTH_SESSION_EVENT, clearAuthSession, getAuthSession } from "./auth-session";
-
-function subscribe(callback: () => void) {
-  window.addEventListener(AUTH_SESSION_EVENT, callback);
-  window.addEventListener("storage", callback);
-  return () => {
-    window.removeEventListener(AUTH_SESSION_EVENT, callback);
-    window.removeEventListener("storage", callback);
-  };
-}
+import { useEffect, useMemo, useState } from "react";
+import { AUTH_SESSION_EVENT, AUTH_SESSION_STORAGE_KEY, clearAuthSession, getAuthSession } from "./auth-session";
 
 export function useEduUser() {
-  const raw = useSyncExternalStore(subscribe, () => localStorage.getItem("edututor_auth_session") ?? "", () => "");
+  // The server and the first browser render must be identical. Reading
+  // localStorage during render briefly made every F5 look signed-out, causing
+  // redirects and account API calls under the wrong role.
+  const [raw, setRaw] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sync = () => setRaw(window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY) ?? "");
+    sync();
+    window.addEventListener(AUTH_SESSION_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
   const user = useMemo(() => {
     if (!raw) return null;
     const session = getAuthSession();
@@ -32,7 +37,7 @@ export function useEduUser() {
       delete: async () => { throw new Error("API chưa hỗ trợ xóa tài khoản."); },
     };
   }, [raw]);
-  return { isLoaded: true, isSignedIn: Boolean(user), user };
+  return { isLoaded: raw !== null, isSignedIn: Boolean(user), user };
 }
 
 function openSignIn(options?: { fallbackRedirectUrl?: string; forceRedirectUrl?: string }) {

@@ -4,7 +4,7 @@ from .views import (
     ClassApplicationCreateView, MyTutorAvailabilityView, RecruitmentJobDetailView,
     RecruitmentJobListView, TutorApplicationCreateView, TutorAvailabilityView,
     TutorChangePasswordView, TutorLoginView, TutorMeView, TutorRefreshView,
-    TutorProfileView,
+    TutorProfileView, TutorSubjectChangeRequestView,
     PublicTutorDetailView, PublicTutorListView, TutorRequestCreateView,
 )
 
@@ -14,6 +14,7 @@ urlpatterns = [
     path('auth/me/', TutorMeView.as_view(), name='api-tutor-me'),
     path('auth/profile/', TutorProfileView.as_view(), name='api-tutor-profile'),
     path('auth/change-password/', TutorChangePasswordView.as_view(), name='api-tutor-change-password'),
+    path('auth/subject-change-requests/', TutorSubjectChangeRequestView.as_view(), name='api-tutor-subject-change-requests'),
     path('jobs/', RecruitmentJobListView.as_view(), name='api-recruitment-job-list'),
     path('jobs/<slug:slug>/', RecruitmentJobDetailView.as_view(), name='api-recruitment-job-detail'),
     path('jobs/<slug:slug>/apply/', ClassApplicationCreateView.as_view(), name='api-class-application-create'),

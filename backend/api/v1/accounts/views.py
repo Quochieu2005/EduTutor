@@ -300,13 +300,17 @@ class MeView(APIView):
 
     @extend_schema(tags=['Tài khoản'], responses={200: UserSerializer})
     def get(self, request):
+        if not isinstance(request.user.user, User):
+            return Response(
+                {'detail': 'Tài khoản gia sư sử dụng API hồ sơ gia sư riêng.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return Response(user_payload(request.user.user), headers={'Cache-Control': 'no-store'})
 
 
 def _account_type_for(user):
-    account_type = getattr(user, 'account_type', None)
-    if account_type in {'student', 'parent'}:
-        return account_type
+    # The role is derived from the persisted profile, never from the legacy
+    # marker in ``users``.  A fresh sign-up must remain a normal User.
     email = (user.email or '').strip().lower()
     if Student.objects(email=email, status='active').first() is not None:
         return 'student'
@@ -344,6 +348,11 @@ class AccountProfileView(APIView):
 
     @extend_schema(tags=['Hồ sơ'], responses={200: AccountProfileSerializer})
     def get(self, request):
+        if not isinstance(request.user.user, User):
+            return Response(
+                {'detail': 'Tài khoản gia sư sử dụng API hồ sơ gia sư riêng.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return Response(
             _account_profile_payload(request.user.user),
             headers={'Cache-Control': 'no-store'},
@@ -354,6 +363,11 @@ class AccountProfileView(APIView):
         responses={200: AccountProfileSerializer},
     )
     def patch(self, request):
+        if not isinstance(request.user.user, User):
+            return Response(
+                {'detail': 'Tài khoản gia sư sử dụng API hồ sơ gia sư riêng.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         serializer = AccountProfileUpdateSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         user = request.user.user

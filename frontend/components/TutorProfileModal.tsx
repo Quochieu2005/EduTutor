@@ -23,11 +23,12 @@ import {
   getTutorBirthYear,
   getTutorGender,
   getTutorHometown,
-  getTutorVoice,
   getTutorDegree,
-  getTutorAvailability,
+  type DayPeriod,
 } from "@/lib/home-mock-data";
-import { addTutorDirectRequest } from "@/lib/portal-store";
+import { edututorApi } from "@/lib/edututor-api";
+import { useEduUser } from "@/lib/auth";
+import { getAuthSession } from "@/lib/auth-session";
 
 interface TutorProfileModalProps {
   tutor: Tutor | null;
@@ -58,12 +59,14 @@ export function TutorProfileModal({
   onClose,
   triggerElement,
 }: TutorProfileModalProps) {
+  const { isSignedIn, user } = useEduUser();
   const modalRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<"profile" | "hire" | "consult">("profile");
 
   // Form states for "Cần tư vấn" & "Mời dạy"
   const [formData, setFormData] = useState({
     parentName: "",
+    email: "",
     phoneNumber: "",
     studentName: "",
     grade: "",
@@ -72,7 +75,58 @@ export function TutorProfileModal({
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
+  const [formSuccessMessage, setFormSuccessMessage] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<Record<number, DayPeriod[]>>({});
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !tutor) return;
+    let current = true;
+    setAvailabilityLoading(true);
+    setAvailabilityError(null);
+    edututorApi.tutorAvailability(tutor.id)
+      .then((result) => {
+        if (!current) return;
+        const next: Record<number, DayPeriod[]> = {};
+        result.slots.forEach((slot) => {
+          // API dùng 0=Thứ 2 ... 6=Chủ nhật; bảng giao diện dùng 2 ... 8.
+          const displayDay = slot.weekday + 2;
+          next[displayDay] = [...(next[displayDay] ?? []), slot.period];
+        });
+        setAvailability(next);
+      })
+      .catch(() => {
+        if (current) {
+          setAvailability({});
+          setAvailabilityError("Không tải được lịch từ hồ sơ gia sư.");
+        }
+      })
+      .finally(() => {
+        if (current) setAvailabilityLoading(false);
+      });
+    return () => { current = false; };
+  }, [isOpen, tutor]);
+
+  useEffect(() => {
+    // Tutors and Admins do not own a student/parent account profile. Avoid
+    // making that deliberately protected call when they only view a tutor.
+    const actorType = getAuthSession()?.actorType;
+    if (!isOpen || !isSignedIn || actorType === "tutor" || actorType === "admin") return;
+    let current = true;
+    edututorApi.accountProfile().then((profile) => {
+      if (!current) return;
+      const detail = profile.student ?? profile.parent ?? {};
+      setFormData((previous) => ({
+        ...previous,
+        parentName: previous.parentName || String(detail.name ?? profile.account?.display_name ?? user?.fullName ?? ""),
+        email: previous.email || String(profile.account?.email ?? user?.primaryEmailAddress?.emailAddress ?? ""),
+        phoneNumber: previous.phoneNumber || String(detail.phone ?? user?.primaryPhoneNumber?.phoneNumber ?? ""),
+      }));
+    }).catch(() => undefined);
+    return () => { current = false; };
+  }, [isOpen, isSignedIn, user]);
 
   // Keyboard navigation & Focus management
   useEffect(() => {
@@ -128,14 +182,20 @@ export function TutorProfileModal({
   const birthYear = getTutorBirthYear(tutor);
   const gender = getTutorGender(tutor);
   const hometown = getTutorHometown(tutor);
-  const voice = getTutorVoice(tutor);
   const degree = getTutorDegree(tutor);
-  const availability = getTutorAvailability(tutor);
-
+  const tutorSubjectOptions = [...new Set(
+    (tutor.teachingSubjects?.length ? tutor.teachingSubjects : tutor.subject.split(","))
+      .map((subject) => subject.trim())
+      .filter((subject) => subject && subject !== "Chưa cập nhật"),
+  )];
   const handleSubmitAction = async (e: React.FormEvent, type: "hire" | "consult") => {
     e.preventDefault();
     if (!formData.parentName.trim() || !formData.phoneNumber.trim()) {
       setFormError("Vui lòng điền họ tên và số điện thoại liên hệ.");
+      return;
+    }
+    if (type === "hire" && !formData.subject.trim()) {
+      setFormError("Vui lòng chọn môn học mà gia sư có thể dạy.");
       return;
     }
 
@@ -143,23 +203,45 @@ export function TutorProfileModal({
     setFormError(null);
 
     try {
-      await new Promise((r) => setTimeout(r, 600));
-
-      addTutorDirectRequest({
-        type,
-        tutorId: tutor.id,
-        tutorName: tutor.name,
-        contactName: formData.parentName.trim(),
-        contactPhone: formData.phoneNumber.trim(),
-        studentName: formData.studentName.trim() || undefined,
-        grade: formData.grade || tutor.grades,
-        subject: formData.subject || tutor.subject,
-        notes: formData.notes.trim() || undefined,
-      });
+      if (type === "consult") {
+        if (!formData.email.trim()) {
+          setFormError("Vui lòng nhập email để EduTutor phản hồi tư vấn.");
+          return;
+        }
+        const result = await edututorApi.sendContact({
+          parent_name: formData.parentName.trim(),
+          email: formData.email.trim(),
+          phone: formData.phoneNumber.trim(),
+          grade: formData.grade.trim() || undefined,
+          needs_description: [
+            `Cần tư vấn về gia sư ${tutor.name} (${tutor.subject}).`,
+            formData.notes.trim(),
+          ].filter(Boolean).join(" "),
+        });
+        setFormSuccessMessage(result.message || "Đã gửi tới mục Phản hồi liên hệ của Admin.");
+      } else {
+        if (!isSignedIn) {
+          setFormError("Bạn cần đăng nhập tài khoản học viên hoặc phụ huynh để mời gia sư dạy.");
+          return;
+        }
+        const result = await edututorApi.inviteTutor(tutor.id, {
+          contact_name: formData.parentName.trim(),
+          contact_phone: formData.phoneNumber.trim(),
+          student_name: formData.studentName.trim() || undefined,
+          grade_subject: [formData.grade.trim(), formData.subject.trim()].filter(Boolean).join(" - ") || `${tutor.grades} - ${tutor.subject}`,
+          message: formData.notes.trim() || undefined,
+        });
+        setFormSuccessMessage(result.email_sent
+          ? `${result.message} Email đã được gửi tới gia sư ${tutor.name}.`
+          : `${result.message} Yêu cầu đã vào tài khoản gia sư và Admin, nhưng email chưa gửi được. Vui lòng kiểm tra cấu hình SMTP.`);
+      }
 
       setFormSuccess(true);
-    } catch {
-      setFormError("Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại!");
+    } catch (error: unknown) {
+      const detail = typeof error === "object" && error !== null && "response" in error
+        ? (error as { response?: { data?: { detail?: string; message?: string } } }).response?.data
+        : undefined;
+      setFormError(detail?.detail || detail?.message || "Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại!");
     } finally {
       setIsSubmitting(false);
     }
@@ -258,7 +340,7 @@ export function TutorProfileModal({
                   <li className="flex justify-between py-1 border-b border-slate-50">
                     <span className="text-slate-400">Giới tính:</span>
                     <span className="font-semibold text-slate-900">
-                      {gender === "male" ? "Nam" : "Nữ"}
+                      {gender === "male" ? "Nam" : gender === "female" ? "Nữ" : "Chưa cập nhật"}
                     </span>
                   </li>
                   <li className="flex justify-between py-1 border-b border-slate-50">
@@ -266,8 +348,8 @@ export function TutorProfileModal({
                     <span className="font-semibold text-slate-900">{hometown}</span>
                   </li>
                   <li className="flex justify-between py-1">
-                    <span className="text-slate-400">Giọng nói:</span>
-                    <span className="font-semibold text-slate-900">{voice}</span>
+                    <span className="text-slate-400">Kinh nghiệm:</span>
+                    <span className="font-semibold text-slate-900">{tutor.experience || 0} năm</span>
                   </li>
                 </ul>
               </div>
@@ -349,6 +431,8 @@ export function TutorProfileModal({
 
                 {/* Grid Table */}
                 <div className="overflow-x-auto">
+                  {availabilityLoading && <p className="pb-3 text-center text-xs text-slate-500">Đang tải lịch từ gia sư...</p>}
+                  {availabilityError && <p className="pb-3 text-center text-xs font-semibold text-rose-600">{availabilityError}</p>}
                   <table className="w-full text-center border-collapse text-[11px]">
                     <thead>
                       <tr>
@@ -462,7 +546,7 @@ export function TutorProfileModal({
                         <span>Gửi yêu cầu thành công!</span>
                       </p>
                       <p>
-                        EduTutor đã nhận thông tin và sẽ liên hệ với bạn trong vòng 30 phút để xác nhận và sắp xếp buổi học thử.
+                        {formSuccessMessage}
                       </p>
                       <button
                         type="button"
@@ -516,6 +600,22 @@ export function TutorProfileModal({
                         </div>
                       </div>
 
+                      {activeTab === "consult" && (
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Email nhận phản hồi: *
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="email@example.com"
+                            value={formData.email}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white focus:outline-hidden focus:border-blue-500"
+                          />
+                        </div>
+                      )}
+
                       {activeTab === "hire" && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
@@ -533,15 +633,18 @@ export function TutorProfileModal({
 
                           <div>
                             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                              Lớp học / Môn học cần kèm:
+                            Môn học cần kèm: *
                             </label>
-                            <input
-                              type="text"
-                              placeholder={`Ví dụ: ${tutor.grades} - ${tutor.subject}`}
-                              value={formData.grade}
-                              onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+                          <select
+                            required
+                            value={formData.subject}
+                            onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs bg-white focus:outline-hidden focus:border-blue-500"
-                            />
+                          >
+                            <option value="">Chọn môn gia sư có thể dạy</option>
+                            {tutorSubjectOptions.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+                          </select>
+                          <p className="mt-1 text-[10px] font-normal text-slate-500">Chỉ hiển thị môn đã được duyệt trong hồ sơ gia sư.</p>
                           </div>
                         </div>
                       )}

@@ -13,6 +13,9 @@
           {% for choice in page.schedule_choices.students %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
         </select>
       </label>
+      <label>Tìm gia sư
+        <input type="search" data-schedule-tutor-search placeholder="Nhập tên hoặc email gia sư" autocomplete="off" />
+      </label>
       <label>Gia sư
         <select name="tutor_id" required>
           <option value="">Chọn gia sư đang Active</option>
@@ -69,6 +72,10 @@
           <option value="">Chọn tỉnh/thành phố trước</option>
           {% for choice in page.schedule_choices.wards %}<option value="{{ choice.value }}" data-province-id="{{ choice.province_id }}">{{ choice.label }}</option>{% endfor %}
         </select>
+      </label>
+      <label data-schedule-location-field>Địa chỉ cụ thể
+        <input name="location_detail" type="text" maxlength="350" placeholder="Ví dụ: 12 Nguyễn Văn Cừ, chung cư..., phòng..." disabled />
+        <small>Nhập số nhà/đường hoặc địa điểm gặp. Tỉnh/thành và xã/phường được chọn ở trên.</small>
       </label>
       <label>Học phí (VNĐ)<input name="price" type="number" min="0" placeholder="Ví dụ: 200000" /></label>
       <label>Thanh toán

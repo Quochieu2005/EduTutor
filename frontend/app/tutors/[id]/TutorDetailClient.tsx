@@ -29,11 +29,11 @@ import {
   getTutorBirthYear,
   getTutorGender,
   getTutorHometown,
-  getTutorVoice,
   getTutorDegree,
   getTutorAvailability,
 } from "@/lib/home-mock-data";
 import { edututorApi, type TutorQuestion, type TutorReview } from "@/lib/edututor-api";
+import { getAuthSession } from "@/lib/auth-session";
 import { toast } from "@/lib/toast";
 import {
   addEnrollmentRequest,
@@ -105,6 +105,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackLoadedTutorId, setFeedbackLoadedTutorId] = useState<string | null>(null);
   const [feedbackErrorTutorId, setFeedbackErrorTutorId] = useState<string | null>(null);
+  const [apiAvailability, setApiAvailability] = useState<Record<number, ("morning" | "afternoon" | "evening")[]>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -125,7 +126,8 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
   }, [user]);
 
   useEffect(() => {
-    if (!isSignedIn || !user || !["student", "parent"].includes(String(user.publicMetadata?.role ?? "student"))) return;
+    const actorType = getAuthSession()?.actorType;
+    if (!isSignedIn || !user || !["student", "parent"].includes(String(actorType))) return;
     let cancelled = false;
     edututorApi.accountProfile().then((profile) => {
       if (cancelled) return;
@@ -161,6 +163,22 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
     return () => { isCurrent = false; };
   }, [tutor.id]);
 
+  useEffect(() => {
+    let current = true;
+    edututorApi.tutorAvailability(tutor.id).then((result) => {
+      if (!current) return;
+      const next: Record<number, ("morning" | "afternoon" | "evening")[]> = {};
+      for (const slot of result.slots) {
+        const day = slot.weekday + 2;
+        (next[day] ??= []).push(slot.period);
+      }
+      setApiAvailability(next);
+    }).catch(() => {
+      if (current) setApiAvailability({});
+    });
+    return () => { current = false; };
+  }, [tutor.id]);
+
   const isLoadingFeedback = feedbackLoadedTutorId !== tutor.id && feedbackErrorTutorId !== tutor.id;
   const visibleFeedbackError = feedbackErrorTutorId === tutor.id ? feedbackError : null;
   const ratingBreakdown = [5, 4, 3, 2, 1].map((rating) => ({
@@ -178,9 +196,13 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
   const birthYear = getTutorBirthYear(tutor);
   const gender = getTutorGender(tutor);
   const hometown = getTutorHometown(tutor);
-  const voice = getTutorVoice(tutor);
   const degree = getTutorDegree(tutor);
-  const availability = getTutorAvailability(tutor);
+  const availability = Object.keys(apiAvailability).length ? apiAvailability : getTutorAvailability(tutor);
+  const tutorSubjectOptions = [...new Set(
+    (tutor.teachingSubjects?.length ? tutor.teachingSubjects : tutor.subject.split(","))
+      .map((subject) => subject.trim())
+      .filter((subject) => subject && subject !== "Chưa cập nhật"),
+  )];
 
   const handleDirectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,20 +210,38 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
       setDirectError("Vui lòng điền họ tên và số điện thoại liên hệ.");
       return;
     }
+    if (activeActionModal === "hire" && !directForm.subject.trim()) {
+      setDirectError("Vui lòng chọn môn học mà gia sư có thể dạy.");
+      return;
+    }
 
     setIsSubmittingDirect(true);
     setDirectError(null);
 
     try {
-      const result = await edututorApi.inviteTutor(tutor.id, {
-        contact_name: directForm.parentName.trim(),
-        contact_phone: directForm.phoneNumber.trim(),
-        student_name: directForm.studentName.trim(),
-        grade_subject: directForm.grade || `${tutor.grades} - ${tutor.subject}`,
-        message: [activeActionModal === "consult" ? "Yêu cầu tư vấn trước khi mời dạy." : "", directForm.notes.trim()].filter(Boolean).join(" "),
-      });
-
-      setDirectSuccessMessage(result.message);
+      if (activeActionModal === "consult") {
+        const result = await edututorApi.sendContact({
+          parent_name: directForm.parentName.trim(),
+          email: user?.primaryEmailAddress?.emailAddress ?? "",
+          phone: directForm.phoneNumber.trim(),
+          grade: directForm.grade || tutor.grades,
+          needs_description: [
+            `Yêu cầu tư vấn về gia sư ${tutor.name}.`,
+            `Môn học: ${directForm.subject || tutor.subject}.`,
+            directForm.notes.trim(),
+          ].filter(Boolean).join(" "),
+        });
+        setDirectSuccessMessage(`${result.message} Yêu cầu đã được chuyển tới mục Phản hồi liên hệ của Admin.`);
+      } else {
+        const result = await edututorApi.inviteTutor(tutor.id, {
+          contact_name: directForm.parentName.trim(),
+          contact_phone: directForm.phoneNumber.trim(),
+          student_name: directForm.studentName.trim(),
+          grade_subject: [directForm.grade.trim(), directForm.subject.trim()].filter(Boolean).join(" - ") || `${tutor.grades} - ${tutor.subject}`,
+          message: directForm.notes.trim(),
+        });
+        setDirectSuccessMessage(result.message);
+      }
       setDirectSuccess(true);
     } catch {
       setDirectError("Không thể gửi thông tin lúc này. Vui lòng thử lại!");
@@ -240,6 +280,10 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
 
   const handleAddQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (getAuthSession()?.actorType === "tutor") {
+      toast.error("Gia sư trả lời bình luận trong mục Quản lý buổi học của hồ sơ.");
+      return;
+    }
     if (!isSignedIn) {
       openSignIn();
       return;
@@ -356,12 +400,12 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
               <ul className="space-y-2.5 text-xs text-slate-700">
                 <li className="flex justify-between py-1 border-b border-slate-50">
                   <span className="text-slate-400">Năm sinh:</span>
-                  <span className="font-semibold text-slate-900">{birthYear}</span>
+                  <span className="font-semibold text-slate-900">{birthYear ?? "Chưa cập nhật"}</span>
                 </li>
                 <li className="flex justify-between py-1 border-b border-slate-50">
                   <span className="text-slate-400">Giới tính:</span>
                   <span className="font-semibold text-slate-900">
-                    {gender === "male" ? "Nam" : "Nữ"}
+                    {gender === "male" ? "Nam" : gender === "female" ? "Nữ" : "Chưa cập nhật"}
                   </span>
                 </li>
                 <li className="flex justify-between py-1 border-b border-slate-50">
@@ -369,8 +413,8 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
                   <span className="font-semibold text-slate-900">{hometown}</span>
                 </li>
                 <li className="flex justify-between py-1">
-                  <span className="text-slate-400">Giọng nói:</span>
-                  <span className="font-semibold text-slate-900">{voice}</span>
+                  <span className="text-slate-400">Kinh nghiệm:</span>
+                  <span className="font-semibold text-slate-900">{tutor.experience || 0} năm</span>
                 </li>
               </ul>
             </div>
@@ -401,11 +445,11 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
 
           {/* CỘT PHẢI: Chuyên môn, Lịch có thể dạy, Xác thực & CTAs (lg:col-span-8) */}
           <div className="lg:col-span-8 space-y-6">
-            {/* Giới thiệu & Phương pháp */}
+            {/* Chuyên môn & Kinh nghiệm */}
             <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-7 space-y-4 shadow-xs">
               <h2 className="text-sm font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
                 <TrophyOutlined className="text-blue-600" />
-                <span>Giới thiệu & Phương pháp giảng dạy</span>
+                <span>Chuyên môn &amp; Kinh nghiệm</span>
               </h2>
               <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
                 {tutor.fullBio || tutor.bio}
@@ -711,10 +755,10 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
           </div>
           <form onSubmit={handleAddQuestion} className="mt-5 space-y-3">
             <label htmlFor="question-input" className="block text-xs font-semibold text-slate-700">Để lại bình luận của bạn:</label>
-            <textarea id="question-input" rows={3} value={newQuestionText} onChange={(e) => setNewQuestionText(e.target.value)} placeholder={isSignedIn ? "Nhập câu hỏi hoặc trao đổi..." : "Đăng nhập để bình luận..."} className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white" />
+            <textarea id="question-input" rows={3} value={newQuestionText} disabled={getAuthSession()?.actorType === "tutor"} onChange={(e) => setNewQuestionText(e.target.value)} placeholder={getAuthSession()?.actorType === "tutor" ? "Gia sư trả lời trong Quản lý buổi học..." : isSignedIn ? "Nhập câu hỏi hoặc trao đổi..." : "Đăng nhập để bình luận..."} className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60" />
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-[11px] italic text-slate-400">* Nội dung sẽ được kiểm duyệt trước khi hiển thị công khai.</span>
-              <button type="submit" disabled={isSubmittingQuestion || !newQuestionText.trim()} className="self-end rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{isSubmittingQuestion ? "Đang gửi..." : "Gửi bình luận"}</button>
+              <button type="submit" disabled={getAuthSession()?.actorType === "tutor" || isSubmittingQuestion || !newQuestionText.trim()} className="self-end rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{isSubmittingQuestion ? "Đang gửi..." : "Gửi bình luận"}</button>
             </div>
           </form>
           {visibleFeedbackError && <p className="mt-3 text-xs text-rose-600">{visibleFeedbackError}</p>}
@@ -831,15 +875,18 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
                         </div>
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                            Lớp / Môn cần học:
+                            Môn học cần kèm: *
                           </label>
-                          <input
-                            type="text"
-                            placeholder={`VD: ${tutor.grades} - ${tutor.subject}`}
-                            value={directForm.grade}
-                            onChange={(e) => setDirectForm({ ...directForm, grade: e.target.value })}
+                          <select
+                            required
+                            value={directForm.subject}
+                            onChange={(e) => setDirectForm({ ...directForm, subject: e.target.value })}
                             className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:outline-hidden focus:border-blue-500"
-                          />
+                          >
+                            <option value="">Chọn môn gia sư có thể dạy</option>
+                            {tutorSubjectOptions.map((subject) => <option key={subject} value={subject}>{subject}</option>)}
+                          </select>
+                          <p className="mt-1 text-[10px] font-normal text-slate-500">Môn đã được duyệt trong hồ sơ gia sư.</p>
                         </div>
                       </div>
                     )}

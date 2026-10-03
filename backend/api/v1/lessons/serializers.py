@@ -1,6 +1,29 @@
 """Validation contracts for student/tutor schedule negotiation."""
 
+from datetime import timedelta
+
 from rest_framework import serializers
+
+
+class WeeklyScheduleSlotSerializer(serializers.Serializer):
+    weekday = serializers.IntegerField(min_value=0, max_value=6)
+    period = serializers.ChoiceField(choices=('morning', 'afternoon', 'evening'))
+    startTime = serializers.TimeField(input_formats=['%H:%M'])
+    endTime = serializers.TimeField(input_formats=['%H:%M'])
+
+    def validate(self, attrs):
+        if attrs['startTime'] >= attrs['endTime']:
+            raise serializers.ValidationError({'endTime': 'Giờ kết thúc phải sau giờ bắt đầu.'})
+        hour = attrs['startTime'].hour
+        end_hour = attrs['endTime'].hour
+        in_period = (
+            (attrs['period'] == 'morning' and hour >= 5 and end_hour <= 12)
+            or (attrs['period'] == 'afternoon' and hour >= 12 and end_hour <= 18)
+            or (attrs['period'] == 'evening' and hour >= 18 and end_hour <= 23)
+        )
+        if not in_period:
+            raise serializers.ValidationError('Giờ học phải nằm trọn trong buổi sáng, chiều hoặc tối đã chọn.')
+        return attrs
 
 
 class LearningRequestCreateSerializer(serializers.Serializer):
@@ -14,6 +37,9 @@ class LearningRequestCreateSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(choices=('online', 'offline'))
     meetingUrl = serializers.URLField(required=False, allow_blank=True)
     location = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    provinceId = serializers.IntegerField(min_value=1, required=False)
+    wardId = serializers.IntegerField(min_value=1, required=False)
+    address = serializers.CharField(max_length=350, required=False, allow_blank=True)
 
     def validate(self, attrs):
         if not attrs.get('subjectId') and not attrs.get('subject'):
@@ -24,6 +50,11 @@ class LearningRequestCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({'meetingUrl': 'Buổi học trực tuyến cần liên kết học.'})
         if attrs['mode'] == 'offline' and not attrs.get('location'):
             raise serializers.ValidationError({'location': 'Buổi học trực tiếp cần địa điểm.'})
+        structured_location = any(attrs.get(key) for key in ('provinceId', 'wardId', 'address'))
+        if attrs['mode'] == 'offline' and structured_location and not all(
+            attrs.get(key) for key in ('provinceId', 'wardId', 'address')
+        ):
+            raise serializers.ValidationError('Buổi học trực tiếp cần đủ tỉnh/thành, xã/phường và địa chỉ cụ thể.')
         return attrs
 
 
@@ -41,6 +72,10 @@ class LearningRequestStatusSerializer(serializers.Serializer):
     )
 
 
+class LessonAttendanceSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=('completed', 'no_show'))
+
+
 class ScheduleProposalSerializer(serializers.Serializer):
     preferredDate = serializers.DateField()
     preferredTime = serializers.TimeField(input_formats=['%H:%M'])
@@ -48,6 +83,12 @@ class ScheduleProposalSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(choices=('online', 'offline'))
     meetingUrl = serializers.URLField(required=False, allow_blank=True)
     location = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    provinceId = serializers.IntegerField(min_value=1, required=False)
+    wardId = serializers.IntegerField(min_value=1, required=False)
+    address = serializers.CharField(max_length=350, required=False, allow_blank=True)
+    note = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    weeklySlots = WeeklyScheduleSlotSerializer(many=True, required=False)
+    recurrenceEndDate = serializers.DateField(required=False)
 
     def validate(self, attrs):
         if attrs['preferredTime'] >= attrs['endTime']:
@@ -56,6 +97,19 @@ class ScheduleProposalSerializer(serializers.Serializer):
             raise serializers.ValidationError({'meetingUrl': 'Buổi học trực tuyến cần liên kết học.'})
         if attrs['mode'] == 'offline' and not attrs.get('location'):
             raise serializers.ValidationError({'location': 'Buổi học trực tiếp cần địa điểm.'})
+        structured_location = any(attrs.get(key) for key in ('provinceId', 'wardId', 'address'))
+        if attrs['mode'] == 'offline' and structured_location and not all(
+            attrs.get(key) for key in ('provinceId', 'wardId', 'address')
+        ):
+            raise serializers.ValidationError('Buổi học trực tiếp cần đủ tỉnh/thành, xã/phường và địa chỉ cụ thể.')
+        slots = attrs.get('weeklySlots') or []
+        keys = [(slot['weekday'], slot['period']) for slot in slots]
+        if len(keys) != len(set(keys)):
+            raise serializers.ValidationError({'weeklySlots': 'Không được chọn trùng một ngày và buổi học.'})
+        if attrs.get('recurrenceEndDate') and attrs['recurrenceEndDate'] < attrs['preferredDate']:
+            raise serializers.ValidationError({'recurrenceEndDate': 'Ngày kết thúc phải sau ngày bắt đầu.'})
+        if attrs.get('recurrenceEndDate') and attrs['recurrenceEndDate'] > attrs['preferredDate'] + timedelta(days=31):
+            raise serializers.ValidationError({'recurrenceEndDate': 'Lịch học chỉ được tạo tối đa một tháng từ ngày bắt đầu.'})
         return attrs
 
 
@@ -74,6 +128,8 @@ class LearningRequestResponseSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(choices=('online', 'offline'), allow_null=True)
     location = serializers.CharField(allow_null=True)
     meetingUrl = serializers.CharField(allow_null=True)
+    provinceId = serializers.CharField(allow_blank=True)
+    wardId = serializers.CharField(allow_blank=True)
     status = serializers.CharField()
     createdAt = serializers.CharField()
     source = serializers.CharField()
@@ -81,3 +137,6 @@ class LearningRequestResponseSerializer(serializers.Serializer):
     proposalVersion = serializers.IntegerField()
     studentConfirmed = serializers.BooleanField()
     tutorConfirmed = serializers.BooleanField()
+    weeklySlots = WeeklyScheduleSlotSerializer(many=True, required=False)
+    recurrenceEndDate = serializers.CharField(allow_blank=True)
+    proposalNote = serializers.CharField(allow_blank=True)

@@ -54,6 +54,7 @@ export function formatCurrency(amount: number) {
 export const statusLabels: Record<string, string> = {
   pending: "Chờ xác nhận",
   accepted: "Đã chấp nhận",
+  declined: "Đã từ chối",
   rejected: "Từ chối",
   completed: "Hoàn thành",
   cancelled: "Đã hủy",
@@ -62,6 +63,7 @@ export const statusLabels: Record<string, string> = {
 export const statusBadgeVariant: Record<string, BadgeProps["variant"]> = {
   pending: "warning",
   accepted: "info",
+  declined: "danger",
   rejected: "danger",
   completed: "success",
   cancelled: "default",

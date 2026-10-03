@@ -92,9 +92,17 @@ class Tutor(TimestampedDocument):
     phone = StringField(max_length=20, null=True)
     avatar = StringField(max_length=1000, null=True)
     avatar_public_id = StringField(max_length=1000, null=True)
+    # Public professional profile. These values are supplied and maintained
+    # by the tutor instead of being hard-coded in the web UI.
+    birth_year = IntField(null=True, min_value=1900, max_value=2100)
+    gender = StringField(choices=('male', 'female', 'other'), null=True)
+    hometown = StringField(max_length=250, null=True)
+    voice = StringField(max_length=150, null=True)
     headline = StringField(max_length=250, null=True)
     bio = StringField(null=True)
     education_level = StringField(max_length=150, null=True)
+    major = StringField(max_length=250, null=True)
+    institution = StringField(max_length=350, null=True)
     experience_years = IntField(default=0, min_value=0)
     hourly_rate_min = IntField(null=True, min_value=0)
     hourly_rate_max = IntField(null=True, min_value=0)
@@ -112,7 +120,15 @@ class Tutor(TimestampedDocument):
     # Incrementing this value revokes all previously issued tutor JWTs.
     token_version = IntField(default=1, min_value=1)
     meta = {'collection': 'tutors', 'indexes': [
-        {'fields': ['oauth_provider', 'oauth_uid'], 'unique': True, 'sparse': True},
+        # Only OAuth identities participate in this unique index. Admin-issued
+        # tutors use password login and keep both fields null, so they must not
+        # collide with each other.
+        {
+            'fields': ['oauth_provider', 'oauth_uid'],
+            'unique': True,
+            'name': 'unique_tutor_oauth_identity_v2',
+            'partialFilterExpression': {'oauth_uid': {'$type': 'string'}},
+        },
         'status', 'teaching_mode', 'is_verified', '-rating_avg',
     ]}
 
@@ -143,6 +159,35 @@ class TutorSubject(BigIntDocument):
     level = StringField(max_length=150, null=True)
     price_per_hour = IntField(null=True, min_value=0)
     meta = {'collection': 'tutor_subjects', 'indexes': [{'fields': ['tutor', 'subject', 'level'], 'unique': True}]}
+
+
+class TutorSubjectChangeRequest(TimestampedDocument):
+    """A tutor's subject add/remove request, approved by an administrator."""
+
+    ACTION_ADD = 'add'
+    ACTION_REMOVE = 'remove'
+    STATUS_PENDING = 'pending'
+    STATUS_APPROVED = 'approved'
+    STATUS_REJECTED = 'rejected'
+
+    tutor = ReferenceField(Tutor, required=True, db_field='tutor_id')
+    subject = ReferenceField(Subject, required=True, db_field='subject_id')
+    action = StringField(required=True, choices=(ACTION_ADD, ACTION_REMOVE))
+    level = StringField(max_length=150, null=True)
+    price_per_hour = IntField(null=True, min_value=0)
+    note = StringField(max_length=1000, null=True)
+    status = StringField(
+        required=True,
+        choices=(STATUS_PENDING, STATUS_APPROVED, STATUS_REJECTED),
+        default=STATUS_PENDING,
+    )
+    reviewed_by = ReferenceField('Admin', null=True, db_field='reviewed_by')
+    reviewed_at = DateTimeField(null=True)
+    review_note = StringField(max_length=1000, null=True)
+    meta = {
+        'collection': 'tutor_subject_change_requests',
+        'indexes': ['tutor', 'subject', 'status', '-created_at'],
+    }
 
 
 class TutorTeachingArea(BigIntDocument):
@@ -192,7 +237,7 @@ class TutorApplication(TimestampedDocument):
 
 class JobPosting(TimestampedDocument):
     slug = StringField(required=True, unique=True, max_length=180)
-    posted_by_type = StringField(required=True, choices=('admin', 'parent'))
+    posted_by_type = StringField(required=True, choices=('admin', 'parent', 'student'))
     posted_by_id = LongField(required=True, min_value=1)
     subject = ReferenceField(Subject, required=True, db_field='subject_id')
     province = ReferenceField(Province, required=True, db_field='province_id')
@@ -204,6 +249,14 @@ class JobPosting(TimestampedDocument):
     budget_min = IntField(null=True, min_value=0)
     budget_max = IntField(null=True, min_value=0)
     schedule_expect = StringField(null=True)
+    # A class request can be taught online, in person, or flexibly by either.
+    # ``both`` preserves the intended behaviour for requests created before
+    # this field was introduced.
+    teaching_mode = StringField(
+        required=True,
+        choices=('online', 'offline', 'both'),
+        default='both',
+    )
     status = StringField(required=True, choices=('open', 'closed'), default='open')
     meta = {'collection': 'job_postings', 'indexes': ['status', 'posted_by_type', 'subject', 'province', 'district', 'ward', '-created_at']}
 

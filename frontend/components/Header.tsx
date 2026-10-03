@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { EduUserButton, useEduUser } from "@/lib/auth";
+import { getAuthSession } from "@/lib/auth-session";
 import {
   SearchOutlined,
   LoginOutlined,
@@ -11,7 +12,6 @@ import {
   CloseOutlined,
   UserOutlined,
   EllipsisOutlined,
-  PhoneOutlined,
   InfoCircleOutlined,
   FileTextOutlined,
   TeamOutlined,
@@ -26,6 +26,7 @@ export function Header() {
   const { isLoaded, isSignedIn, user } = useEduUser();
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const authReady = mounted && isLoaded;
+  const actorType = mounted ? getAuthSession()?.actorType : null;
 
 
 
@@ -33,17 +34,17 @@ export function Header() {
   const moreButtonRef = useRef<HTMLButtonElement>(null);
 
   const isHome = pathname === "/" || pathname === "/Home";
-  const isClasses = pathname === "/classes" || pathname.startsWith("/classes/");
+  const isClassCreate = pathname === "/classes/create";
+  const isClasses = pathname === "/classes";
   const isTutors = pathname === "/tutors" || pathname.startsWith("/tutors/");
   const isRecruitment = pathname === "/recruitment" || pathname.startsWith("/recruitment/");
 
   const navLinks = [
     { label: "Trang chủ", href: isHome ? "#hero" : "/", isActive: isHome, isAnchor: isHome },
-    { label: "Đội ngũ gia sư", href: "/tutors", isActive: isTutors, isAnchor: false },
+    ...(actorType === "tutor" ? [] : [{ label: "Đội ngũ gia sư", href: "/tutors", isActive: isTutors, isAnchor: false }]),
     { label: "Nhận lớp", href: "/classes", isActive: isClasses, isAnchor: false },
-    { label: "Quy trình", href: isHome ? "#timeline" : "/#timeline", isActive: false, isAnchor: isHome },
     { label: "Tuyển dụng", href: "/recruitment", isActive: isRecruitment, isAnchor: false },
-    { label: "Liên hệ", href: isHome ? "#contact" : "/#contact", isActive: false, isAnchor: isHome },
+    { label: "Liên hệ", href: "/classes/create", isActive: isClassCreate, isAnchor: false },
   ];
 
   // Close more menu on click outside
@@ -98,13 +99,10 @@ export function Header() {
       },
     },
     {
-      label: "Liên hệ",
-      href: isHome ? "#contact" : "/#contact",
-      icon: <PhoneOutlined className="text-blue-600" />,
-      action: (e: React.MouseEvent<HTMLAnchorElement>) => {
-        handleScrollOrNav(e, isHome ? "#contact" : "/#contact");
-        setMoreMenuOpen(false);
-      },
+      label: "Đăng lớp tìm gia sư",
+      href: "/classes/create",
+      icon: <FileTextOutlined className="text-blue-600" />,
+      action: () => setMoreMenuOpen(false),
     },
     {
       label: "Blog",

@@ -1,5 +1,8 @@
 """HTTP views for tutors and public recruitment content managed by Admin."""
 
+from datetime import datetime, timezone
+
+from django.core.cache import cache
 from django.http import Http404
 from django.utils.text import slugify
 from drf_spectacular.utils import extend_schema
@@ -16,11 +19,13 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 
 from core.pagination import StandardResultsSetPagination
 from accounts.cloudinary_media import delete_asset, upload_tutor_application_document, upload_tutor_avatar
-from accounts.documents import Parent, Student
+from accounts.documents import Parent, Student, User
+from api.v1.accounts.services import SocialTokenError, ensure_student_profile
 from tutors.documents import (
     JobApplication, JobPosting, Province, Subject, Tutor, TutorApplication,
-    TutorAvailability, TutorSubject, TutorTeachingArea, Ward,
+    TutorAvailability, TutorSubject, TutorSubjectChangeRequest, TutorTeachingArea, Ward,
 )
+from core.documents import AdminNotification
 from .authentication import TutorJWTAuthentication
 from api.v1.accounts.authentication import MongoJWTAuthentication
 
@@ -33,6 +38,7 @@ from .serializers import (
     TutorAccountSerializer, TutorChangePasswordSerializer, TutorLoginSerializer,
     TutorPasswordChangedSerializer, TutorRefreshSerializer, TutorTokenPairSerializer,
     TutorProfileSerializer, TutorProfileUpdateSerializer,
+    TutorSubjectChangeRequestResponseSerializer, TutorSubjectChangeRequestSerializer,
     PublicTutorQuerySerializer, PublicTutorSerializer,
 )
 from .services import (
@@ -48,7 +54,9 @@ def open_recruitment_jobs(posted_by_type=None):
         'status': 'open',
         'subject__in': active_subject_ids,
     }
-    if posted_by_type:
+    if posted_by_type == 'requester':
+        filters['posted_by_type__in'] = ('parent', 'student')
+    elif posted_by_type:
         filters['posted_by_type'] = posted_by_type
     return JobPosting.objects(**filters).order_by('-created_at', '-id')
 
@@ -64,17 +72,22 @@ def _public_tutor_payload(tutor):
         'slug': tutor.slug,
         'name': tutor.name,
         'avatar': tutor.avatar,
+        'birth_year': tutor.birth_year,
+        'gender': tutor.gender,
+        'hometown': tutor.hometown,
+        'voice': tutor.voice,
         'headline': tutor.headline,
-        # Existing tutor.bio is imported from CVs and can contain contact
-        # details. Do not disclose unmoderated CV text on a public endpoint.
-        # A separately moderated public introduction can replace this later.
-        'bio': None,
+        # The tutor now edits this as their public introduction in the portal.
+        'bio': tutor.bio,
         'education_level': tutor.education_level,
+        'major': tutor.major,
+        'institution': tutor.institution,
         'experience_years': tutor.experience_years or 0,
         'hourly_rate_min': tutor.hourly_rate_min,
         'hourly_rate_max': tutor.hourly_rate_max,
         'rating_avg': float(tutor.rating_avg or 0),
         'rating_count': tutor.rating_count or 0,
+        'teaching_mode': tutor.teaching_mode,
         'subjects': [{'slug': link.subject.slug, 'name': link.subject.name, 'level': link.level} for link in subject_links],
         'teaching_areas': [
             {
@@ -220,7 +233,10 @@ class TutorProfileView(APIView):
             old_public_id = tutor.avatar_public_id
             tutor.avatar = asset['secure_url']
             tutor.avatar_public_id = asset['public_id']
-        nullable_text = {'phone', 'headline', 'bio', 'education_level'}
+        nullable_text = {
+            'phone', 'hometown', 'voice', 'headline', 'bio', 'education_level',
+            'major', 'institution',
+        }
         for field, value in values.items():
             setattr(tutor, field, (value or None) if field in nullable_text else value)
         tutor.save()
@@ -289,6 +305,13 @@ class RecruitmentJobListView(PublicRecruitmentView):
             if ward is None:
                 raise Http404
             jobs = jobs.filter(ward=ward)
+        if teaching_mode := query.validated_data.get('teaching_mode'):
+            # A flexible request (``both``) is compatible with either filter.
+            # Older postings have no field and are treated as flexible too.
+            accepted_modes = ('both',) if teaching_mode == 'both' else (teaching_mode, 'both')
+            jobs = jobs.filter(
+                Q(teaching_mode__in=accepted_modes) | Q(teaching_mode__exists=False),
+            )
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(jobs, request, view=self)
@@ -308,17 +331,18 @@ class RecruitmentJobDetailView(PublicRecruitmentView):
 def _requester_profile(user):
     """Resolve the authenticated EduTutor account to a student or parent."""
     email = (getattr(user, 'email', '') or '').strip().lower()
-    account_type = getattr(user, 'account_type', None)
-    if account_type == 'parent':
-        parent = Parent.objects(email=email).first()
-        if parent is not None:
-            return 'parent', int(parent.id)
     student = Student.objects(email=email, status='active').first()
     if student is not None:
         return 'student', int(student.id)
     parent = Parent.objects(email=email).first()
     if parent is not None:
         return 'parent', int(parent.id)
+    if isinstance(user, User):
+        try:
+            student = ensure_student_profile(user)
+        except SocialTokenError:
+            return None
+        return 'student', int(student.id)
     return None
 
 
@@ -358,7 +382,7 @@ class TutorRequestCreateView(APIView):
         requester = _requester_profile(request.user.user)
         if requester is None:
             return Response(
-                {'detail': 'Tài khoản cần có hồ sơ học viên hoặc phụ huynh trước khi gửi yêu cầu tìm gia sư.'},
+                {'detail': 'Không thể tạo hồ sơ học viên để gửi yêu cầu tìm gia sư.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -374,16 +398,28 @@ class TutorRequestCreateView(APIView):
         try:
             job = JobPosting(
                 slug=_unique_request_slug(values['title']),
-                posted_by_type='parent', posted_by_id=requester[1],
+                posted_by_type=requester[0], posted_by_id=requester[1],
                 title=values['title'].strip(), description=values['description'].strip(),
                 subject=subject, province=province, ward=ward,
                 grade=values.get('grade', '').strip() or None,
                 budget_min=values.get('budget_min'), budget_max=values.get('budget_max'),
                 schedule_expect=values.get('schedule_expect', '').strip() or None,
+                teaching_mode=values.get('teaching_mode', 'both'),
                 status='open',
             ).save()
         except (ValidationError, NotUniqueError) as error:
             return Response({'detail': str(error)}, status=400)
+        requester_label = 'Học viên' if requester[0] == 'student' else 'Phụ huynh'
+        AdminNotification(
+            title='Có yêu cầu đăng lớp mới',
+            message=(
+                f'{requester_label} vừa đăng nhu cầu "{job.title}" '
+                f'({subject.name} · {province.name}).'
+            ),
+            kind='system',
+            url='/admin/management/tutor-requests/',
+        ).save()
+        cache.delete('admin-header-notification-items:v1')
         return Response(RecruitmentJobSerializer(job).data, status=status.HTTP_201_CREATED)
 
 
@@ -499,7 +535,84 @@ class MyTutorAvailabilityView(APIView):
         TutorAvailability.objects(tutor=tutor).delete()
         for slot in serializer.validated_data['slots']:
             TutorAvailability(tutor=tutor, **slot, is_available=True).save()
+        # This is immediately visible on the public profile, but Admin is
+        # informed so scheduling staff can coordinate any existing classes.
+        AdminNotification(
+            title='Gia sư cập nhật lịch có thể dạy',
+            message=f'{tutor.name} vừa cập nhật lịch rảnh ({len(serializer.validated_data["slots"])} khung giờ).',
+            kind='system', url='/admin/management/tutors/',
+        ).save()
+        cache.delete('admin-header-notification-items:v1')
         return Response(_availability_payload(tutor))
+
+
+def _subject_change_payload(change):
+    return {
+        'id': int(change.id),
+        'subject': {
+            'id': int(change.subject.id), 'slug': change.subject.slug,
+            'name': change.subject.name,
+        },
+        'action': change.action,
+        'level': change.level,
+        'price_per_hour': change.price_per_hour,
+        'note': change.note,
+        'status': change.status,
+        'review_note': change.review_note,
+        'created_at': change.created_at,
+    }
+
+
+class TutorSubjectChangeRequestView(APIView):
+    """Tutor subject changes are queued for an administrator to approve."""
+
+    authentication_classes = [TutorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=['Hồ sơ gia sư'], responses=TutorSubjectChangeRequestResponseSerializer(many=True),
+    )
+    def get(self, request):
+        changes = TutorSubjectChangeRequest.objects(tutor=request.user.tutor).order_by('-created_at')
+        return Response([_subject_change_payload(change) for change in changes])
+
+    @extend_schema(
+        tags=['Hồ sơ gia sư'], request=TutorSubjectChangeRequestSerializer,
+        responses={201: TutorSubjectChangeRequestResponseSerializer},
+    )
+    def post(self, request):
+        serializer = TutorSubjectChangeRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        tutor = request.user.tutor
+        values = serializer.validated_data
+        subject = Subject.objects(id=values['subject_id'], status=1).first()
+        if subject is None:
+            return Response({'subject_id': ['Môn học không tồn tại hoặc đang ngưng hoạt động.']}, status=400)
+        assignment = TutorSubject.objects(tutor=tutor, subject=subject).first()
+        if values['action'] == TutorSubjectChangeRequest.ACTION_ADD and assignment is not None:
+            return Response({'detail': 'Môn học này đã có trong hồ sơ gia sư.'}, status=409)
+        if values['action'] == TutorSubjectChangeRequest.ACTION_REMOVE and assignment is None:
+            return Response({'detail': 'Môn học này không có trong hồ sơ gia sư.'}, status=409)
+        if TutorSubjectChangeRequest.objects(
+            tutor=tutor, subject=subject, action=values['action'],
+            status=TutorSubjectChangeRequest.STATUS_PENDING,
+        ).first() is not None:
+            return Response({'detail': 'Yêu cầu cho môn học này đang chờ Admin duyệt.'}, status=409)
+
+        change = TutorSubjectChangeRequest(
+            tutor=tutor, subject=subject, action=values['action'],
+            level=(values.get('level') or '').strip() or None,
+            price_per_hour=values.get('price_per_hour'),
+            note=(values.get('note') or '').strip() or None,
+        ).save()
+        action_label = 'thêm' if change.action == TutorSubjectChangeRequest.ACTION_ADD else 'gỡ'
+        AdminNotification(
+            title='Yêu cầu cập nhật môn dạy',
+            message=f'{tutor.name} yêu cầu {action_label} môn {subject.name}.',
+            kind='system', url='/admin/management/tutor-subject-requests/',
+        ).save()
+        cache.delete('admin-header-notification-items:v1')
+        return Response(_subject_change_payload(change), status=status.HTTP_201_CREATED)
 
 
 class ClassApplicationCreateView(APIView):

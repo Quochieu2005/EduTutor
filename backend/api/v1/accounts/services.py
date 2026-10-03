@@ -153,9 +153,6 @@ def clerk_exchange(*, claims, email, display_name='', avatar=''):
     user = User.objects(oauth_provider='clerk', oauth_uid=subject).first()
     if user is not None:
         changed = False
-        if not user.account_type:
-            user.account_type = 'student'
-            changed = True
         if user.email != email and User.objects(email=email, id__ne=user.id).first() is None:
             user.email = email
             changed = True
@@ -170,7 +167,6 @@ def clerk_exchange(*, claims, email, display_name='', avatar=''):
                 user.save()
             except NotUniqueError as error:
                 raise SocialTokenError('Không thể đồng bộ thông tin tài khoản Clerk.') from error
-        _ensure_account_profile(user, oauth_provider='clerk', oauth_uid=subject)
         return user, False
 
     existing = User.objects(email=email).first()
@@ -185,8 +181,6 @@ def clerk_exchange(*, claims, email, display_name='', avatar=''):
             raise SocialTokenError('Email này đã liên kết với tài khoản mạng xã hội khác.')
         existing.oauth_provider = 'clerk'
         existing.oauth_uid = subject
-        if not existing.account_type:
-            existing.account_type = 'student'
         if display_name:
             existing.display_name = display_name
         if avatar:
@@ -195,7 +189,6 @@ def clerk_exchange(*, claims, email, display_name='', avatar=''):
             existing.save()
         except NotUniqueError as error:
             raise SocialTokenError('Không thể liên kết tài khoản Clerk hiện có.') from error
-        _ensure_account_profile(existing, oauth_provider='clerk', oauth_uid=subject)
         return existing, False
 
     try:
@@ -210,14 +203,15 @@ def clerk_exchange(*, claims, email, display_name='', avatar=''):
         avatar=avatar.strip() or None,
         oauth_provider='clerk',
         oauth_uid=subject,
-        account_type='student',
+        # A newly authenticated website account is only a ``User``.  Its
+        # student profile is created when it actually starts a learning flow.
+        account_type=None,
     )
     user.set_password(secrets.token_urlsafe(48))
     try:
         user.save()
     except NotUniqueError as error:
         raise SocialTokenError('Không thể đồng bộ tài khoản Clerk. Vui lòng thử lại.') from error
-    _ensure_account_profile(user, oauth_provider='clerk', oauth_uid=subject)
     return user, True
 
 
@@ -238,10 +232,10 @@ def unique_username(value):
 
 
 def _ensure_student_profile(user, *, oauth_provider=None, oauth_uid=None):
-    """Give every unified website account a student profile for tutor requests."""
+    """Create or update a student profile only after a learning action."""
     email = (user.email or '').strip().lower()
     if not email:
-        return
+        return None
     existing = Student.objects(email=email).first()
     if existing is not None:
         changed = False
@@ -258,7 +252,7 @@ def _ensure_student_profile(user, *, oauth_provider=None, oauth_uid=None):
                 existing.save()
             except NotUniqueError:
                 pass
-        return
+        return existing
     base = _username_base(getattr(user, 'display_name', '') or user.username or email.split('@', 1)[0])
     slug = base
     suffix = 2
@@ -279,7 +273,33 @@ def _ensure_student_profile(user, *, oauth_provider=None, oauth_uid=None):
         student.save()
     except NotUniqueError:
         # A concurrent login may have created the profile already.
-        return
+        return Student.objects(email=email).first()
+    return student
+
+
+def ensure_student_profile(user):
+    """Promote one website ``User`` to an active learner exactly when needed.
+
+    Registration and ordinary sign-in intentionally do not create a
+    ``students`` record.  This function is called only by actions that need a
+    learner (book a lesson, invite a tutor, or send a signed-in study request).
+    It is idempotent so a repeated browser request cannot create duplicates.
+    """
+    if not isinstance(user, User):
+        raise SocialTokenError('Chỉ tài khoản người dùng mới có thể gửi yêu cầu học.')
+    student = _ensure_student_profile(
+        user,
+        oauth_provider=user.oauth_provider,
+        oauth_uid=user.oauth_uid,
+    )
+    if student is None:
+        raise SocialTokenError('Không thể tạo hồ sơ học viên cho tài khoản này.')
+    if user.account_type != 'student':
+        # ``account_type`` is retained for backward-compatible API payloads;
+        # the Student document remains the source of truth for learner access.
+        User.objects(id=user.id).update_one(set__account_type='student')
+        user.account_type = 'student'
+    return student
 
 
 def _ensure_parent_profile(user):
@@ -324,14 +344,6 @@ def _ensure_parent_profile(user):
         return
 
 
-def _ensure_account_profile(user, *, oauth_provider=None, oauth_uid=None):
-    """Keep the selected website account profile in the correct collection."""
-    if getattr(user, 'account_type', None) == 'parent':
-        _ensure_parent_profile(user)
-    elif getattr(user, 'account_type', None) == 'student':
-        _ensure_student_profile(user, oauth_provider=oauth_provider, oauth_uid=oauth_uid)
-
-
 def user_payload(user):
     return {
         'id': str(user.id),
@@ -346,7 +358,6 @@ def user_payload(user):
 
 
 def token_pair_for(user):
-    _ensure_account_profile(user)
     now = datetime.now(timezone.utc)
     access_expires = now + timedelta(minutes=settings.API_JWT_ACCESS_TTL_MINUTES)
     refresh_expires = now + timedelta(days=settings.API_JWT_REFRESH_TTL_DAYS)
@@ -512,7 +523,7 @@ def reset_user_password(*, raw_token, new_password):
     return user
 
 
-def register_user(*, username, email, password, account_type='student', display_name=''):
+def register_user(*, username, email, password, account_type=None, display_name=''):
     email = email.strip().lower()
     try:
         assert_email_available(email)
@@ -525,14 +536,15 @@ def register_user(*, username, email, password, account_type='student', display_
         display_name=(display_name or username).strip(),
         email=email,
         oauth_provider='local',
-        account_type=account_type,
+        # A sign-up creates only a website User.  Do not make the person a
+        # student/parent until they use a learning feature.
+        account_type=None,
     )
     user.set_password(password)
     try:
         user.save()
     except NotUniqueError as error:
         raise SocialTokenError('Email hoặc username này đã được sử dụng.') from error
-    _ensure_account_profile(user)
     return user
 
 
@@ -574,7 +586,7 @@ def social_login(*, provider, identity, requested_username=''):
     user = User(
         username=username, display_name=identity.get('name') or username,
         email=email, oauth_provider=provider, oauth_uid=uid,
-        account_type='student',
+        account_type=None,
     )
     # Password is intentionally random: social accounts can only sign in with
     # the verified provider until a password-reset flow is explicitly added.

@@ -1,5 +1,5 @@
 import axios, { type AxiosRequestConfig } from "axios";
-import { clearAuthSession, getAuthSession, saveAuthSession, type ActorType } from "./auth-session";
+import { clearAuthSession, getAuthSession, saveAuthSession, touchAuthSession, type ActorType } from "./auth-session";
 import { toast } from "./toast";
 import type {
   AuthTokens,
@@ -54,7 +54,7 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-type EduTutorRequestConfig = AxiosRequestConfig & {
+export type EduTutorRequestConfig = AxiosRequestConfig & {
   _edututorSkipAuth?: boolean;
   _edututorSilentToast?: boolean;
   _edututorRetried?: boolean;
@@ -73,6 +73,7 @@ api.interceptors.request.use((config) => {
     const session = getAuthSession();
     if (session?.access && !(config as EduTutorRequestConfig)._edututorSkipAuth) {
       config.headers.Authorization = `Bearer ${session.access}`;
+      touchAuthSession();
     }
   }
   return config;
@@ -596,7 +597,9 @@ export async function updateLessonStatus(
     if (!updatedLesson) throw new Error("Không tìm thấy buổi học");
     return updatedLesson;
   }
-  const { data } = await api.patch(`/v1/lessons/${id}/`, { status });
+  const { data } = await api.patch(`/v1/lessons/${id}/`, { status }, {
+    _edututorSilentToast: true,
+  } as EduTutorRequestConfig);
   return data;
 }
 
@@ -604,7 +607,9 @@ export async function proposeLessonSchedule(
   id: string,
   payload: ScheduleProposalPayload,
 ): Promise<LessonRequest> {
-  const { data } = await api.put(`/v1/lessons/${id}/proposal/`, payload);
+  const { data } = await api.put(`/v1/lessons/${id}/proposal/`, payload, {
+    _edututorSilentToast: true,
+  } as EduTutorRequestConfig);
   return data;
 }
 
@@ -816,7 +821,9 @@ export async function respondToIncomingRequest(
           .includes("nhà")
           ? "offline"
           : "online",
-        meetingLink: "https://meet.google.com/edu-tutor-new",
+        // A meeting room belongs to a specific lesson. Never reuse a shared
+        // hard-coded Meet URL for a new online session.
+        meetingLink: undefined,
         hourlyRate: (updated as TutorIncomingRequest).offeredRate || 250000,
         status: "upcoming",
         notes: (updated as TutorIncomingRequest).content,

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -7,7 +8,12 @@ from django.test import RequestFactory, SimpleTestCase
 from django.core.cache import cache
 
 from accounts.documents import Admin
-from core.admin_contacts import contacts, contact_notifications, NEW_CONTACT_COUNT_CACHE_KEY
+from core.admin_contacts import (
+    NEW_CONTACT_COUNT_CACHE_KEY,
+    contact_delete,
+    contact_notifications,
+    contacts,
+)
 
 
 class AdminContactTests(SimpleTestCase):
@@ -36,15 +42,16 @@ class AdminContactTests(SimpleTestCase):
         context = render.call_args.args[2]
         self.assertEqual(context['page']['rows'][0]['id'], 17)
         self.assertFalse(context['page']['can_create'])
+        self.assertTrue(context['page']['can_manage'])
         html = render_to_string('resource/resource-list.html', context)
         for marker in ('data-resource-search', 'data-resource-view', 'data-resource-page-size',
-                       'name="contact_id" value="17"', 'name="status"', '0901234567'):
+                       'name="contact_id" value="17"', 'name="status"', '0901234567',
+                       'data-contact-view', 'data-contact-reply', 'data-resource-delete-selected'):
             self.assertIn(marker, html)
         self.assertIn('parent@example.com', html)
         self.assertIn('data-field="email"', html)
         self.assertNotIn('data-field="grade"', html)
         self.assertNotIn('<script>alert', html)
-        self.assertNotIn('data-resource-delete-selected', html)
 
     @patch('core.admin_contacts.messages.success')
     @patch('core.admin_contacts.record_admin_activity')
@@ -59,16 +66,31 @@ class AdminContactTests(SimpleTestCase):
 
     @patch('core.admin_contacts.messages.success')
     @patch('core.admin_contacts.send_mail')
+    @patch('core.admin_contacts.record_admin_activity')
     @patch('core.admin_contacts.Contact.objects')
-    def test_sends_email_reply_to_entered_recipient(self, objects, send, success):
+    def test_sends_email_reply_to_selected_contact(self, objects, audit, send, success):
+        contact = MagicMock(email='recipient@example.com', status='new')
+        objects.return_value.first.return_value = contact
         response = contacts(self.request('post', {
-            'action': 'reply', 'recipient_email': 'recipient@example.com',
+            'action': 'reply', 'contact_id': '17', 'recipient_email': 'wrong@example.com',
             'subject': 'EduTutor phản hồi', 'message': 'Nội dung phản hồi',
         }))
         self.assertEqual(response.status_code, 302)
         send.assert_called_once()
         self.assertEqual(send.call_args.args[3], ['recipient@example.com'])
-        objects.assert_not_called()
+        self.assertEqual(contact.update.call_args.kwargs['set__status'], 'contacted')
+        audit.assert_called_once()
+
+    @patch('core.admin_contacts.record_admin_activity')
+    @patch('core.admin_contacts.Contact.objects')
+    def test_deletes_one_contact(self, objects, audit):
+        contact = MagicMock()
+        objects.return_value.first.return_value = contact
+        response = contact_delete(self.request('post'), 17)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(json.loads(response.content)['ok'])
+        contact.delete.assert_called_once()
+        audit.assert_called_once()
 
     @patch('core.admin_contacts.Contact.objects')
     def test_rejects_invalid_input_and_missing_contact(self, objects):
@@ -78,6 +100,9 @@ class AdminContactTests(SimpleTestCase):
         objects.assert_not_called()
         objects.return_value.first.return_value = None
         self.assertEqual(contacts(self.request('post', {'contact_id': '17', 'status': 'closed'})).status_code, 404)
+        self.assertEqual(contacts(self.request('post', {
+            'action': 'reply', 'subject': 'Tiêu đề', 'message': 'Nội dung',
+        })).status_code, 400)
 
     @patch('core.admin_contacts.Contact.objects')
     def test_access_and_method_guards(self, objects):

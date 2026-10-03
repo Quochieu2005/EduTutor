@@ -37,6 +37,7 @@ export interface TutorProfile {
 export type LessonStatus =
   | "pending"
   | "accepted"
+  | "declined"
   | "rejected"
   | "completed"
   | "cancelled"
@@ -49,6 +50,8 @@ export interface LessonRequest {
   studentPhone?: string;
   tutorId: string;
   tutorName: string;
+  tutorAvailability?: Array<{ weekday: number; period: "morning" | "afternoon" | "evening" }>;
+  tutorAreas?: Array<{ provinceId: number; provinceName: string; wardId?: number | null; wardName?: string | null }>;
   subject: string;
   message: string;
   preferredDate: string;
@@ -66,6 +69,14 @@ export interface LessonRequest {
   proposalVersion?: number;
   studentConfirmed?: boolean;
   tutorConfirmed?: boolean;
+  weeklySlots?: Array<{
+    weekday: number;
+    period: "morning" | "afternoon" | "evening";
+    startTime: string;
+    endTime: string;
+  }>;
+  recurrenceEndDate?: string;
+  proposalNote?: string;
 }
 
 export interface ScheduleProposalPayload {
@@ -75,6 +86,17 @@ export interface ScheduleProposalPayload {
   mode: "online" | "offline";
   meetingUrl?: string;
   location?: string;
+  provinceId?: number;
+  wardId?: number;
+  address?: string;
+  weeklySlots?: Array<{
+    weekday: number;
+    period: "morning" | "afternoon" | "evening";
+    startTime: string;
+    endTime: string;
+  }>;
+  recurrenceEndDate?: string;
+  note?: string;
 }
 
 export interface AuthTokens {

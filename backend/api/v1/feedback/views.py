@@ -1,4 +1,5 @@
 from django.http import Http404
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -13,7 +14,7 @@ from tutors.documents import Tutor
 
 from .serializers import (
     ComplaintCreateSerializer, ComplaintSerializer, ReviewCreateSerializer, ReviewSerializer,
-    TutorQuestionCreateSerializer, TutorQuestionSerializer,
+    TutorQuestionAnswerSerializer, TutorQuestionCreateSerializer, TutorQuestionSerializer,
 )
 from .services import complaint_payload, create_complaint, question_payload, review_payload
 
@@ -113,6 +114,40 @@ class TutorQuestionListCreateView(APIView):
             status='visible',
         ).save()
         return Response(question_payload(question), status=status.HTTP_201_CREATED)
+
+
+class TutorQuestionTutorInboxView(APIView):
+    """Private question inbox for the tutor who owns the public profile."""
+
+    authentication_classes = [TutorJWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(tags=['Đánh giá & Hỏi đáp'], responses={200: TutorQuestionSerializer(many=True)})
+    def get(self, request):
+        questions = TutorQuestion.objects(
+            tutor=request.user.tutor, status__ne='hidden',
+        ).order_by('-created_at').select_related()
+        return Response([question_payload(question) for question in questions])
+
+
+class TutorQuestionAnswerView(APIView):
+    """A tutor can answer only questions posted on their own profile."""
+
+    authentication_classes = [TutorJWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(tags=['Đánh giá & Hỏi đáp'], request=TutorQuestionAnswerSerializer, responses={200: TutorQuestionSerializer})
+    def patch(self, request, question_id):
+        serializer = TutorQuestionAnswerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        question = TutorQuestion.objects(id=question_id, tutor=request.user.tutor).first()
+        if question is None:
+            return Response({'detail': 'Không tìm thấy bình luận thuộc hồ sơ gia sư này.'}, status=status.HTTP_404_NOT_FOUND)
+        question.answer = serializer.validated_data['answer'].strip()
+        question.answered_at = timezone.now()
+        question.status = 'visible'
+        question.save()
+        return Response(question_payload(question))
 
 
 class StudentComplaintListCreateView(APIView):

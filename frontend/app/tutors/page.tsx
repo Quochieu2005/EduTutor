@@ -25,12 +25,18 @@ import {
 } from "@/lib/home-mock-data";
 import { edututorApi, type Province, type Ward } from "@/lib/edututor-api";
 import { toTutorPresentation } from "@/lib/tutor-presenter";
-import { getProvinceSlug, getSubjectSlug, getSubjectFilterByQuery } from "@/lib/tutor-filter-mapping";
+import { getProvinceSlug } from "@/lib/tutor-filter-mapping";
 import { toast } from "@/lib/toast";
+import { getAuthSession } from "@/lib/auth-session";
 
 function TutorsListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isTutorAccount = getAuthSession()?.actorType === "tutor";
+
+  useEffect(() => {
+    if (isTutorAccount) router.replace("/profile");
+  }, [isTutorAccount, router]);
 
   // URL query params
   const paramSubject = searchParams.get("subject") || "all";
@@ -40,15 +46,9 @@ function TutorsListContent() {
   const paramWard = searchParams.get("ward") || "all";
   const paramTutorId = searchParams.get("tutorId");
 
-  const activeSubjectFilter = useMemo(
-    () => getSubjectFilterByQuery(paramSubject),
-    [paramSubject]
-  );
-  const resolvedSubjectValue = activeSubjectFilter
-    ? activeSubjectFilter.slug
-    : paramSubject === "all"
-    ? "all"
-    : paramSubject;
+  // Giá trị dropdown luôn là slug do API Subjects trả về. Không ánh xạ qua
+  // danh sách môn viết sẵn trong frontend, để môn Admin thêm sau này vẫn lọc được.
+  const resolvedSubjectValue = paramSubject === "all" ? "all" : paramSubject;
 
   // Local draft filter states
   const [filterSubject, setFilterSubject] = useState(resolvedSubjectValue);
@@ -133,7 +133,7 @@ function TutorsListContent() {
       try {
         const page = await edututorApi.tutors({
           page_size: 100,
-          subject: getSubjectSlug(paramSubject),
+          subject: paramSubject === "all" ? undefined : paramSubject,
           province: getProvinceSlug(paramCity),
           ward: paramWard !== "all" ? paramWard : undefined,
           teaching_mode: paramMode === "online" || paramMode === "offline" || paramMode === "both"
@@ -155,7 +155,7 @@ function TutorsListContent() {
     return () => {
       isCurrent = false;
     };
-  }, [activeSubjectFilter, paramCity, paramMode, paramSubject, paramWard]);
+  }, [paramCity, paramMode, paramSubject, paramWard]);
 
   const subjectOptions = apiSubjects;
   const provinceOptions = apiProvinces.map((province) => ({ value: province.name, label: province.name }));
@@ -197,21 +197,14 @@ function TutorsListContent() {
   // Filter logic
   const filteredTutors = useMemo(() => {
     return tutors.filter((tutor) => {
-      // 1. Môn học
-      if (paramSubject !== "all") {
-        if (activeSubjectFilter) {
-          if (!activeSubjectFilter.matches(tutor)) return false;
-        } else if (!tutor.subject.toLowerCase().includes(paramSubject.toLowerCase())) {
-          return false;
-        }
-      }
+      // 1. Môn học đã được API lọc theo subject slug. Không lọc lại bằng
+      // tên hiển thị tại đây vì slug (tin-hoc-van-phong) khác chuỗi có dấu
+      // hiển thị trên card (Tin Học Văn Phòng) và sẽ làm mất kết quả đúng.
 
       // 2. Cấp học
       if (paramGrade !== "all") {
-        if (paramGrade === "primary" && tutor.gradeLevel !== "primary") return false;
-        if (paramGrade === "secondary" && tutor.gradeLevel !== "secondary") return false;
-        if (paramGrade === "high-school" && tutor.gradeLevel !== "high-school") return false;
-        if (paramGrade === "exam-prep" && !tutor.grades.includes("12") && !tutor.grades.includes("Đại học")) return false;
+        const requestedGrade = paramGrade as Tutor["gradeLevels"][number];
+        if (!tutor.gradeLevels.includes(requestedGrade)) return false;
       }
 
       // 3. Hình thức dạy
@@ -226,7 +219,12 @@ function TutorsListContent() {
 
       return true;
     });
-  }, [tutors, activeSubjectFilter, paramSubject, paramGrade, paramMode, paramCity]);
+  }, [tutors, paramGrade, paramMode, paramCity]);
+
+  const selectedSubjectName = subjectOptions.find((subject) => subject.slug === paramSubject)?.name;
+  const noResultMessage = selectedSubjectName
+    ? `Hiện chưa có gia sư đang hoạt động dạy ${selectedSubjectName}. Gia sư cần được Admin duyệt môn dạy trước khi hiển thị tại đây.`
+    : "Không có gia sư nào thỏa mãn đầy đủ các tiêu chí lọc hiện tại. Vui lòng bấm “Xóa lọc” để xem toàn bộ danh sách hoặc thử mở rộng khu vực.";
 
   const handleOpenTutor = (tutor: Tutor, e: React.MouseEvent<HTMLElement>) => {
     setTriggerEl(e.currentTarget);
@@ -241,6 +239,10 @@ function TutorsListContent() {
     const qs = currentParams.toString();
     router.push(`/tutors${qs ? `?${qs}` : ""}`);
   };
+
+  if (isTutorAccount) {
+    return <main className="flex-1 px-4 py-16 text-center text-sm text-slate-500">Đang chuyển đến trang quản lý hồ sơ gia sư...</main>;
+  }
 
   return (
     <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -410,7 +412,7 @@ function TutorsListContent() {
           </div>
           <h2 className="text-base font-bold text-slate-900">Không tìm thấy gia sư phù hợp</h2>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            {tutorsLoadError ?? "Không có gia sư nào thỏa mãn đầy đủ các tiêu chí lọc hiện tại. Vui lòng bấm “Xóa lọc” để xem toàn bộ danh sách hoặc thử mở rộng khu vực."}
+            {tutorsLoadError ?? noResultMessage}
           </p>
           <button
             type="button"

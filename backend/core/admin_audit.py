@@ -24,6 +24,7 @@ ACTION_LABELS = {
     'logout_all': 'Đăng xuất tất cả thiết bị',
     'create': 'Thêm mới', 'update': 'Cập nhật', 'delete': 'Xóa',
     'toggle_status': 'Đổi trạng thái', 'change_password': 'Đổi mật khẩu',
+    'reply': 'Gửi phản hồi',
     'reset_password': 'Đặt lại mật khẩu', 'update_email': 'Đổi email',
     'update_profile': 'Cập nhật hồ sơ',
     'reconcile_payment': 'Đối soát học phí tự động',

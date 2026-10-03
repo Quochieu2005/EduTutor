@@ -86,6 +86,8 @@ from templates.views import (
 
     users,
 )
+from core.admin_contacts import contact_delete
+from core.admin_tutor_subject_changes import tutor_subject_change_requests, tutor_subject_change_review
 
 handler404 = page_not_found
 
@@ -103,6 +105,9 @@ urlpatterns = [
     path('admin/students/<slug:slug>/delete/', student_delete, name='student-delete'),
     path('admin/students/<slug:slug>/toggle-status/', student_toggle_status, name='student-toggle-status'),
     path('admin/users/', users, name='users'),
+    path('admin/management/contacts/<int:contact_id>/delete/', contact_delete, name='contact-delete'),
+    path('admin/management/tutor-subject-requests/', tutor_subject_change_requests, name='admin-tutor-subject-changes'),
+    path('admin/management/tutor-subject-requests/<int:change_id>/review/', tutor_subject_change_review, name='admin-tutor-subject-change-review'),
     path('admin/management/administrators/create/', administrator_create, name='administrator-create'),
     path('admin/management/administrators/<slug:slug>/edit/', administrator_edit, name='administrator-edit'),
     path('admin/management/administrators/<slug:slug>/delete/', administrator_delete, name='administrator-delete'),

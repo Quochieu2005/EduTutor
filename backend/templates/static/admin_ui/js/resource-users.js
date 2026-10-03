@@ -36,6 +36,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const scheduleStatusNote = form?.querySelector("[data-schedule-status-note]");
   const tutorRequestSubject = form?.elements.subject_id;
   const tutorRequestTutor = form?.elements.tutor_id;
+  const scheduleTutorSearch = form?.querySelector("[data-schedule-tutor-search]");
+  const scheduleTutorSelect = form?.elements.tutor_id;
   const feedbackStatus = form?.elements.status;
   const scheduleMode = form?.querySelector("[data-schedule-mode]");
   const scheduleWeekdayModes = [
@@ -47,6 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const scheduleLocationFields = [
     ...(form?.querySelectorAll("[data-schedule-location-field]") || []),
   ];
+  const locationDetailInput = form?.querySelector('[name="location_detail"]');
   const scheduleOnlineField = form?.querySelector("[data-schedule-online-field]");
   const meetingUrlInput = form?.querySelector('[name="meeting_url"]');
   const scheduleCreateOnly = [
@@ -108,6 +111,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
   provinceSelect?.addEventListener("change", () => filterWards());
+
+  const filterScheduleTutors = () => {
+    if (resourceKey !== "schedules" || !scheduleTutorSearch || !scheduleTutorSelect)
+      return;
+    const query = normalize(scheduleTutorSearch.value);
+    [...scheduleTutorSelect.options].forEach((option) => {
+      if (!option.value) return;
+      const matches = !query || normalize(option.textContent).includes(query);
+      option.hidden = !matches;
+      option.disabled = !matches;
+    });
+    if (scheduleTutorSelect.selectedOptions[0]?.disabled)
+      scheduleTutorSelect.value = "";
+  };
+  scheduleTutorSearch?.addEventListener("input", filterScheduleTutors);
 
   const selectedScheduleModes = () => {
     const recurrenceModes = scheduleRecurrenceDays
@@ -171,7 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const modes = selectedScheduleModes();
     const isOffline = modes.includes("offline");
     const isOnline = modes.includes("online");
-    [provinceSelect, wardSelect].filter(Boolean).forEach((field) => {
+    [provinceSelect, wardSelect, locationDetailInput].filter(Boolean).forEach((field) => {
       field.disabled = !isOffline;
       field.required = isOffline;
     });
@@ -181,6 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!isOffline) {
       if (provinceSelect) provinceSelect.value = "";
       if (wardSelect) wardSelect.value = "";
+      if (locationDetailInput) locationDetailInput.value = "";
     }
     if (meetingUrlInput) {
       meetingUrlInput.disabled = !isOnline;
@@ -439,14 +458,14 @@ document.addEventListener("DOMContentLoaded", () => {
       row.dataset.canDelete !== "false" &&
       (!isAdministrator || row.dataset.canDelete === "true");
     const actions = [];
-    const editLabel = resourceKey === "reviews-complaints" ? "Xử lý" : "Edit";
+    const editLabel = resourceKey === "reviews-complaints" ? "Xử lý" : "Chỉnh sửa";
     if (canEdit)
       actions.push(
         `<button type="button" data-resource-edit>${editLabel} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11.5 15H7a4 4 0 0 0-4 4v2"></path><path d="m14.4 17.6 4-4a2 2 0 0 1 3 3l-4 4-4 1z"></path><circle cx="10" cy="7" r="4"></circle></svg></button>`,
       );
     if (canDelete)
       actions.push(
-        '<button type="button" class="is-delete" data-resource-delete>Delete <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 11v6M14 11v6M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>',
+        '<button type="button" class="is-delete" data-resource-delete>Xóa <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 11v6M14 11v6M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>',
       );
     menu.innerHTML = actions.join("<hr>");
     document.body.appendChild(menu);
@@ -590,6 +609,11 @@ document.addEventListener("DOMContentLoaded", () => {
       [...form.elements].forEach((field) => {
         if (!field.name || field.name === "record_id") return;
         if (field.type === "file") return;
+        if (field.name === "availability_slots") {
+          field.checked = Array.isArray(savedValues.availability_slots)
+            && savedValues.availability_slots.includes(field.value);
+          return;
+        }
         const cell = row.querySelector(
           `[data-field="${CSS.escape(field.name)}"]`,
         );
@@ -597,6 +621,11 @@ document.addEventListener("DOMContentLoaded", () => {
           field.value = savedValues[field.name];
         else if (cell)
           field.value = cell.dataset.value || cell.textContent.trim();
+      });
+    }
+    if (!row) {
+      form.querySelectorAll('input[name="availability_slots"]').forEach((field) => {
+        field.checked = false;
       });
     }
     if (resourceKey === "tutors" && row) {
@@ -661,7 +690,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!targets.length) return;
     const overlay = document.createElement("div");
     overlay.className = "delete-modal";
-    overlay.innerHTML = `<div class="delete-dialog"><h2>&#9888; Delete ${targets.length > 1 ? `${targets.length} items` : entity}</h2><p>Are you sure you want to delete the selected data?<br>This action cannot be undone.</p><aside><b>Warning!</b><br>Please be careful, this operation can not be rolled back.</aside><footer><button type="button">Cancel</button><button type="button">Delete</button></footer></div>`;
+    overlay.innerHTML = `<div class="delete-dialog"><h2>&#9888; Xóa ${targets.length > 1 ? `${targets.length} mục đã chọn` : entity}</h2><p>Bạn có chắc muốn xóa dữ liệu đã chọn?<br>Thao tác này không thể hoàn tác.</p><aside><b>Lưu ý:</b><br>Hãy kiểm tra kỹ trước khi xóa.</aside><footer><button type="button">Hủy</button><button type="button">Xóa</button></footer></div>`;
     document.body.appendChild(overlay);
     const [cancel, remove] = overlay.querySelectorAll("footer button");
     cancel.addEventListener("click", () => overlay.remove());

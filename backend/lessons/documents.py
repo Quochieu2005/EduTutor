@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 from bson.int64 import Int64
-from mongoengine import BooleanField, DateField, DateTimeField, Document, IntField, LongField, ReferenceField, SequenceField, StringField
+from mongoengine import BooleanField, DateField, DateTimeField, DictField, Document, IntField, ListField, LongField, ReferenceField, SequenceField, StringField
 
 
 class BigIntDocument(Document):
@@ -33,8 +33,16 @@ class LearningRequest(TimestampedDocument):
     proposed_start_time = StringField(max_length=8, null=True)
     proposed_end_time = StringField(max_length=8, null=True)
     proposed_mode = StringField(choices=('online', 'offline'), null=True)
+    proposed_province = ReferenceField('Province', null=True, db_field='proposed_province_id')
+    proposed_ward = ReferenceField('Ward', null=True, db_field='proposed_ward_id')
     proposed_location = StringField(max_length=500, null=True)
     proposed_meeting_url = StringField(max_length=1000, null=True)
+    proposed_note = StringField(max_length=2000, null=True)
+    # The learner chooses one or more recurring weekly slots.  The start date
+    # is deliberately separate: it is the date from which this timetable is
+    # applied, not an availability restriction for that date itself.
+    proposed_slots = ListField(DictField(), default=list)
+    recurrence_end_date = DateField(null=True)
     # Both entry points converge here: a learner can invite a tutor from the
     # tutor directory, or a tutor can apply to a class from the class board.
     source = StringField(

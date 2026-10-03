@@ -2,12 +2,22 @@
   <div class="invite-dialog" role="dialog" aria-modal="true" aria-labelledby="contact-reply-title">
     <button class="invite-close" type="button" aria-label="Đóng">&times;</button>
     <h2 id="contact-reply-title">&#9993; Phản hồi liên hệ</h2>
-    <p>Nhập đúng địa chỉ email người nhận để gửi phản hồi.</p>
+    <p>Kiểm tra yêu cầu trước khi phản hồi. Email người nhận được lấy từ liên hệ đã chọn.</p>
     <form method="post" action="{% url 'management-page' module='contacts' %}">
       {% csrf_token %}
       <input type="hidden" name="action" value="reply" />
+      <input type="hidden" name="contact_id" required />
+      <section class="contact-reply-details" data-contact-reply-details aria-label="Thông tin liên hệ đã chọn">
+        <dl>
+          <div><dt>Người liên hệ</dt><dd data-contact-reply-name>—</dd></div>
+          <div><dt>Email nhận phản hồi</dt><dd data-contact-reply-email>—</dd></div>
+          <div><dt>Số điện thoại</dt><dd data-contact-reply-phone>—</dd></div>
+          <div><dt>Ngày gửi</dt><dd data-contact-reply-created>—</dd></div>
+        </dl>
+        <div class="contact-reply-request"><b>Nội dung yêu cầu</b><p data-contact-reply-message>—</p></div>
+      </section>
       <label>Email người nhận
-        <input type="email" name="recipient_email" maxlength="254" required autocomplete="email" placeholder="example@email.com" />
+        <input type="email" data-contact-reply-email-input readonly aria-readonly="true" />
       </label>
       <label>Tiêu đề<input type="text" name="subject" maxlength="250" required placeholder="Nhập tiêu đề phản hồi" /></label>
       <label>Nội dung<textarea name="message" maxlength="10000" required placeholder="Nhập nội dung phản hồi"></textarea></label>

@@ -22,6 +22,10 @@ class TutorQuestionCreateSerializer(serializers.Serializer):
     content = serializers.CharField(min_length=3, max_length=3000)
 
 
+class TutorQuestionAnswerSerializer(serializers.Serializer):
+    answer = serializers.CharField(min_length=3, max_length=3000)
+
+
 class TutorQuestionSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     tutor = serializers.CharField()

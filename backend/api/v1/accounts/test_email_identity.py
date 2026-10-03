@@ -5,7 +5,7 @@ from unittest.mock import patch
 from accounts.documents import Admin, Parent, Student, User
 from tutors.documents import Tutor
 
-from .services import SocialTokenError, register_user
+from .services import SocialTokenError, ensure_student_profile, register_user
 from .views import ClerkExchangeView, UnifiedLoginView
 
 
@@ -41,11 +41,14 @@ class CrossCollectionEmailIdentityTests(SimpleTestCase):
         self.assertEqual(response.data['actor_type'], 'admin')
         self.assertEqual(response.data['account']['email'], 'admin@example.com')
 
-    def test_student_user_logs_in_and_keeps_student_identity(self):
-        register_user(
+    def test_user_becomes_student_only_after_starting_a_learning_flow(self):
+        user = register_user(
             username='hoc_vien_a', display_name='Học viên A',
-            email='student@example.com', password='mat-khau-123', account_type='student',
+            email='student@example.com', password='mat-khau-123',
         )
+
+        self.assertIsNone(Student.objects(email='student@example.com').first())
+        ensure_student_profile(user)
 
         response = UnifiedLoginView.as_view()(self.factory.post(
             '/api/v1/accounts/login/unified/',

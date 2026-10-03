@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 
-from core.admin_contacts import NEW_CONTACT_COUNT_CACHE_KEY
+from core.admin_contacts import ADMIN_HEADER_NOTIFICATION_CACHE_KEY, NEW_CONTACT_COUNT_CACHE_KEY
 from core.documents import Banner, BlogCategory, BlogPost, Contact
 from tutors.documents import Subject
 
@@ -179,7 +179,7 @@ class ContactCreateView(PublicView):
         serializer.is_valid(raise_exception=True)
         Contact(**serializer.validated_data, status='new').save()
         try:
-            cache.delete(NEW_CONTACT_COUNT_CACHE_KEY)
+            cache.delete_many((NEW_CONTACT_COUNT_CACHE_KEY, ADMIN_HEADER_NOTIFICATION_CACHE_KEY))
         except Exception:
             # A cache outage must not turn a successful save into a failed submission.
             logger.warning('Could not invalidate admin contact count', exc_info=True)

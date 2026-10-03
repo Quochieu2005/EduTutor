@@ -41,7 +41,7 @@ export interface ClassComment {
 
 export interface ClassListing {
   id: string;
-  postedByType?: "admin" | "parent";
+  postedByType?: "admin" | "parent" | "student";
   code: string;
   title: string;
   status: "needing" | "with";
@@ -165,57 +165,36 @@ export function getTutorRoleTitle(tutor: Tutor): string {
 }
 
 export function getTutorInstitution(tutor: Tutor): string {
-  if (tutor.institution) return tutor.institution;
-  if (tutor.city === "Hà Nội") return "ĐH Sư phạm Hà Nội";
-  if (tutor.city === "Đà Nẵng") return "ĐH Sư phạm - ĐH Đà Nẵng";
-  return "ĐH Sư phạm TP.HCM";
+  return tutor.institution || "Chưa cập nhật";
 }
 
 export function getTutorMajor(tutor: Tutor): string {
-  if (tutor.major) return tutor.major;
-  return `Sư phạm ${tutor.subject}`;
+  return tutor.major || "Chưa cập nhật";
 }
 
-export function getTutorBirthYear(tutor: Tutor): number {
-  if (tutor.birthYear) return tutor.birthYear;
-  return tutor.tutorType === "teacher" ? 1993 : 2003;
+export function getTutorBirthYear(tutor: Tutor): number | null {
+  return tutor.birthYear ?? null;
 }
 
-export function getTutorGender(tutor: Tutor): "male" | "female" {
-  if (tutor.gender) return tutor.gender;
-  return tutor.name.includes("Thị") || tutor.name.includes("Lan") || tutor.name.includes("Linh") || tutor.name.includes("Mai") || tutor.name.includes("Bình")
-    ? "female"
-    : "male";
+export function getTutorGender(tutor: Tutor): "male" | "female" | null {
+  return tutor.gender ?? null;
 }
 
 export function getTutorHometown(tutor: Tutor): string {
-  if (tutor.hometown) return tutor.hometown;
-  return tutor.city || "Hà Nội";
+  return tutor.hometown || "Chưa cập nhật";
 }
 
 export function getTutorVoice(tutor: Tutor): string {
-  if (tutor.voice) return tutor.voice;
-  if (tutor.city === "TP.HCM" || tutor.city === "Cần Thơ") return "Giọng Nam chuẩn";
-  if (tutor.city === "Đà Nẵng") return "Giọng Trung truyền cảm";
-  return "Giọng Bắc chuẩn";
+  return tutor.voice || "Chưa cập nhật";
 }
 
 export function getTutorDegree(tutor: Tutor): string {
-  if (tutor.degreeLevel) return tutor.degreeLevel;
-  return tutor.tutorType === "teacher" ? "Cử nhân Sư phạm" : "Sinh viên năm 3";
+  return tutor.degreeLevel || "Chưa cập nhật";
 }
 
 export function getTutorAvailability(tutor: Tutor): Record<number, DayPeriod[]> {
   if (tutor.availability) return tutor.availability;
-  return {
-    2: ["evening"],
-    3: ["afternoon", "evening"],
-    4: ["evening"],
-    5: ["afternoon", "evening"],
-    6: ["evening"],
-    7: ["morning", "afternoon", "evening"],
-    8: ["morning", "afternoon"],
-  };
+  return {};
 }
 
 

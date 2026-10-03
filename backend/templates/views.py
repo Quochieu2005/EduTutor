@@ -84,7 +84,7 @@ from core.admin_tutor_requests import (
 from lessons.documents import LearningRequest, Lesson
 from tutors.documents import (
     JobApplication, JobPosting, Province, Subject, Tutor, TutorApplication, TutorSubject,
-    TutorTeachingArea, Ward,
+    TutorAvailability, TutorTeachingArea, Ward,
 )
 
 
@@ -538,9 +538,12 @@ def _tutor_mode(value):
 def _tutors_page_config():
     tutors = list(Tutor.objects.order_by('-created_at'))
     tutor_ids = [tutor.id for tutor in tutors]
+    month_start = datetime.now(VIETNAM_TIME_ZONE).date().replace(day=1)
+    completed_this_month = {}
     subjects_by_tutor = {}
     subject_links_by_tutor = {}
     areas_by_tutor = {}
+    availability_by_tutor = {}
     if tutor_ids:
         # Fetch all related rows once. The former loop issued two or more Atlas
         # queries for every tutor, which grows very slowly on Render.
@@ -549,6 +552,16 @@ def _tutors_page_config():
             subject_links_by_tutor.setdefault(str(link.tutor.id), link)
         for link in TutorTeachingArea.objects(tutor__in=tutor_ids).select_related():
             areas_by_tutor.setdefault(str(link.tutor.id), link)
+        for slot in TutorAvailability.objects(tutor__in=tutor_ids, is_available=True).order_by('weekday', 'period').select_related():
+            availability_by_tutor.setdefault(str(slot.tutor.id), []).append(f'{slot.weekday}:{slot.period}')
+        for lesson in Lesson.objects(
+            tutor__in=tutor_ids,
+            status='completed',
+            session_date__gte=month_start,
+        ).only('tutor'):
+            if lesson.tutor:
+                key = str(lesson.tutor.id)
+                completed_this_month[key] = completed_this_month.get(key, 0) + 1
 
     rows = []
     for tutor in tutors:
@@ -559,6 +572,7 @@ def _tutors_page_config():
             area = f'{area} — {area_link.ward.name}'
         rows.append((
             tutor.name, tutor.email, subjects, area, _tutor_mode(tutor.teaching_mode),
+            str(completed_this_month.get(str(tutor.id), 0)),
             _recruitment_status(tutor.status),
         ))
     return {
@@ -568,7 +582,8 @@ def _tutors_page_config():
         'description': 'Tạo, cập nhật và xóa hồ sơ gia sư cùng thông tin chuyên môn từ CV.',
         'columns': [
             ('name', 'Họ và tên'), ('email', 'Email'), ('subjects', 'Môn dạy'),
-            ('area', 'Khu vực'), ('teaching_mode', 'Hình thức dạy'), ('status', 'Trạng thái'),
+            ('area', 'Khu vực'), ('teaching_mode', 'Hình thức dạy'),
+            ('monthly_completed', 'Buổi hoàn thành tháng này'), ('status', 'Trạng thái'),
         ],
         'statuses': ['Pending', 'Approved', 'Rejected'],
         'rows': rows,
@@ -577,6 +592,7 @@ def _tutors_page_config():
         # Otherwise the generic renderer would reintroduce one query per tutor.
         'subject_links_by_tutor': subject_links_by_tutor,
         'areas_by_tutor': areas_by_tutor,
+        'availability_by_tutor': availability_by_tutor,
     }
 
 
@@ -588,7 +604,9 @@ def _recruitment_page_config(module):
     created for them.
     """
     if module == 'tutor-jobs':
-        jobs = list(JobPosting.objects.order_by('-created_at'))
+        # This board is reserved for recruitment notices created by Admin.
+        # Parent/student class postings are reviewed under tutor-requests.
+        jobs = list(JobPosting.objects(posted_by_type='admin').order_by('-created_at'))
         return {
             'title': 'Tin tuyển dụng gia sư',
             'group': 'Tuyển dụng',
@@ -596,12 +614,14 @@ def _recruitment_page_config(module):
             'description': 'Đăng và quản lý các nhu cầu tìm gia sư theo môn học, khu vực và lịch học.',
             'columns': [
                 ('title', 'Tiêu đề'), ('subject', 'Môn học'), ('area', 'Khu vực'),
-                ('budget', 'Ngân sách'), ('schedule', 'Lịch mong muốn'), ('source', 'Nguồn yêu cầu'), ('status', 'Trạng thái'),
+                ('budget', 'Ngân sách'), ('schedule', 'Lịch mong muốn'),
+                ('teaching_mode', 'Hình thức học'), ('source', 'Nguồn yêu cầu'), ('status', 'Trạng thái'),
             ],
             'statuses': ['Open', 'Closed'],
             'rows': [(
                 job.title, _recruitment_reference_name(job.subject), _recruitment_area(job),
                 _recruitment_budget(job), job.schedule_expect or '-',
+                _tutor_mode(getattr(job, 'teaching_mode', 'both')),
                 'Admin' if job.posted_by_type == 'admin' else 'Phụ huynh / học viên',
                 _recruitment_status(job.status),
             ) for job in jobs],
@@ -1217,6 +1237,7 @@ def tutor_job_create(request):
             budget_min=budget_min,
             budget_max=budget_max,
             schedule_expect=request.POST.get('schedule_expect', '').strip() or None,
+            teaching_mode=request.POST.get('teaching_mode', 'both').strip(),
             status=status,
         )
         job.save()
@@ -1262,6 +1283,7 @@ def tutor_job_edit(request, slug):
         job.budget_min = budget_min
         job.budget_max = budget_max
         job.schedule_expect = request.POST.get('schedule_expect', '').strip() or None
+        job.teaching_mode = request.POST.get('teaching_mode', getattr(job, 'teaching_mode', 'both')).strip()
         job.status = status
         job.updated_at = datetime.now(timezone.utc)
         job.save()
@@ -1447,6 +1469,17 @@ def _tutor_form_values(request, tutor=None):
     maximum = _optional_nonnegative_int(request.POST.get('hourly_rate_max', ''), 'Học phí tối đa')
     if minimum is not None and maximum is not None and minimum > maximum:
         raise ValueError('Học phí tối thiểu không được lớn hơn học phí tối đa.')
+    availability_slots = []
+    for raw_slot in request.POST.getlist('availability_slots'):
+        try:
+            weekday_text, period = raw_slot.split(':', 1)
+            weekday = int(weekday_text)
+        except (TypeError, ValueError):
+            raise ValueError('Khung lịch có thể dạy không hợp lệ.')
+        if weekday not in range(7) or period not in ('morning', 'afternoon', 'evening'):
+            raise ValueError('Khung lịch có thể dạy không hợp lệ.')
+        if (weekday, period) not in availability_slots:
+            availability_slots.append((weekday, period))
     return {
         'name': name, 'email': email, 'phone': request.POST.get('phone', '').strip() or None,
         'headline': request.POST.get('headline', '').strip() or None,
@@ -1456,6 +1489,7 @@ def _tutor_form_values(request, tutor=None):
         'hourly_rate_min': minimum, 'hourly_rate_max': maximum, 'teaching_mode': teaching_mode,
         'status': status, 'is_verified': True, 'password': password, 'subject': subject,
         'province': province, 'ward': ward,
+        'availability_slots': availability_slots,
         'subject_level': request.POST.get('subject_level', '').strip() or None,
         'subject_price': _optional_nonnegative_int(request.POST.get('subject_price', ''), 'Học phí môn dạy'),
         'avatar_upload': request.FILES.get('avatar'),
@@ -1467,6 +1501,13 @@ def _save_tutor_relations(tutor, values):
     TutorTeachingArea.objects(tutor=tutor).delete()
     TutorSubject(tutor=tutor, subject=values['subject'], level=values['subject_level'], price_per_hour=values['subject_price']).save()
     TutorTeachingArea(tutor=tutor, province=values['province'], ward=values['ward']).save()
+    TutorAvailability.objects(tutor=tutor).delete()
+    slots = [
+        TutorAvailability(tutor=tutor, weekday=weekday, period=period, is_available=True)
+        for weekday, period in values['availability_slots']
+    ]
+    if slots:
+        TutorAvailability.objects.insert(slots, load_bulk=False)
 
 
 def tutor_create(request):
@@ -1620,6 +1661,7 @@ def tutor_delete(request, slug):
         return JsonResponse({'ok': False, 'message': 'Không tìm thấy gia sư.'}, status=404)
     TutorSubject.objects(tutor=tutor).delete()
     TutorTeachingArea.objects(tutor=tutor).delete()
+    TutorAvailability.objects(tutor=tutor).delete()
     delete_asset(tutor.avatar_public_id)
     tutor.delete()
     record_admin_activity(request, 'delete', tutor)
@@ -1682,7 +1724,7 @@ def management_page(request, module):
     elif module == 'payments':
         config = payment_page_config()
     elif module == 'tutor-requests':
-        config = tutor_request_page_config()
+        config = tutor_request_page_config(request.GET.get('tab', 'all'))
     elif module == 'reviews-complaints':
         config = reviews_complaints_page_config()
     else:
@@ -1724,7 +1766,28 @@ def management_page(request, module):
         page['can_create'] = True
         page['create_url'] = reverse('tutor-job-create')
     if module == 'tutor-requests':
-        page['create_url'] = reverse('tutor-request-create')
+        page['tabs'] = [
+            {
+                'label': 'Tất cả yêu cầu',
+                'url': reverse('management-page', kwargs={'module': 'tutor-requests'}),
+                'active': config.get('tab') == 'all',
+            },
+            {
+                'label': 'Lớp đăng tìm gia sư',
+                'url': f"{reverse('management-page', kwargs={'module': 'tutor-requests'})}?tab=class-postings",
+                'active': config.get('tab') == 'class-postings',
+            },
+            {
+                'label': 'Yêu cầu mời dạy trực tiếp',
+                'url': f"{reverse('management-page', kwargs={'module': 'tutor-requests'})}?tab=direct-requests",
+                'active': config.get('tab') == 'direct-requests',
+            },
+        ]
+        if config.get('kind') in ('all-requests', 'class-postings'):
+            page['can_manage'] = False
+            page['can_create'] = False
+        else:
+            page['create_url'] = reverse('tutor-request-create')
     if module == 'reviews-complaints':
         page['can_create'] = False
     if module == 'tutors':
@@ -1773,7 +1836,17 @@ def management_page(request, module):
                 'value': value,
                 'tone': tone,
             })
-        row = {'id': f'{module}-{index}', 'cells': cells}
+        # Most resources support the common edit/delete menu. Individual
+        # modules can override these two flags below when an operation is not
+        # allowed (for example a sent notification).  Leaving the flags unset
+        # rendered them as ``false`` in the template, which produced an empty
+        # action popover for banners and blog records.
+        row = {
+            'id': f'{module}-{index}',
+            'cells': cells,
+            'can_edit': page['can_manage'],
+            'can_delete': page['can_manage'],
+        }
         if module == 'administrators':
             admin = config['records'][index - 1]
             row.update({
@@ -1811,9 +1884,25 @@ def management_page(request, module):
                     'budget_min': job.budget_min if job.budget_min is not None else '',
                     'budget_max': job.budget_max if job.budget_max is not None else '',
                     'schedule_expect': job.schedule_expect or '',
+                    'teaching_mode': getattr(job, 'teaching_mode', 'both'),
                     'description': job.description,
                     'status': job.status,
                 }),
+            })
+        elif module == 'tutor-requests' and config.get('kind') in ('all-requests', 'class-postings'):
+            if config.get('kind') == 'all-requests':
+                row.update({
+                    'can_edit': False,
+                    'can_delete': False,
+                })
+                page['rows'].append(row)
+                continue
+            job = config['records'][index - 1]
+            row.update({
+                'id': job.slug,
+                'slug': job.slug,
+                'can_edit': False,
+                'can_delete': False,
             })
         elif module == 'tutor-requests':
             tutor_request = config['records'][index - 1]
@@ -1879,6 +1968,7 @@ def management_page(request, module):
                     'subject_price': subject_link.price_per_hour if subject_link and subject_link.price_per_hour else '',
                     'province_id': str(area_link.province.id) if area_link else '',
                     'ward_id': str(area_link.ward.id) if area_link and area_link.ward else '',
+                    'availability_slots': config['availability_by_tutor'].get(str(tutor.id), []),
                 }),
             })
         elif module == 'blog':
@@ -2036,10 +2126,11 @@ def management_page(request, module):
             {'name': 'budget_min', 'label': 'Ngân sách tối thiểu (đ/giờ)', 'type': 'number', 'placeholder': 'Ví dụ: 150000', 'required': False},
             {'name': 'budget_max', 'label': 'Ngân sách tối đa (đ/giờ)', 'type': 'number', 'placeholder': 'Ví dụ: 250000', 'required': False},
             {'name': 'schedule_expect', 'label': 'Lịch mong muốn (không bắt buộc)', 'type': 'text', 'placeholder': 'Ví dụ: Tối thứ 2, 4, 6', 'required': False},
+            {'name': 'teaching_mode', 'label': 'Hình thức học', 'type': 'select', 'options': ['online', 'offline', 'both']},
             {'name': 'description', 'label': 'Mô tả', 'type': 'textarea', 'placeholder': 'Mô tả yêu cầu công việc'},
             {'name': 'status', 'label': 'Trạng thái', 'type': 'select', 'options': ['open', 'closed']},
         ]
-    if module == 'tutor-requests':
+    if module == 'tutor-requests' and config.get('kind') == 'direct-requests':
         request_choices = tutor_request_form_choices()
         page['form_fields'] = [
             {
@@ -2095,6 +2186,10 @@ def management_page(request, module):
         ]
     if module == 'tutors':
         subject_choices = _active_subject_choices()
+        page['availability_days'] = range(7)
+        page['availability_periods'] = (
+            ('morning', 'Sáng'), ('afternoon', 'Chiều'), ('evening', 'Tối'),
+        )
         province_choices = [{'value': str(item.id), 'label': item.name} for item in Province.objects.order_by('name')]
         ward_choices = [
             {'value': str(item.id), 'label': f'{item.name} — {item.province.name}', 'province_id': str(item.province.id)}
@@ -2126,6 +2221,7 @@ def management_page(request, module):
             {'name': 'teaching_mode', 'label': 'Hình thức dạy', 'type': 'select', 'options': ['online', 'offline', 'both']},
             {'name': 'province_id', 'label': 'Tỉnh/thành phố', 'type': 'select', 'select_choices': True, 'choices': province_choices, 'empty_label': 'Chọn tỉnh/thành phố'},
             {'name': 'ward_id', 'label': 'Xã/Phường/Đặc khu', 'type': 'select', 'select_choices': True, 'choices': ward_choices, 'empty_label': 'Chọn tỉnh/thành phố trước'},
+            {'name': 'availability_slots', 'label': 'Lịch có thể dạy', 'type': 'availability_grid', 'required': False},
             {'name': 'bio', 'label': 'Giới thiệu CV', 'type': 'textarea', 'placeholder': 'Kinh nghiệm giảng dạy, thành tích, phương pháp dạy học...', 'required': False},
             {'name': 'status', 'label': 'Trạng thái tài khoản', 'type': 'select', 'options': ['active', 'inactive']},
         ]
@@ -2575,8 +2671,8 @@ def _dashboard_data(today, week_end, *, finance_period='month', now=None):
         ],
         'tasks': [
             {'title': 'Duyệt hồ sơ gia sư', 'count': TutorApplication.objects(status='pending').count(), 'description': 'Hồ sơ mới đang chờ kiểm tra', 'url': reverse('management-page', kwargs={'module': 'tutor-approvals'}), 'tone': 'violet'},
-            {'title': 'Yêu cầu tìm gia sư', 'count': LearningRequest.objects(status='pending').count(), 'description': 'Yêu cầu học cần được phản hồi', 'url': reverse('management-page', kwargs={'module': 'tutor-requests'}), 'tone': 'blue'},
-            {'title': 'Tin tuyển dụng đang mở', 'count': JobPosting.objects(status='open').count(), 'description': 'Nhu cầu tuyển gia sư đang hiển thị', 'url': reverse('management-page', kwargs={'module': 'tutor-jobs'}), 'tone': 'green'},
+            {'title': 'Yêu cầu tìm gia sư', 'count': LearningRequest.objects(status='pending').count() + JobPosting.objects(posted_by_type__in=('parent', 'student'), status='open').count(), 'description': 'Yêu cầu học và lớp mới cần được theo dõi', 'url': reverse('management-page', kwargs={'module': 'tutor-requests'}), 'tone': 'blue'},
+            {'title': 'Tin tuyển dụng đang mở', 'count': JobPosting.objects(posted_by_type='admin', status='open').count(), 'description': 'Tin do Admin đăng để tuyển gia sư', 'url': reverse('management-page', kwargs={'module': 'tutor-jobs'}), 'tone': 'green'},
         ],
         'lessons': [
             {'subject': _recruitment_reference_name(lesson.subject), 'student': _recruitment_reference_name(lesson.student), 'tutor': _recruitment_reference_name(lesson.tutor), 'time': f'{lesson.session_date.strftime("%d/%m")} · {lesson.start_time}–{lesson.end_time}', 'mode': 'Trực tuyến' if lesson.mode == 'online' else 'Trực tiếp'}
@@ -2620,10 +2716,36 @@ def dashboard(request):
 
 
 def users(request):
-    # Authentication accounts originate from registration/login. This page is
-    # read-only and must never expose password hashes or creation controls.
-    login_users = list(User.objects.order_by('-created_at'))
-    return render(request, 'admin/user/users.html', {'login_users': login_users})
+    # This screen is deliberately the ``users`` collection only. Tutor and
+    # Admin credentials live in their own sections; learner profiles belong
+    # to ``Học viên`` and are created only after a real learning request.
+    provider_labels = {
+        'local': 'Email & mật khẩu', 'google': 'Google',
+        'facebook': 'Facebook', 'clerk': 'Clerk',
+    }
+    # Do not surface a legacy duplicate User document for an account issued to
+    # a tutor or an administrator.  Those identities are managed exclusively
+    # in their own back-office sections.
+    non_user_emails = {
+        (email or '').strip().lower()
+        for email in Tutor.objects.scalar('email')
+    } | {
+        (email or '').strip().lower()
+        for email in Admin.objects.scalar('email')
+    }
+    account_rows = [
+        {
+            'username': account.username,
+            'name': account.display_name or '—',
+            'email': account.email,
+            'provider': provider_labels.get(account.oauth_provider or 'local', 'Email & mật khẩu'),
+            'created_at': _recruitment_date(account.created_at),
+            'status': 'Đang hoạt động',
+        }
+        for account in User.objects.order_by('-created_at')
+        if (account.email or '').strip().lower() not in non_user_emails
+    ]
+    return render(request, 'admin/user/users.html', {'login_users': account_rows})
 
 
 def chats(request):

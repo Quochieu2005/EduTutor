@@ -12,16 +12,16 @@
   <div class="users-table-wrap">
     <div class="users-table-scroll">
       <table class="users-table">
-        <thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Phone Number</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th><th>Phương thức đăng nhập</th><th>Ngày tạo</th><th>Trạng thái</th></tr></thead>
         <tbody data-login-user-body>
           {% for account in login_users %}
             <tr data-login-user-row>
               <td title="{{ account.username }}">{{ account.username }}</td>
-              <td>—</td>
+              <td>{{ account.name }}</td>
               <td title="{{ account.email }}">{{ account.email }}</td>
-              <td>—</td>
-              <td>—</td>
-              <td>—</td>
+              <td>{{ account.provider }}</td>
+              <td>{{ account.created_at }}</td>
+              <td>{{ account.status }}</td>
             </tr>
           {% empty %}
             <tr class="users-no-results"><td colspan="6">Chưa có tài khoản người dùng.</td></tr>

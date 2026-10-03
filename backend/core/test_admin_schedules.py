@@ -81,14 +81,14 @@ class AdminScheduleTests(SimpleTestCase):
         provinces.return_value.first.return_value = province
         wards.return_value.first.return_value = ward
         request = self.factory.post('/admin/management/schedules/create/', {
-            'province_id': '5', 'ward_id': '6',
+            'province_id': '5', 'ward_id': '6', 'location_detail': '12 Đường Số 1',
         })
 
         selected_province, selected_ward, label = _offline_location(request)
 
         self.assertIs(selected_province, province)
         self.assertIs(selected_ward, ward)
-        self.assertEqual(label, 'Tân Đông Hiệp, Hồ Chí Minh')
+        self.assertEqual(label, '12 Đường Số 1, Tân Đông Hiệp, Hồ Chí Minh')
 
     def test_reference_id_must_be_provided(self):
         request = self.factory.post('/admin/management/schedules/create/', {})

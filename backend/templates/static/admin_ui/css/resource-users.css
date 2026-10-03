@@ -639,3 +639,73 @@ html[data-theme="dark"] .users-status--neutral { background: rgb(71 85 105 / 32%
 }
 
 .blog-category-status-toggle:disabled { cursor: wait; opacity: .65; }
+.tutor-availability-grid {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 4px 0 8px;
+  padding: 14px;
+  border: 1px solid #dbe5f1;
+  border-radius: 14px;
+  background: #f8fbff;
+}
+.tutor-availability-grid legend { padding: 0 6px; font-weight: 700; color: #15233d; }
+.tutor-availability-grid > p { margin: 0 0 10px; color: #64748b; font-size: 12px; }
+.tutor-availability-grid__scroll { overflow-x: auto; }
+.tutor-availability-grid table { width: 100%; min-width: 620px; border-collapse: collapse; text-align: center; }
+.tutor-availability-grid th, .tutor-availability-grid td { padding: 7px; border: 1px solid #dbe5f1; font-size: 12px; }
+.tutor-availability-grid th { background: #eef4fb; color: #334155; }
+.resource-form-modal .tutor-availability-grid td label { display: grid; place-items: center; cursor: pointer; }
+.resource-form-modal .tutor-availability-grid input[type="checkbox"] { position: absolute; width: 1px; height: 1px; min-width: 0; margin: -1px; padding: 0; border: 0; opacity: 0; pointer-events: none; clip: rect(0 0 0 0); }
+.resource-form-modal .tutor-availability-grid td span { display: grid; width: 34px; height: 30px; place-items: center; box-sizing: border-box; border: 1px solid #dbe5f1; border-radius: 8px; background: #fff; color: transparent; }
+.resource-form-modal .tutor-availability-grid td input:checked + span { border-color: #2563eb; background: #2563eb; color: #fff; }
+.resource-form-modal .tutor-availability-grid td input:focus-visible + span { outline: 3px solid rgba(37, 99, 235, .22); }
+
+/* Tutor records contain both a CV and a seven-day timetable.  The generic
+   640px dialog made the form's data column too narrow, so its text wrapped
+   character-by-character and the timetable hid Monday–Wednesday. */
+.resource-form-modal--tutors .add-user-dialog {
+  width: min(980px, calc(100% - 32px));
+  max-height: calc(100vh - 24px);
+  padding: 28px 32px;
+}
+
+.resource-form-modal--tutors .add-user-dialog form {
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 18px 30px;
+}
+
+.resource-form-modal--tutors .tutor-availability-grid__scroll {
+  overflow-x: hidden;
+}
+
+.resource-form-modal--tutors .tutor-availability-grid table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.resource-form-modal--tutors .tutor-availability-grid th:first-child {
+  width: 76px;
+}
+
+@media (max-width: 700px) {
+  .resource-form-modal--tutors .add-user-dialog {
+    width: min(640px, calc(100% - 20px));
+    padding: 24px 18px;
+  }
+
+  .resource-form-modal--tutors .add-user-dialog form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .resource-form-modal--tutors .tutor-availability-grid {
+    padding: 10px;
+  }
+
+  .resource-form-modal--tutors .tutor-availability-grid__scroll {
+    overflow-x: auto;
+  }
+
+  .resource-form-modal--tutors .tutor-availability-grid table {
+    min-width: 560px;
+  }
+}

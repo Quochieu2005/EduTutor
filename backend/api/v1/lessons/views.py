@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django.http import Http404
 
@@ -13,14 +14,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.v1.accounts.authentication import MongoJWTAuthentication
-from lessons.documents import LearningRequest
-from accounts.documents import Parent, Student
+from lessons.documents import LearningRequest, Lesson
+from accounts.documents import User
+from api.v1.accounts.services import SocialTokenError, ensure_student_profile
 from tutors.documents import Tutor, TutorSubject
 from core.documents import NotificationDelivery, SystemNotification
 
 from .serializers import (
     LearningRequestCreateSerializer, LearningRequestResponseSerializer,
-    LearningRequestStatusSerializer, ScheduleProposalSerializer, TutorInvitationSerializer,
+    LearningRequestStatusSerializer, LessonAttendanceSerializer, ScheduleProposalSerializer, TutorInvitationSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,19 +40,18 @@ class TutorInvitationCreateView(APIView):
         serializer = TutorInvitationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = request.user.user
-        email = (getattr(user, 'email', '') or '').strip().lower()
-        student = Student.objects(email=email, status='active').first()
-        requested_by_type = 'student'
-        requested_by_id = int(student.id) if student else None
-        if student is None:
-            parent = Parent.objects(email=email).first()
-            if parent is not None:
-                student = Student.objects(parent=parent, status='active').first()
-                requested_by_type = 'parent'
-                requested_by_id = int(parent.id)
-        if student is None:
-            return Response({'detail': 'Hồ sơ cần có học viên Active để gửi yêu cầu mời dạy.'}, status=403)
-
+        if isinstance(user, User):
+            try:
+                student = ensure_student_profile(user)
+            except SocialTokenError as error:
+                return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+            requested_by_type = 'student'
+            requested_by_id = int(student.id)
+        else:
+            return Response(
+                {'detail': 'Chỉ tài khoản người dùng mới có thể gửi yêu cầu mời dạy.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         tutor = Tutor.objects(slug=tutor_slug, status=Tutor.STATUS_ACTIVE).first()
         if tutor is None:
             raise Http404
@@ -62,8 +63,15 @@ class TutorInvitationCreateView(APIView):
             return Response({'detail': 'Gia sư chưa được phân công môn học để nhận yêu cầu.'}, status=400)
 
         values = serializer.validated_data
+        # The invitation form is often the first place a new website account
+        # supplies a contact number. Persist it on the learner profile so the
+        # tutor sees the same number in every subsequent request.
+        contact_phone = values['contact_phone'].strip()
+        if student.phone != contact_phone:
+            student.phone = contact_phone
+            student.save()
         detail = ' | '.join(filter(None, [
-            f"Người liên hệ: {values['contact_name'].strip()} - {values['contact_phone'].strip()}",
+            f"Người liên hệ: {values['contact_name'].strip()} - {contact_phone}",
             f"Học sinh: {values.get('student_name', '').strip()}" if values.get('student_name', '').strip() else '',
             f"Lớp/Môn: {values.get('grade_subject', '').strip()}" if values.get('grade_subject', '').strip() else '',
             values.get('message', '').strip(),
@@ -74,6 +82,10 @@ class TutorInvitationCreateView(APIView):
             message=detail, expected_schedule='Chờ hai bên thống nhất',
             source='tutor_directory', proposed_by='student', status='pending',
         ).save()
+        try:
+            cache.delete('admin-header-notification-items:v1')
+        except Exception:
+            logger.warning('Could not invalidate admin request notifications', exc_info=True)
 
         notification = SystemNotification(
             title='Bạn có yêu cầu mời dạy mới',
@@ -112,8 +124,8 @@ class TutorInvitationCreateView(APIView):
             'message': 'Đã gửi yêu cầu mời dạy tới gia sư và chuyển vào danh sách yêu cầu của Admin.' if email_sent else 'Đã lưu yêu cầu cho Admin; email tới gia sư đang chờ hệ thống gửi lại.',
         }, status=status.HTTP_201_CREATED)
 from .services import (
-    LessonWorkflowError, create_learning_request, learning_request_payload,
-    propose_schedule, update_learning_request, visible_learning_requests,
+    LessonWorkflowError, create_learning_request, learning_request_payload, lesson_session_payload,
+    propose_schedule, update_learning_request, update_lesson_attendance, visible_learning_requests, visible_lesson_sessions,
 )
 
 
@@ -168,6 +180,36 @@ class LearningRequestStatusView(APIView):
         except LessonWorkflowError as error:
             return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
         return Response(learning_request_payload(record))
+
+
+class LessonSessionListView(APIView):
+    authentication_classes = [MongoJWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            return Response([lesson_session_payload(item) for item in visible_lesson_sessions(request.user.user)])
+        except LessonWorkflowError as error:
+            return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
+
+
+class LessonAttendanceView(APIView):
+    authentication_classes = [MongoJWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = LessonAttendanceSerializer
+
+    def patch(self, request, lesson_id):
+        serializer = LessonAttendanceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        lesson = Lesson.objects(id=lesson_id).first()
+        if lesson is None:
+            return Response({'detail': 'Không tìm thấy buổi học.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            return Response(lesson_session_payload(update_lesson_attendance(
+                request.user.user, lesson, serializer.validated_data['status'],
+            )))
+        except LessonWorkflowError as error:
+            return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
 
 
 class ScheduleProposalView(APIView):

@@ -8,16 +8,20 @@ import { useEduClerk, useEduUser } from "@/lib/auth";
 import { AUTH_SESSION_EVENT, getAuthSession, type ActorType } from "@/lib/auth-session";
 import { saveAuthSession } from "@/lib/auth-session";
 import { edututorApi } from "@/lib/edututor-api";
+import type { LessonSession, TutorAvailability } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
-import { getLessons } from "@/lib/api";
-import type { LessonRequest } from "@/lib/types";
+import { getLessons, proposeLessonSchedule, updateLessonStatus } from "@/lib/api";
+import type { LessonRequest, ScheduleProposalPayload } from "@/lib/types";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { TutorPortal } from "@/components/tutor/TutorPortal";
+import { ActualScheduleCalendar, LessonCard, WeeklyTimetable } from "@/components/lessons/LessonCard";
+import { ScheduleProposalForm } from "@/components/lessons/ScheduleProposalForm";
+import { AppstoreOutlined, BookOutlined, CalendarOutlined, LockOutlined, LogoutOutlined, SettingOutlined, TableOutlined, UserOutlined } from "@ant-design/icons";
 import {
   PORTAL_STORE_EVENT,
   buildDemoTeachingSchedule,
   getEnrollmentRequests,
-  getEnrollmentRequestsForUser,
   getTutorApplicationForUser,
   type EnrollmentRequest,
   type TutorApplication,
@@ -48,24 +52,36 @@ export default function ProfilePage() {
   const { isLoaded, isSignedIn, user } = useEduUser();
   const { signOut } = useEduClerk();
   const router = useRouter();
-  const [enrollments, setEnrollments] = useState<EnrollmentRequest[]>([]);
   const [application, setApplication] = useState<TutorApplication | null>(null);
   const [incomingRequests, setIncomingRequests] = useState<EnrollmentRequest[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // The server cannot read browser session storage. Start from the same value
+  // on server and client, then resolve the signed actor in the effect below;
+  // otherwise a tutor session causes an SSR hydration mismatch.
   const [actorType, setActorType] = useState<ActorType>("student");
+  const [authResolved, setAuthResolved] = useState(false);
   const [apiAccount, setApiAccount] = useState<Record<string, unknown>>({});
   const [profileForm, setProfileForm] = useState({ displayName: "", username: "", phone: "" });
   const [profileSaving, setProfileSaving] = useState(false);
   const [tutorRequests, setTutorRequests] = useState<LessonRequest[]>([]);
   const [tutorRequestsLoading, setTutorRequestsLoading] = useState(false);
+  const [availabilitySlots, setAvailabilitySlots] = useState<TutorAvailability["slots"]>([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
+  const [userTab, setUserTab] = useState<"overview" | "profile" | "lessons" | "schedule" | "timetable" | "security">("overview");
+  const [learnerRequests, setLearnerRequests] = useState<LessonRequest[]>([]);
+  const [learnerSessions, setLearnerSessions] = useState<LessonSession[]>([]);
+  const [learnerRequestsLoading, setLearnerRequestsLoading] = useState(false);
+  const [schedulingRequest, setSchedulingRequest] = useState<LessonRequest | null>(null);
 
   useEffect(() => {
     const syncActor = () => {
       const session = getAuthSession();
       setActorType(session?.actorType ?? "student");
       setApiAccount(session?.account ?? {});
+      setAuthResolved(true);
     };
     syncActor();
     window.addEventListener(AUTH_SESSION_EVENT, syncActor);
@@ -73,7 +89,7 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
-    if (!isSignedIn || !["student", "parent"].includes(actorType)) return;
+    if (!authResolved || !isSignedIn || !["student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return;
     let cancelled = false;
     edututorApi.accountProfile().then((profile) => {
       if (cancelled) return;
@@ -85,21 +101,82 @@ export default function ProfilePage() {
       });
     }).catch(() => toast.error("Không tải được hồ sơ tài khoản."));
     return () => { cancelled = true; };
-  }, [actorType, isSignedIn]);
+  }, [actorType, authResolved, isSignedIn]);
+
+  const refreshLearnerData = useCallback(async (showLoading = false) => {
+    if (!authResolved || !isSignedIn || !["student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return;
+    if (showLoading) setLearnerRequestsLoading(true);
+    try {
+      const [records, sessions] = await Promise.all([getLessons(), edututorApi.lessonSessions()]);
+      setLearnerRequests(records);
+      setLearnerSessions(sessions);
+    } catch {
+      if (showLoading) { setLearnerRequests([]); setLearnerSessions([]); }
+    } finally {
+      if (showLoading) setLearnerRequestsLoading(false);
+    }
+  }, [actorType, authResolved, isSignedIn]);
 
   useEffect(() => {
-    if (!isSignedIn || actorType !== "tutor") return;
+    void refreshLearnerData(true);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshLearnerData(false);
+    };
+    const timer = window.setInterval(refreshWhenVisible, 8_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshLearnerData]);
+
+  useEffect(() => {
+    if (!authResolved || !isSignedIn || actorType !== "tutor" || getAuthSession()?.actorType !== "tutor") return;
     let cancelled = false;
     setTutorRequestsLoading(true);
-    getLessons().then((records) => {
-      if (!cancelled) setTutorRequests(records);
+    setAvailabilityLoading(true);
+    Promise.all([getLessons(), edututorApi.myTutorAvailability()]).then(([records, availability]) => {
+      if (!cancelled) {
+        setTutorRequests(records);
+        setAvailabilitySlots(availability.slots);
+      }
     }).catch(() => {
-      if (!cancelled) setTutorRequests([]);
+      if (!cancelled) {
+        setTutorRequests([]);
+        toast.error("Không tải được yêu cầu hoặc lịch có thể dạy của gia sư.");
+      }
     }).finally(() => {
-      if (!cancelled) setTutorRequestsLoading(false);
+      if (!cancelled) {
+        setTutorRequestsLoading(false);
+        setAvailabilityLoading(false);
+      }
     });
     return () => { cancelled = true; };
-  }, [actorType, isSignedIn]);
+  }, [actorType, authResolved, isSignedIn]);
+
+  function toggleAvailability(weekday: number, period: "morning" | "afternoon" | "evening") {
+    setAvailabilitySlots((current) => {
+      const exists = current.some((slot) => slot.weekday === weekday && slot.period === period);
+      return exists
+        ? current.filter((slot) => !(slot.weekday === weekday && slot.period === period))
+        : [...current, { weekday, period }];
+    });
+  }
+
+  async function saveAvailability() {
+    setAvailabilitySaving(true);
+    try {
+      const result = await edututorApi.updateMyTutorAvailability(availabilitySlots);
+      setAvailabilitySlots(result.slots);
+      toast.success("Đã cập nhật lịch có thể dạy. Lịch mới đã hiển thị trên hồ sơ công khai.");
+    } catch {
+      toast.error("Không thể lưu lịch có thể dạy. Vui lòng thử lại.");
+    } finally {
+      setAvailabilitySaving(false);
+    }
+  }
 
   async function handleProfileSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -119,17 +196,54 @@ export default function ProfilePage() {
     }
   }
 
+  async function updateLearnerRequest(id: string, status: "accepted" | "declined" | "cancelled") {
+    try {
+      const updated = await updateLessonStatus(id, status);
+      setLearnerRequests((current) => current.map((item) => item.id === id ? updated : item));
+      if (status === "declined") {
+        setSchedulingRequest(updated);
+        toast.info("Đã từ chối lịch cũ. Hãy chọn lịch mới và ghi lý do gửi gia sư.");
+      } else if (status === "accepted") {
+        setSchedulingRequest(null);
+        await refreshLearnerData(false);
+        toast.success("Đã đồng ý lịch. Các buổi học trong một tháng đã được tạo.");
+      } else {
+        toast.success("Đã hủy đề xuất học.");
+      }
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      toast.error(typeof detail === "string" && detail.trim() ? detail : "Không thể cập nhật yêu cầu học. Vui lòng thử lại.");
+    }
+  }
+
+  async function proposeLearnerSchedule(id: string, payload: ScheduleProposalPayload) {
+    try {
+      const updated = await proposeLessonSchedule(id, payload);
+      setLearnerRequests((current) => current.map((item) => item.id === id ? updated : item));
+      setSchedulingRequest(null);
+      await refreshLearnerData(false);
+      toast.success(payload.note ? "Đã gửi lại lịch mới và lý do tới gia sư." : "Đã gửi đề xuất lịch học tới gia sư.");
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      const message = typeof detail === "string" && detail.trim() ? detail : "Không thể gửi lịch học. Hãy kiểm tra ngày, giờ và thông tin buổi học.";
+      toast.error(message);
+      throw new Error(message);
+    }
+  }
+
   useEffect(() => {
-    if (isLoaded && !isSignedIn) {
+    // useSyncExternalStore receives an empty server snapshot on the first
+    // client render. Do not redirect during that short hydration window when
+    // a valid local EduTutor session is already present.
+    if (authResolved && isLoaded && !isSignedIn && !getAuthSession()) {
       router.replace("/login");
     }
-  }, [isLoaded, isSignedIn, router]);
+  }, [authResolved, isLoaded, isSignedIn, router]);
 
   const refresh = useCallback(() => {
     if (!user) return;
     const nextApplication = getTutorApplicationForUser(user.id) ?? null;
     setApplication(nextApplication);
-    setEnrollments(getEnrollmentRequestsForUser(user.id));
     setIncomingRequests(
       nextApplication?.status === "approved" && nextApplication.assignedTutorId
         ? getEnrollmentRequests().filter(
@@ -171,6 +285,16 @@ export default function ProfilePage() {
   const profileAvatar = String(apiAccount.avatar ?? user?.imageUrl ?? "");
   const roleLabel = actorType === "admin" ? "Quản trị viên" : actorType === "tutor" ? "Gia sư" : actorType === "parent" ? "Phụ huynh" : "Học viên";
   const profileTitle = actorType === "admin" ? "Hồ sơ quản trị viên" : actorType === "tutor" ? "Hồ sơ gia sư" : actorType === "parent" ? "Hồ sơ phụ huynh" : "Hồ sơ học viên";
+  const isLearner = actorType === "student" || actorType === "parent";
+
+  const learnerNavigation = [
+    { key: "overview" as const, label: "Tổng quan", icon: <AppstoreOutlined /> },
+    { key: "profile" as const, label: "Cập nhật hồ sơ", icon: <UserOutlined /> },
+    { key: "lessons" as const, label: "Chốt lịch & buổi học", icon: <CalendarOutlined /> },
+    { key: "schedule" as const, label: "Lịch học", icon: <CalendarOutlined /> },
+    { key: "timetable" as const, label: "Thời khóa biểu", icon: <TableOutlined /> },
+    { key: "security" as const, label: "Bảo mật", icon: <LockOutlined /> },
+  ];
 
   if (!isLoaded) {
     return (
@@ -186,17 +310,42 @@ export default function ProfilePage() {
     );
   }
 
+  if (actorType === "tutor") {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
+        <Header />
+        <TutorPortal />
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
       <Header />
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-        <div>
+        <div className={isLearner ? "grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]" : "space-y-6"}>
+          {isLearner && <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-xs lg:sticky lg:top-24">
+            <div className="flex items-center gap-3 border-b border-slate-100 px-2 pb-4">
+              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-blue-600 font-bold text-white">
+                {profileAvatar ? <Image src={profileAvatar} alt="Ảnh đại diện" width={44} height={44} className="h-full w-full object-cover" /> : (profileName[0] || "U")}
+              </div>
+              <div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{profileName}</p><p className="truncate text-xs text-slate-500">{roleLabel}</p></div>
+            </div>
+            <nav className="mt-3 space-y-1" aria-label="Quản lý tài khoản">
+              {learnerNavigation.map((item) => <button key={item.key} type="button" onClick={() => setUserTab(item.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${userTab === item.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"}`}><span>{item.icon}</span>{item.label}</button>)}
+            </nav>
+            <button type="button" onClick={() => void signOut().then(() => router.replace("/login"))} className="mt-4 flex w-full items-center gap-3 border-t border-slate-100 px-3 pt-4 text-sm font-semibold text-slate-600 hover:text-rose-600"><LogoutOutlined />Đăng xuất</button>
+          </aside>}
+          <div className="min-w-0 space-y-6">
+
+        {(!isLearner || userTab === "overview") && <div>
           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Tài khoản {roleLabel}</p>
           <h1 className="text-3xl font-bold mt-1">{profileTitle}</h1>
-        </div>
+        </div>}
 
-        <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 flex flex-col sm:flex-row gap-4 items-start">
+        {(!isLearner || userTab === "overview") && <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 flex flex-col sm:flex-row gap-4 items-start">
           <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-600 to-purple-600 text-white flex items-center justify-center text-xl font-bold shrink-0">
             {profileAvatar ? <Image src={profileAvatar} alt="Ảnh đại diện" width={64} height={64} className="w-full h-full object-cover" /> : (profileName[0] || "U")}
           </div>
@@ -205,7 +354,7 @@ export default function ProfilePage() {
             <p className="text-sm text-gray-500 break-all">{profileEmail}</p>
             <div className="flex flex-wrap gap-2 mt-3 text-xs">
               <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{roleLabel}</span>
-              {actorType !== "tutor" && actorType !== "admin" && application && application.status !== "rejected" && (
+              {String(actorType) !== "tutor" && actorType !== "admin" && application && application.status !== "rejected" && (
                 <span
                   className={`px-2.5 py-1 rounded-full border ${
                     application.status === "approved"
@@ -218,9 +367,9 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
-        </section>
+        </section>}
 
-        {actorType !== "tutor" && actorType !== "admin" && (
+        {isLearner && userTab === "profile" && (
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
             <div className="border-b border-gray-100 pb-4">
               <h2 className="text-xl font-bold">Cập nhật hồ sơ</h2>
@@ -246,55 +395,23 @@ export default function ProfilePage() {
           </section>
         )}
 
-        {actorType !== "tutor" && actorType !== "admin" && <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-4">
-            <div>
-              <h2 className="text-xl font-bold">Lớp đã đăng ký</h2>
-              <p className="text-xs text-gray-500 mt-1">Các yêu cầu tham gia lớp bạn đã gửi tới Admin.</p>
-            </div>
-            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full">{enrollments.length}</span>
-          </div>
-          {enrollments.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-500">
-              Bạn chưa đăng ký lớp nào. <Link href="/classes" className="text-blue-600 font-semibold hover:underline">Xem danh sách lớp học</Link>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {enrollments.map((request) => (
-                <article key={request.id} className="rounded-xl border border-gray-200 p-4 space-y-2 hover:border-blue-200 hover:shadow-xs transition-all bg-white">
-                  <div className="flex items-start justify-between gap-2">
-                    <Link
-                      href={`/classes/${request.classId}`}
-                      className="font-bold text-sm text-gray-900 hover:text-blue-600 transition-colors line-clamp-1"
-                    >
-                      {request.classTitle}
-                    </Link>
-                    <span
-                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 border ${
-                        request.status === "approved"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : request.status === "rejected"
-                          ? "bg-rose-50 text-rose-700 border-rose-200"
-                          : "bg-amber-50 text-amber-700 border-amber-200"
-                      }`}
-                    >
-                      {enrollmentStatusLabel[request.status] || request.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-blue-600 font-semibold">{request.subject} • {request.grade}</p>
-                  <dl className="text-xs grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                    <dt className="text-gray-400">Giáo viên:</dt><dd className="font-semibold text-right text-gray-800">{request.tutorName}</dd>
-                    <dt className="text-gray-400">Lịch học:</dt><dd className="font-semibold text-right text-gray-800">{request.schedule}</dd>
-                    <dt className="text-gray-400">Hình thức:</dt><dd className="font-semibold text-right text-purple-700 font-medium">{request.teachingMode === "online" ? "Online" : request.teachingMode === "offline" ? "Trực tiếp" : "Online & Trực tiếp"}</dd>
-                    <dt className="text-gray-400">Học viên:</dt><dd className="font-semibold text-right text-gray-700">{request.studentName} ({request.age} tuổi)</dd>
-                  </dl>
-                </article>
-              ))}
-            </div>
-          )}
+        {isLearner && userTab === "lessons" && <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-5">
+          <div className="border-b border-gray-100 pb-4"><h2 className="text-xl font-bold">Chốt lịch & buổi học</h2><p className="mt-1 text-xs text-gray-500">Theo dõi và phản hồi các lịch học đang thương lượng.</p></div>
+          {schedulingRequest && <ScheduleProposalForm lesson={schedulingRequest} counterpartName={schedulingRequest.tutorName} proposalRole={schedulingRequest.status === "declined" ? "learner-counter" : "learner"} onCancel={() => setSchedulingRequest(null)} onSubmit={(payload) => proposeLearnerSchedule(schedulingRequest.id, payload)} />}
+          {!schedulingRequest && learnerRequestsLoading ? <p className="py-8 text-center text-sm text-slate-500">Đang tải yêu cầu học...</p> : !schedulingRequest ? learnerRequests.length === 0 ? <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Chưa có yêu cầu mời dạy nào. Bạn có thể tìm gia sư và gửi lời mời từ hồ sơ của họ.</p> : <div className="space-y-4">{learnerRequests.map((request) => <LessonCard key={request.id} lesson={request} userRole={actorType} onAccept={(id) => void updateLearnerRequest(id, "accepted")} onReject={(id) => void updateLearnerRequest(id, "declined")} onCancel={(id) => void updateLearnerRequest(id, "cancelled")} onSchedule={setSchedulingRequest} />)}</div> : null}
         </section>}
 
-        {actorType === "tutor" && (
+        {isLearner && userTab === "schedule" && <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-5">
+          <div className="border-b border-gray-100 pb-4"><h2 className="text-xl font-bold">Lịch học</h2><p className="mt-1 text-xs text-gray-500">Các buổi học đã được gia sư và bạn xác nhận trong một tháng.</p></div>
+          {learnerRequestsLoading ? <p className="py-8 text-center text-sm text-slate-500">Đang tải lịch học...</p> : <ActualScheduleCalendar sessions={learnerSessions} />}
+        </section>}
+
+        {isLearner && userTab === "timetable" && <section className="space-y-5">
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs"><h2 className="text-xl font-bold">Thời khóa biểu</h2><p className="mt-1 text-xs text-gray-500">Toàn bộ lịch học từ Thứ 2 đến Thứ 7, chia theo sáng, trưa, chiều và tối.</p></div>
+          {learnerRequestsLoading ? <p className="rounded-2xl bg-white py-8 text-center text-sm text-slate-500">Đang tải thời khóa biểu...</p> : <WeeklyTimetable sessions={learnerSessions} role="learner" />}
+        </section>}
+
+        {String(actorType) === "tutor" && (
           <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-5">
             <div className="border-b border-gray-100 pb-4">
               <h2 className="text-xl font-bold">Hồ sơ gia sư</h2>
@@ -307,6 +424,27 @@ export default function ProfilePage() {
               <div className="rounded-xl bg-slate-50 p-4"><dt className="text-gray-500">Đánh giá</dt><dd className="mt-1 font-bold">{String(apiAccount.rating_avg ?? 0)} / 5 ({String(apiAccount.rating_count ?? 0)} lượt)</dd></div>
             </dl>
             <div className="flex flex-wrap gap-3"><Link href="/lessons" className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Lịch dạy và yêu cầu</Link><Link href="/classes" className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold hover:bg-slate-50">Danh sách lớp</Link></div>
+            <div className="border-t border-slate-100 pt-5">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><h3 className="font-bold">Lịch có thể dạy</h3><p className="mt-1 text-xs text-slate-500">Chọn các buổi bạn còn trống. Lịch này được hiển thị trực tiếp trên hồ sơ gia sư.</p></div>
+                <button type="button" onClick={() => void saveAvailability()} disabled={availabilityLoading || availabilitySaving} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60">
+                  {availabilitySaving ? "Đang lưu..." : "Lưu lịch có thể dạy"}
+                </button>
+              </div>
+              {availabilityLoading ? <p className="py-6 text-center text-sm text-slate-500">Đang tải lịch...</p> : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] border-collapse text-center text-xs">
+                    <thead><tr><th className="border border-slate-200 bg-slate-50 p-2 text-left">Buổi</th>{[0, 1, 2, 3, 4, 5, 6].map((day) => <th key={day} className="border border-slate-200 bg-slate-50 p-2">{dayLabels[day + 2]}</th>)}</tr></thead>
+                    <tbody>{([ ["morning", "Sáng"], ["afternoon", "Chiều"], ["evening", "Tối"] ] as const).map(([period, label]) => (
+                      <tr key={period}><th className="border border-slate-200 bg-slate-50 p-2 text-left">{label}</th>{[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                        const selected = availabilitySlots.some((slot) => slot.weekday === day && slot.period === period);
+                        return <td key={day} className="border border-slate-200 p-1"><button type="button" aria-pressed={selected} onClick={() => toggleAvailability(day, period)} className={`h-10 w-full rounded-lg font-bold transition-colors ${selected ? "bg-blue-600 text-white" : "bg-slate-50 text-slate-400 hover:bg-blue-50 hover:text-blue-700"}`}>{selected ? "Có thể dạy" : "Bận"}</button></td>;
+                      })}</tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
             <div className="border-t border-slate-100 pt-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div><h3 className="font-bold">Yêu cầu mời dạy gửi đến bạn</h3><p className="mt-1 text-xs text-slate-500">Yêu cầu từ học viên/phụ huynh được lấy trực tiếp từ API.</p></div>
@@ -325,7 +463,7 @@ export default function ProfilePage() {
           </section>
         )}
 
-        {actorType !== "tutor" && actorType !== "admin" && application?.status === "approved" && (
+        {isLearner && userTab === "overview" && application?.status === "approved" && (
           <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
               <div>
@@ -420,7 +558,7 @@ export default function ProfilePage() {
           </section>
         )}
 
-        <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
+        {(!isLearner || userTab === "security") && <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
           <div className="border-b border-gray-100 pb-4">
             <h2 className="text-xl font-bold">Bảo mật & tài khoản</h2>
             <p className="text-xs text-gray-500 mt-1">Đăng nhập hiện tại được API EduTutor quản lý.</p>
@@ -433,7 +571,9 @@ export default function ProfilePage() {
             <div><strong className="text-sm">Xóa tài khoản</strong><p className="text-xs text-gray-500 mt-1">Hành động này là vĩnh viễn và không thể hoàn tác.</p></div>
             <button type="button" onClick={() => setDeleteDialogOpen(true)} className="text-sm font-semibold text-rose-600 hover:text-rose-700 cursor-pointer">Xóa tài khoản</button>
           </div>
-        </section>
+        </section>}
+          </div>
+        </div>
       </main>
 
       {deleteDialogOpen && (

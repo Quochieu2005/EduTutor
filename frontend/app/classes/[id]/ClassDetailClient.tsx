@@ -8,6 +8,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { edututorApi } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
+import { getAuthSession } from "@/lib/auth-session";
 import type { ClassListing, ClassComment } from "@/lib/home-mock-data";
 import {
   addEnrollmentRequest,
@@ -24,6 +25,7 @@ interface ClassDetailClientProps {
 export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
   const { isSignedIn, user } = useEduUser();
   const { openSignIn } = useEduClerk();
+  const actorType = getAuthSession()?.actorType;
 
   const [classItem] = useState<ClassListing>(initialClass);
   const [isApplied, setIsApplied] = useState(false);
@@ -135,6 +137,10 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
       openSignIn({
         fallbackRedirectUrl: typeof window !== "undefined" ? window.location.href : undefined,
       });
+      return;
+    }
+    if (actorType !== "tutor") {
+      toast.info("Chỉ gia sư đã được cấp tài khoản mới có thể đề nghị dạy lớp này.");
       return;
     }
     setIsApplying(true);
@@ -461,7 +467,7 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
               <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
                 {classItem.fee}
               </span>
-              {classItem.status === "needing" && classItem.postedByType !== "admin" ? (
+              {classItem.status === "needing" && classItem.postedByType !== "admin" && actorType === "tutor" ? (
                 <div className="mt-2">
                   <button
                     type="button"
@@ -476,6 +482,8 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
                     {isApplied ? "✓ Đã gửi đề nghị" : isApplying ? "Đang gửi..." : "Đề nghị dạy lớp này"}
                   </button>
                 </div>
+              ) : classItem.status === "needing" && classItem.postedByType !== "admin" ? (
+                <p className="mt-2 text-xs font-semibold text-slate-500">Chỉ gia sư được cấp tài khoản mới có thể đề nghị dạy lớp này.</p>
               ) : classItem.postedByType === "admin" ? (
                 <p className="mt-2 text-xs font-semibold text-slate-500">Tin tuyển dụng do Admin đăng · xem thông tin tại trang Tuyển dụng</p>
               ) : (

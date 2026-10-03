@@ -8,10 +8,6 @@ class RegisterSerializer(serializers.Serializer):
     display_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     email = serializers.EmailField()
     password = serializers.CharField(min_length=8, max_length=72, trim_whitespace=False, write_only=True)
-    account_type = serializers.ChoiceField(
-        choices=('student', 'parent'), default='student', required=False,
-    )
-
     def validate_password(self, value):
         if len(value.encode('utf-8')) > 72:
             raise serializers.ValidationError('Mật khẩu không được vượt quá 72 byte.')
