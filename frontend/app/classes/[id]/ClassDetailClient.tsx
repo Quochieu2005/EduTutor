@@ -8,7 +8,6 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { edututorApi } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
-import { getAuthSession } from "@/lib/auth-session";
 import type { ClassListing, ClassComment } from "@/lib/home-mock-data";
 import {
   addEnrollmentRequest,
@@ -25,12 +24,14 @@ interface ClassDetailClientProps {
 export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
   const { isSignedIn, user } = useEduUser();
   const { openSignIn } = useEduClerk();
-  const actorType = getAuthSession()?.actorType;
+  const actorType = user?.publicMetadata.role ?? null;
 
   const [classItem] = useState<ClassListing>(initialClass);
   const [isApplied, setIsApplied] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [applyNotification, setApplyNotification] = useState<string | null>(null);
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+  const [applyNote, setApplyNote] = useState("");
 
   // State các yêu cầu ghi danh từ portal-store
   const [enrollments, setEnrollments] = useState<EnrollmentRequest[]>([]);
@@ -102,6 +103,20 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
     return () => window.clearTimeout(timer);
   }, [isSignedIn]);
 
+  useEffect(() => {
+    if (actorType !== "tutor") {
+      setIsApplied(false);
+      return;
+    }
+    let isCurrent = true;
+    edututorApi.myTutorJobApplications()
+      .then((applications) => {
+        if (isCurrent) setIsApplied(applications.some((application) => application.job_slug === classItem.id));
+      })
+      .catch(() => undefined);
+    return () => { isCurrent = false; };
+  }, [actorType, classItem.id]);
+
   // Tính toán số lượng slot và trạng thái lớp
   const tutorPhone = getTutorPhoneForClass(classItem);
 
@@ -143,14 +158,28 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
       toast.info("Chỉ gia sư đã được cấp tài khoản mới có thể đề nghị dạy lớp này.");
       return;
     }
+    setApplyNotification(null);
+    setApplyNote("");
+    setIsApplyModalOpen(true);
+  };
+
+  const handleConfirmApply = async (event: React.FormEvent) => {
+    event.preventDefault();
     setIsApplying(true);
+    setApplyNotification(null);
     try {
-      await edututorApi.applyForTutorJob(classItem.id, {});
+      const result = await edututorApi.applyForTutorJob(classItem.id, {
+        cover_letter: applyNote.trim() || undefined,
+      });
       setIsApplied(true);
+      setIsApplyModalOpen(false);
+      setApplyNotification(result.message || "Đã gửi đề nghị nhận lớp thành công.");
       toast.success("Đã gửi đề nghị nhận lớp thành công.");
-    } catch {
-      setApplyNotification("Không thể gửi đề nghị lúc này. Vui lòng thử lại sau.");
-      toast.error("Không thể gửi đề nghị nhận lớp lúc này.");
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const message = detail || "Không thể gửi đề nghị lúc này. Vui lòng thử lại sau.";
+      setApplyNotification(message);
+      toast.error(message);
     } finally {
       setIsApplying(false);
     }
@@ -423,6 +452,53 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
             >
               ✕
             </button>
+          </div>
+        )}
+
+        {isApplyModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="class-application-title"
+            onClick={(event) => {
+              if (event.target === event.currentTarget && !isApplying) setIsApplyModalOpen(false);
+            }}
+          >
+            <form onSubmit={handleConfirmApply} className="w-full max-w-lg overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-2xl">
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-slate-50 px-6 py-5">
+                <div>
+                  <h2 id="class-application-title" className="text-lg font-extrabold text-slate-900">Đề nghị dạy lớp này</h2>
+                  <p className="mt-1 text-xs text-slate-500">{classItem.code} · {classItem.subject} · {classItem.grade}</p>
+                </div>
+                <button type="button" disabled={isApplying} onClick={() => setIsApplyModalOpen(false)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-white" aria-label="Đóng">×</button>
+              </div>
+              <div className="space-y-4 p-6">
+                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs leading-5 text-slate-700">
+                  <p><strong>Lớp:</strong> {classItem.title}</p>
+                  <p><strong>Lịch dự kiến:</strong> {classItem.schedule}</p>
+                  <p><strong>Học phí:</strong> {classItem.fee}</p>
+                </div>
+                <label className="block text-sm font-bold text-slate-800">
+                  Lời nhắn tới học viên/phụ huynh
+                  <textarea
+                    value={applyNote}
+                    onChange={(event) => setApplyNote(event.target.value)}
+                    maxLength={3000}
+                    rows={4}
+                    placeholder="Giới thiệu kinh nghiệm, thời gian có thể bắt đầu và lý do bạn phù hợp với lớp..."
+                    className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+                <p className="text-xs text-slate-500">Đề nghị sẽ được lưu trên hệ thống và gửi tới Admin để theo dõi.</p>
+                <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+                  <button type="button" disabled={isApplying} onClick={() => setIsApplyModalOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">Hủy</button>
+                  <button type="submit" disabled={isApplying} className="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60">
+                    {isApplying ? "Đang gửi đề nghị..." : "Xác nhận đề nghị dạy"}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         )}
 

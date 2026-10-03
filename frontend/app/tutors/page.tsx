@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -29,10 +29,15 @@ import { getProvinceSlug } from "@/lib/tutor-filter-mapping";
 import { toast } from "@/lib/toast";
 import { getAuthSession } from "@/lib/auth-session";
 
+const emptySubscribe = () => () => {};
+
 function TutorsListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isTutorAccount = getAuthSession()?.actorType === "tutor";
+  // useSyncExternalStore supplies the same `false` snapshot during SSR and
+  // hydration, then reveals browser-only localStorage state after mounting.
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const isTutorAccount = mounted && getAuthSession()?.actorType === "tutor";
 
   useEffect(() => {
     if (isTutorAccount) router.replace("/profile");

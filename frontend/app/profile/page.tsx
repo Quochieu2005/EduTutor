@@ -8,7 +8,7 @@ import { useEduClerk, useEduUser } from "@/lib/auth";
 import { AUTH_SESSION_EVENT, getAuthSession, type ActorType } from "@/lib/auth-session";
 import { saveAuthSession } from "@/lib/auth-session";
 import { edututorApi } from "@/lib/edututor-api";
-import type { LessonSession, TutorAvailability } from "@/lib/edututor-api";
+import type { LessonSession, PostedClassWithApplications, TutorAvailability } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
 import { getLessons, proposeLessonSchedule, updateLessonStatus } from "@/lib/api";
 import type { LessonRequest, ScheduleProposalPayload } from "@/lib/types";
@@ -70,11 +70,14 @@ export default function ProfilePage() {
   const [availabilitySlots, setAvailabilitySlots] = useState<TutorAvailability["slots"]>([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
-  const [userTab, setUserTab] = useState<"overview" | "profile" | "lessons" | "schedule" | "timetable" | "security">("overview");
+  const [userTab, setUserTab] = useState<"overview" | "profile" | "applications" | "lessons" | "schedule" | "timetable" | "security">("overview");
   const [learnerRequests, setLearnerRequests] = useState<LessonRequest[]>([]);
   const [learnerSessions, setLearnerSessions] = useState<LessonSession[]>([]);
   const [learnerRequestsLoading, setLearnerRequestsLoading] = useState(false);
   const [schedulingRequest, setSchedulingRequest] = useState<LessonRequest | null>(null);
+  const [postedClasses, setPostedClasses] = useState<PostedClassWithApplications[]>([]);
+  const [postedClassesLoading, setPostedClassesLoading] = useState(false);
+  const [decidingApplicationId, setDecidingApplicationId] = useState<number | null>(null);
 
   useEffect(() => {
     const syncActor = () => {
@@ -103,15 +106,31 @@ export default function ProfilePage() {
     return () => { cancelled = true; };
   }, [actorType, authResolved, isSignedIn]);
 
-  const refreshLearnerData = useCallback(async (showLoading = false) => {
+  const refreshPostedClasses = useCallback(async () => {
     if (!authResolved || !isSignedIn || !["student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return;
+    setPostedClassesLoading(true);
+    try {
+      setPostedClasses(await edututorApi.myPostedClassApplications());
+    } catch {
+      setPostedClasses([]);
+    } finally {
+      setPostedClassesLoading(false);
+    }
+  }, [actorType, authResolved, isSignedIn]);
+
+  useEffect(() => { void refreshPostedClasses(); }, [refreshPostedClasses]);
+
+  const refreshLearnerData = useCallback(async (showLoading = false) => {
+    if (!authResolved || !isSignedIn || !["student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return [];
     if (showLoading) setLearnerRequestsLoading(true);
     try {
       const [records, sessions] = await Promise.all([getLessons(), edututorApi.lessonSessions()]);
       setLearnerRequests(records);
       setLearnerSessions(sessions);
+      return records;
     } catch {
       if (showLoading) { setLearnerRequests([]); setLearnerSessions([]); }
+      return [];
     } finally {
       if (showLoading) setLearnerRequestsLoading(false);
     }
@@ -231,6 +250,36 @@ export default function ProfilePage() {
     }
   }
 
+  async function decideClassApplication(applicationId: number, status: "accepted" | "rejected") {
+    setDecidingApplicationId(applicationId);
+    try {
+      const updatedJob = await edututorApi.decidePostedClassApplication(applicationId, status);
+      setPostedClasses((current) => current.map((job) => job.slug === updatedJob.slug ? updatedJob : job));
+      if (status === "accepted") {
+        await refreshLearnerData(false);
+        toast.success("Đã chọn gia sư. Hãy chuyển sang bước chốt lịch học.");
+      } else {
+        toast.success("Đã từ chối đề nghị dạy.");
+      }
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      toast.error(typeof detail === "string" ? detail : "Không thể xử lý đề nghị dạy.");
+    } finally {
+      setDecidingApplicationId(null);
+    }
+  }
+
+  async function openClassBoardSchedule(requestId: number) {
+    const request = learnerRequests.find((item) => item.id === String(requestId))
+      ?? (await refreshLearnerData(false)).find((item) => item.id === String(requestId));
+    setUserTab("lessons");
+    if (request) {
+      setSchedulingRequest(request);
+    } else {
+      toast.error("Chưa tải được yêu cầu chốt lịch. Vui lòng thử lại.");
+    }
+  }
+
   useEffect(() => {
     // useSyncExternalStore receives an empty server snapshot on the first
     // client render. Do not redirect during that short hydration window when
@@ -290,6 +339,7 @@ export default function ProfilePage() {
   const learnerNavigation = [
     { key: "overview" as const, label: "Tổng quan", icon: <AppstoreOutlined /> },
     { key: "profile" as const, label: "Cập nhật hồ sơ", icon: <UserOutlined /> },
+    { key: "applications" as const, label: "Gia sư ứng tuyển", icon: <BookOutlined /> },
     { key: "lessons" as const, label: "Chốt lịch & buổi học", icon: <CalendarOutlined /> },
     { key: "schedule" as const, label: "Lịch học", icon: <CalendarOutlined /> },
     { key: "timetable" as const, label: "Thời khóa biểu", icon: <TableOutlined /> },
@@ -367,6 +417,26 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
+        </section>}
+
+        {isLearner && userTab === "applications" && <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
+          <div className="flex flex-col gap-3 border-b border-gray-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><h2 className="text-xl font-bold">Lớp đã đăng & gia sư ứng tuyển</h2><p className="mt-1 text-xs text-gray-500">Xem người đã đề nghị dạy bài đăng của bạn và chọn gia sư phù hợp.</p></div>
+            <Link href="/classes" className="text-sm font-bold text-blue-600 hover:text-blue-700">Xem danh sách lớp</Link>
+          </div>
+          {postedClassesLoading ? <p className="py-8 text-center text-sm text-slate-500">Đang tải danh sách ứng tuyển...</p> : postedClasses.length === 0 ? <p className="mt-5 rounded-xl bg-slate-50 px-4 py-7 text-center text-sm text-slate-500">Bạn chưa đăng yêu cầu tìm gia sư nào.</p> : <div className="mt-5 space-y-4">{postedClasses.map((job) => (
+            <article key={job.slug} className="rounded-2xl border border-slate-200 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-slate-900">{job.title}</h3><p className="mt-1 text-xs text-slate-500">{job.subject} · {job.applications.length} gia sư ứng tuyển</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${job.status === "open" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{job.status === "open" ? "Đang tuyển" : "Đã chọn gia sư"}</span></div>
+              {job.applications.length === 0 ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">Chưa có gia sư đề nghị dạy lớp này.</p> : <div className="mt-4 grid gap-3">{job.applications.map((application) => (
+                <div key={application.id} className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+                  <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div className="flex min-w-0 gap-3">{application.tutor.avatar ? <Image src={application.tutor.avatar} alt={application.tutor.name} width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-cover" /> : <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 font-bold text-white">{application.tutor.name.charAt(0)}</div>}<div className="min-w-0"><Link href={`/tutors/${application.tutor.slug}`} className="font-bold text-slate-900 hover:text-blue-600">{application.tutor.name}</Link><p className="mt-1 text-xs text-slate-500">{application.tutor.headline || `${application.tutor.experience_years} năm kinh nghiệm`} · {application.tutor.rating_avg}/5 ({application.tutor.rating_count} đánh giá)</p><p className="mt-1 text-xs text-slate-500">{application.tutor.phone || application.tutor.email}</p></div></div><span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${application.status === "accepted" ? "bg-emerald-100 text-emerald-700" : application.status === "rejected" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{application.status === "accepted" ? "Đã chấp nhận" : application.status === "rejected" ? "Đã từ chối" : "Chờ phản hồi"}</span></div>
+                  <p className="mt-3 rounded-lg bg-white p-3 text-sm leading-6 text-slate-700"><strong>Lời nhắn:</strong> {application.cover_letter || "Gia sư chưa để lại lời nhắn."}</p>
+                  {application.status === "pending" && job.status === "open" && <div className="mt-3 flex flex-wrap justify-end gap-2"><button type="button" disabled={decidingApplicationId !== null} onClick={() => void decideClassApplication(application.id, "rejected")} className="rounded-xl border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50">Từ chối</button><button type="button" disabled={decidingApplicationId !== null} onClick={() => void decideClassApplication(application.id, "accepted")} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">{decidingApplicationId === application.id ? "Đang xử lý..." : "Chấp nhận gia sư"}</button></div>}
+                </div>
+              ))}</div>}
+              {job.status === "closed" && job.learning_request_id && <div className="mt-4 flex justify-end"><button type="button" onClick={() => void openClassBoardSchedule(job.learning_request_id!)} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Chốt lịch học với gia sư</button></div>}
+            </article>
+          ))}</div>}
         </section>}
 
         {isLearner && userTab === "profile" && (

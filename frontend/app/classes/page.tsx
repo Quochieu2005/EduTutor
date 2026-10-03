@@ -26,17 +26,16 @@ import { edututorApi, type Province, type Subject, type Ward } from "@/lib/edutu
 import { toClassPresentation } from "@/lib/class-presenter";
 import { getProvinceSlug, getSubjectSlug } from "@/lib/tutor-filter-mapping";
 import { toast } from "@/lib/toast";
-import { getAuthSession } from "@/lib/auth-session";
 
 export function ClassesListContent({ recruitmentMode = false }: { recruitmentMode?: boolean } = {}) {
   // The two public boards intentionally use different JobPosting sources:
   // recruitment = admin announcements, classes = parent/student requests.
-  const actorType = getAuthSession()?.actorType;
-  const canPropose = !recruitmentMode && actorType === "tutor";
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isSignedIn, user } = useEduUser();
   const { openSignIn } = useEduClerk();
+  const actorType = user?.publicMetadata.role ?? null;
+  const canPropose = !recruitmentMode && actorType === "tutor";
 
   // URL parameters
   const paramSubject = searchParams.get("subject") || "all";
@@ -110,6 +109,36 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
   const [isLoadingClasses, setIsLoadingClasses] = useState(true);
   const [classesLoadError, setClassesLoadError] = useState<string | null>(null);
   const [appliedClassIds, setAppliedClassIds] = useState<string[]>([]);
+  const [classesRefreshKey, setClassesRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const refreshOpenClasses = () => setClassesRefreshKey((value) => value + 1);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshOpenClasses();
+    };
+    window.addEventListener("focus", refreshOpenClasses);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshOpenClasses);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (actorType !== "tutor") {
+      setAppliedClassIds([]);
+      return;
+    }
+    let isCurrent = true;
+    edututorApi.myTutorJobApplications()
+      .then((applications) => {
+        if (isCurrent) setAppliedClassIds(applications.map((application) => application.job_slug));
+      })
+      .catch(() => {
+        if (isCurrent) setAppliedClassIds([]);
+      });
+    return () => { isCurrent = false; };
+  }, [actorType]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -171,7 +200,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
     }
     void loadClasses();
     return () => { isCurrent = false; };
-  }, [paramCity, paramKeyword, paramMode, paramSubject, paramWard, recruitmentMode]);
+  }, [classesRefreshKey, paramCity, paramKeyword, paramMode, paramSubject, paramWard, recruitmentMode]);
 
   const subjectOptions = apiSubjects;
   const provinceOptions = apiProvinces.map((province) => ({ value: province.name, label: province.name }));
@@ -236,11 +265,15 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
     try {
       await edututorApi.applyForTutorJob(applyingClass.id, { cover_letter: applyNote.trim() || undefined });
       setAppliedClassIds((current) => current.includes(applyingClass.id) ? current : [...current, applyingClass.id]);
+      setClasses((current) => current.map((item) => item.id === applyingClass.id
+        ? { ...item, applicationsCount: (item.applicationsCount ?? 0) + 1 }
+        : item));
 
       setApplySuccess(true);
       toast.success("Đã gửi đề nghị nhận lớp thành công.");
-    } catch {
-      setApplyError("Không thể gửi đề nghị dạy lúc này. Vui lòng thử lại!");
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setApplyError(detail || "Không thể gửi đề nghị dạy lúc này. Vui lòng thử lại!");
     } finally {
       setIsSubmittingApply(false);
     }

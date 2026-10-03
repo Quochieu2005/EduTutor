@@ -54,7 +54,10 @@ export type TutorSubjectChangeRequest = {
   created_at: string;
 };
 export type PublicTutor = { id: number; slug: string; name: string; avatar: string | null; birth_year: number | null; gender: "male" | "female" | "other" | null; hometown: string | null; voice: string | null; headline: string | null; bio: string | null; education_level: string | null; major: string | null; institution: string | null; experience_years: number; hourly_rate_min: number | null; hourly_rate_max: number | null; teaching_mode: "online" | "offline" | "both"; rating_avg: number; rating_count: number; subjects: Array<{ slug: string; name: string; level?: string | null }>; teaching_areas: Array<{ province_slug: string; province_name: string; ward_slug?: string | null; ward_name?: string | null }> };
-export type TutorJob = { slug: string; posted_by_type: "admin" | "parent" | "student"; title: string; subject: { id: number; slug: string; name: string }; province: { id: number; slug: string; name: string }; district: { id: number; slug: string; name: string } | null; ward: { id: number; slug: string; name: string; type: string } | null; grade: string | null; description: string; budget_min: number | null; budget_max: number | null; schedule_expect: string | null; teaching_mode: "online" | "offline" | "both"; status: string; created_at: string; updated_at: string };
+export type TutorJob = { slug: string; posted_by_type: "admin" | "parent" | "student"; title: string; subject: { id: number; slug: string; name: string }; province: { id: number; slug: string; name: string }; district: { id: number; slug: string; name: string } | null; ward: { id: number; slug: string; name: string; type: string } | null; grade: string | null; description: string; budget_min: number | null; budget_max: number | null; schedule_expect: string | null; teaching_mode: "online" | "offline" | "both"; status: string; created_at: string; updated_at: string; applications_count: number };
+export type TutorJobApplication = { id: number; job_slug: string; status: "pending" | "accepted" | "rejected"; cover_letter: string | null; created_at: string };
+export type PostedClassApplication = { id: number; status: "pending" | "accepted" | "rejected"; cover_letter: string | null; created_at: string; tutor: { id: number; slug: string; name: string; email: string; phone: string | null; avatar: string | null; headline: string | null; experience_years: number; rating_avg: number; rating_count: number } };
+export type PostedClassWithApplications = { slug: string; title: string; subject: string; status: "open" | "closed"; created_at: string; learning_request_id: number | null; applications: PostedClassApplication[] };
 export type ActorNotification = { id: number; title: string; content: string; is_read: boolean; created_at: string; type?: string };
 export type LessonSession = {
   id: string; requestId: string; subject: string; studentName: string; studentPhone: string;
@@ -103,6 +106,9 @@ export const edututorApi = {
   async tutor(slug: string) { return (await api.get<PublicTutor>(`/v1/tutors/${encodeURIComponent(slug)}/`)).data; },
   async tutorJob(slug: string) { return (await api.get(`/v1/tutors/jobs/${encodeURIComponent(slug)}/`)).data; },
   async applyForTutorJob(slug: string, payload: { cover_letter?: string }) { return (await api.post(`/v1/tutors/jobs/${encodeURIComponent(slug)}/apply/`, payload)).data; },
+  async myTutorJobApplications() { return (await api.get<TutorJobApplication[]>("/v1/tutors/jobs/applications/mine/")).data; },
+  async myPostedClassApplications() { return (await api.get<PostedClassWithApplications[]>("/v1/tutors/jobs/requests/mine/applications/")).data; },
+  async decidePostedClassApplication(applicationId: number, status: "accepted" | "rejected") { return (await api.patch<PostedClassWithApplications>(`/v1/tutors/jobs/requests/mine/applications/${applicationId}/`, { status })).data; },
   async createTutorRequest(payload: { subject_id: number; province_id: number; ward_id: number; title: string; description: string; grade?: string; budget_min?: number | null; budget_max?: number | null; schedule_expect?: string; teaching_mode?: "online" | "offline" | "both" }) {
     return (await api.post<TutorJob>("/v1/tutors/requests/", payload)).data;
   },

@@ -199,6 +199,11 @@ class RecruitmentJobSerializer(serializers.Serializer):
     status = serializers.CharField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
+    applications_count = serializers.SerializerMethodField()
+
+    def get_applications_count(self, job):
+        from tutors.documents import JobApplication
+        return JobApplication.objects(job_posting=job).count()
 
 
 class TutorRequestCreateSerializer(serializers.Serializer):
@@ -308,3 +313,11 @@ class ClassApplicationResponseSerializer(serializers.Serializer):
     job_slug = serializers.CharField()
     status = serializers.CharField()
     message = serializers.CharField()
+
+
+class MyClassApplicationSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    job_slug = serializers.CharField()
+    status = serializers.CharField()
+    cover_letter = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()

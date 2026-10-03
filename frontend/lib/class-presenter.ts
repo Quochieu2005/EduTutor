@@ -17,7 +17,7 @@ export function toClassPresentation(job: TutorJob): ClassListing {
     schedule: job.schedule_expect ?? "Thỏa thuận sau khi kết nối", sessionsPerWeek: 0,
     sessionDuration: "Theo thỏa thuận", teachingMode: job.teaching_mode || "both", requirements: job.description || "Chưa có yêu cầu bổ sung.",
     description: job.description, contact: "EduTutor", postedDate: new Intl.DateTimeFormat("vi-VN").format(new Date(job.created_at)),
-    contractFee: "Theo thỏa thuận", applicationsCount: 0, averageRating: 0, reviewCount: 0,
+    contractFee: "Theo thỏa thuận", applicationsCount: job.applications_count ?? 0, averageRating: 0, reviewCount: 0,
     ratingBreakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }, reviews: [], comments: [],
   };
 }

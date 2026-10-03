@@ -25,7 +25,8 @@ from tutors.documents import (
     JobApplication, JobPosting, Province, Subject, Tutor, TutorApplication,
     TutorAvailability, TutorSubject, TutorSubjectChangeRequest, TutorTeachingArea, Ward,
 )
-from core.documents import AdminNotification
+from core.documents import AdminNotification, NotificationDelivery, SystemNotification
+from lessons.documents import LearningRequest
 from .authentication import TutorJWTAuthentication
 from api.v1.accounts.authentication import MongoJWTAuthentication
 
@@ -35,6 +36,7 @@ from .serializers import (
     TutorAvailabilitySlotSerializer, TutorAvailabilityUpdateSerializer,
     TutorAvailabilityResponseSerializer,
     ClassApplicationResponseSerializer, ClassApplicationSerializer,
+    MyClassApplicationSerializer,
     TutorAccountSerializer, TutorChangePasswordSerializer, TutorLoginSerializer,
     TutorPasswordChangedSerializer, TutorRefreshSerializer, TutorTokenPairSerializer,
     TutorProfileSerializer, TutorProfileUpdateSerializer,
@@ -632,7 +634,7 @@ class ClassApplicationCreateView(APIView):
             return Response({'detail': 'Chỉ gia sư Active mới có thể đề nghị nhận lớp.'}, status=403)
         # Tutor proposals are accepted only for parent/student requests.
         # Admin recruitment notices remain read-only announcements.
-        job = open_recruitment_jobs('parent').filter(slug=slug).first()
+        job = open_recruitment_jobs('requester').filter(slug=slug).first()
         if job is None:
             raise Http404
         if JobApplication.objects(job_posting=job, tutor=tutor).first() is not None:
@@ -643,9 +645,179 @@ class ClassApplicationCreateView(APIView):
             cover_letter=serializer.validated_data.get('cover_letter') or None,
             status='pending',
         ).save()
+        AdminNotification(
+            title='Gia sư đề nghị dạy lớp',
+            message=f'{tutor.name} đã đề nghị dạy lớp {job.title}.',
+            kind='system', url='/admin/management/tutor-requests/?tab=class-postings',
+        ).save()
+        cache.delete('admin-header-notification-items:v1')
         return Response({
             'id': int(application.id),
             'job_slug': job.slug,
             'status': application.status,
             'message': 'Đã gửi đề nghị nhận lớp. Khi được kết nối, hai bên sẽ thống nhất lịch học.',
         }, status=201)
+
+
+class MyClassApplicationListView(APIView):
+    authentication_classes = [TutorJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(tags=['Nhận lớp'], responses=MyClassApplicationSerializer(many=True))
+    def get(self, request):
+        tutor = request.user.tutor
+        if tutor is None:
+            return Response({'detail': 'Chỉ gia sư Active mới có thể xem đề nghị nhận lớp.'}, status=403)
+        applications = JobApplication.objects(tutor=tutor).order_by('-created_at').select_related()
+        payload = [{
+            'id': int(application.id),
+            'job_slug': application.job_posting.slug,
+            'status': application.status,
+            'cover_letter': application.cover_letter,
+            'created_at': application.created_at,
+        } for application in applications]
+        return Response(MyClassApplicationSerializer(payload, many=True).data)
+
+
+def _student_for_job_owner(job):
+    if job.posted_by_type == 'student':
+        return Student.objects(id=job.posted_by_id, status='active').first()
+    if job.posted_by_type == 'parent':
+        parent = Parent.objects(id=job.posted_by_id).first()
+        return Student.objects(parent=parent, status='active').first() if parent else None
+    return None
+
+
+def _ensure_class_board_learning_request(job, application):
+    learning_request = LearningRequest.objects(job_posting=job).first()
+    if learning_request is not None:
+        return learning_request
+    student = _student_for_job_owner(job)
+    if student is None:
+        return None
+    return LearningRequest(
+        student=student,
+        requested_by_type=job.posted_by_type,
+        requested_by_id=job.posted_by_id,
+        tutor=application.tutor,
+        subject=job.subject,
+        message=f'Gia sư được chọn từ bài đăng: {job.title}',
+        expected_schedule='Chờ người đăng chọn lịch học',
+        source='class_board',
+        job_posting=job,
+        proposed_by='student',
+        student_confirmed=False,
+        tutor_confirmed=False,
+        status='pending',
+    ).save()
+
+
+def _posted_job_application_payload(job):
+    applications = JobApplication.objects(job_posting=job).order_by('-created_at').select_related()
+    learning_request = LearningRequest.objects(job_posting=job).order_by('-created_at').first()
+    if learning_request is None:
+        accepted = next((item for item in applications if item.status == 'accepted'), None)
+        if accepted is not None:
+            learning_request = _ensure_class_board_learning_request(job, accepted)
+    return {
+        'slug': job.slug,
+        'title': job.title,
+        'subject': job.subject.name,
+        'status': job.status,
+        'created_at': job.created_at,
+        'learning_request_id': int(learning_request.id) if learning_request else None,
+        'applications': [{
+            'id': int(application.id),
+            'status': application.status,
+            'cover_letter': application.cover_letter,
+            'created_at': application.created_at,
+            'tutor': {
+                'id': int(application.tutor.id),
+                'slug': application.tutor.slug,
+                'name': application.tutor.name,
+                'email': application.tutor.email,
+                'phone': application.tutor.phone,
+                'avatar': application.tutor.avatar,
+                'headline': application.tutor.headline,
+                'experience_years': application.tutor.experience_years,
+                'rating_avg': float(application.tutor.rating_avg or 0),
+                'rating_count': application.tutor.rating_count,
+            },
+        } for application in applications],
+    }
+
+
+class MyPostedClassApplicationsView(APIView):
+    """Let a learner/parent see every tutor who applied to their postings."""
+
+    authentication_classes = [MongoJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        requester = _requester_profile(request.user.user)
+        if requester is None:
+            return Response({'detail': 'Không tìm thấy hồ sơ học viên hoặc phụ huynh.'}, status=403)
+        jobs = JobPosting.objects(
+            posted_by_type=requester[0], posted_by_id=requester[1],
+        ).order_by('-created_at').select_related()
+        return Response([_posted_job_application_payload(job) for job in jobs])
+
+
+class PostedClassApplicationDecisionView(APIView):
+    """Accept or reject an applicant, but only by the owner of the posting."""
+
+    authentication_classes = [MongoJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, application_id):
+        decision = str(request.data.get('status') or '').strip().lower()
+        if decision not in ('accepted', 'rejected'):
+            return Response({'status': ['Chỉ chấp nhận accepted hoặc rejected.']}, status=400)
+        requester = _requester_profile(request.user.user)
+        application = JobApplication.objects(id=application_id).first()
+        if requester is None or application is None:
+            raise Http404
+        job = application.job_posting
+        if job.posted_by_type != requester[0] or int(job.posted_by_id) != requester[1]:
+            return Response({'detail': 'Bạn không có quyền xử lý đề nghị này.'}, status=403)
+        if application.status != 'pending':
+            return Response({'detail': 'Đề nghị này đã được xử lý.'}, status=409)
+        if decision == 'accepted':
+            if job.status != 'open':
+                return Response({'detail': 'Bài đăng này đã đóng.'}, status=409)
+            if _student_for_job_owner(job) is None:
+                return Response({'detail': 'Không tìm thấy hồ sơ học viên để chốt lịch.'}, status=400)
+            application.status = 'accepted'
+            application.save()
+            JobApplication.objects(job_posting=job, status='pending', id__ne=application.id).update(status='rejected')
+            job.status = 'closed'
+            job.save()
+            _ensure_class_board_learning_request(job, application)
+            try:
+                notification = SystemNotification(
+                    title='Bạn đã được chọn dạy lớp',
+                    message=(
+                        f'Người đăng đã chọn bạn dạy lớp {job.title}. '
+                        'Mở mục Chốt lịch & buổi học để xem lịch học được gửi tới.'
+                    ),
+                    audience=SystemNotification.AUDIENCE_TUTORS,
+                    status=SystemNotification.STATUS_SENT,
+                    sent_at=datetime.now(timezone.utc), recipient_count=1,
+                ).save()
+                NotificationDelivery(
+                    notification=notification, recipient_type='tutor',
+                    recipient_id=int(application.tutor.id),
+                ).save()
+            except Exception:
+                pass
+            message = f'Đã chọn gia sư {application.tutor.name} cho lớp {job.title}.'
+        else:
+            application.status = 'rejected'
+            application.save()
+            message = f'Đã từ chối đề nghị của gia sư {application.tutor.name}.'
+        AdminNotification(
+            title='Người đăng đã xử lý đề nghị dạy', message=message,
+            kind='system', url='/admin/management/tutor-requests/?tab=class-postings',
+        ).save()
+        cache.delete('admin-header-notification-items:v1')
+        return Response(_posted_job_application_payload(job))
