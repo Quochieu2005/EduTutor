@@ -31,7 +31,7 @@ export function BlogSection() {
 
   useEffect(() => {
     let isCurrent = true;
-    edututorApi.blogs({ page_size: 3 })
+    edututorApi.blogs({ page_size: 6 })
       .then((page) => {
         if (isCurrent) setPosts(page.results);
       })
@@ -61,8 +61,18 @@ export function BlogSection() {
         </div>
 
         {isLoading ? (
-          <div className="rounded-3xl border border-blue-100 bg-white p-12 text-center text-sm text-slate-500">
-            Đang tải bài viết...
+          <div aria-label="Đang tải bài viết" className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-3">
+            {Array.from({ length: 6 }, (_, index) => (
+              <div key={index} className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
+                <div className="h-44 animate-pulse bg-slate-200 motion-reduce:animate-none" />
+                <div className="space-y-4 p-6">
+                  <div className="h-5 w-28 animate-pulse rounded-full bg-slate-100 motion-reduce:animate-none" />
+                  <div className="h-6 w-4/5 animate-pulse rounded-lg bg-slate-200 motion-reduce:animate-none" />
+                  <div className="h-4 w-full animate-pulse rounded bg-slate-100 motion-reduce:animate-none" />
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100 motion-reduce:animate-none" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : hasError ? (
           <div className="rounded-3xl border border-rose-100 bg-white p-12 text-center text-sm text-rose-600">
@@ -73,24 +83,26 @@ export function BlogSection() {
             Hiện chưa có bài viết được xuất bản.
           </div>
         ) : (
-          <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-3 sm:gap-8">
+          <div className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 sm:gap-8 lg:grid-cols-3">
             {posts.map((post) => (
               <article
                 key={post.slug}
-                className="group flex flex-col justify-between overflow-hidden rounded-3xl border border-blue-100/80 bg-white shadow-sm transition-all duration-300 hover:border-blue-300 hover:shadow-xl"
+                className="group min-w-0 flex flex-col justify-between overflow-hidden rounded-3xl border border-blue-100/80 bg-white shadow-sm transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl motion-reduce:transform-none"
               >
                 <div>
                   {post.thumbnail ? (
-                    <div className="relative h-48 w-full overflow-hidden bg-slate-100">
+                    <div className="relative h-44 w-full overflow-hidden bg-slate-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={post.thumbnail}
                         alt={post.title}
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />
                     </div>
                   ) : (
-                    <div className="flex h-32 items-center justify-center border-b border-blue-50 bg-gradient-to-br from-blue-50 to-slate-50 text-blue-500">
+                    <div className="flex h-44 items-center justify-center border-b border-blue-50 bg-gradient-to-br from-blue-50 to-slate-50 text-blue-500">
                       <BookOutlined className="text-3xl" aria-hidden="true" />
                     </div>
                   )}
@@ -105,10 +117,10 @@ export function BlogSection() {
                         {formatDate(post.published_at)}
                       </span>
                     </div>
-                    <h3 className="mb-3 line-clamp-2 text-base font-bold leading-snug text-slate-900 transition-colors group-hover:text-blue-600 sm:text-lg">
+                    <h3 className="mb-3 line-clamp-2 break-words [overflow-wrap:anywhere] text-base font-bold leading-snug text-slate-900 transition-colors group-hover:text-blue-600 sm:text-lg">
                       {post.title}
                     </h3>
-                    <p className="line-clamp-3 text-xs leading-relaxed text-slate-500 sm:text-sm">
+                    <p className="line-clamp-3 break-words [overflow-wrap:anywhere] text-xs leading-relaxed text-slate-500 sm:text-sm">
                       {post.excerpt || "Xem bài viết được EduTutor xuất bản."}
                     </p>
                   </div>

@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
   LeftOutlined,
@@ -11,22 +10,12 @@ import {
 } from "@ant-design/icons";
 
 import { edututorApi, type Subject } from "@/lib/edututor-api";
+import { getAuthSession } from "@/lib/auth-session";
 import { TUTOR_CATEGORIES, type TutorCategoryItem } from "@/lib/tutor-filter-mapping";
 
-const CARD_HOLD_MS = 1000;
-const SLIDE_TRANSITION_MS = 300;
-const DEFAULT_SUBJECT_IMAGE = "/assets/sub-toantuduy.png";
-
-function subjectImage(slug: string) {
-  if (slug.includes("tieng-anh")) return "/assets/sub-tienganh.png";
-  if (slug.includes("ielts")) return "/assets/sub-ielts.png";
-  if (slug.includes("ngu-van") || slug.includes("van")) return "/assets/sub-nguvan.png";
-  if (slug.includes("vat-ly") || slug.includes("vat-li")) return "/assets/sub-vatly.png";
-  if (slug.includes("hoa")) return "/assets/sub-hoahoc.png";
-  if (slug.includes("toan")) return "/assets/sub-toantuduy.png";
-  return DEFAULT_SUBJECT_IMAGE;
-}
-
+const CARD_HOLD_MS = 2200;
+const SLIDE_TRANSITION_MS = 650;
+const emptySubscribe = () => () => {};
 function toCategory(subject: Subject): TutorCategoryItem {
   const metadata = TUTOR_CATEGORIES.find((item) => item.filterSubjectSlug === subject.slug);
   const tutorCount = subject.tutor_count ?? 0;
@@ -34,7 +23,7 @@ function toCategory(subject: Subject): TutorCategoryItem {
     id: `subject-${subject.id}`,
     slug: subject.slug,
     title: metadata?.title ?? `Gia sư ${subject.name}`,
-    imageSrc: metadata?.imageSrc ?? subjectImage(subject.slug),
+    imageSrc: metadata?.imageSrc ?? "",
     filterSubjectSlug: subject.slug,
     bullets: metadata?.bullets ?? [
       tutorCount > 0 ? `${tutorCount.toLocaleString("vi-VN")} gia sư đang hoạt động` : "Đang cập nhật gia sư",
@@ -44,24 +33,117 @@ function toCategory(subject: Subject): TutorCategoryItem {
   };
 }
 
+const subjectThemes = {
+  math: { surface: "bg-blue-600", soft: "bg-blue-400/35", ink: "text-white", glyph: "∑", label: "Tư duy logic" },
+  literature: { surface: "bg-amber-500", soft: "bg-orange-300/45", ink: "text-amber-950", glyph: "Aa", label: "Ngôn ngữ & diễn đạt" },
+  technology: { surface: "bg-indigo-600", soft: "bg-cyan-300/30", ink: "text-white", glyph: "</>", label: "Công nghệ & sáng tạo" },
+  language: { surface: "bg-emerald-600", soft: "bg-teal-300/35", ink: "text-white", glyph: "EN", label: "Giao tiếp & hội nhập" },
+  science: { surface: "bg-violet-600", soft: "bg-fuchsia-300/30", ink: "text-white", glyph: "⚗", label: "Khám phá khoa học" },
+} as const;
+
+const generatedThemes = [
+  { surface: "bg-sky-600", soft: "bg-cyan-300/30", ink: "text-white" },
+  { surface: "bg-rose-600", soft: "bg-pink-300/30", ink: "text-white" },
+  { surface: "bg-teal-600", soft: "bg-emerald-300/30", ink: "text-white" },
+  { surface: "bg-orange-500", soft: "bg-amber-200/40", ink: "text-orange-950" },
+  { surface: "bg-purple-600", soft: "bg-violet-300/30", ink: "text-white" },
+  { surface: "bg-cyan-700", soft: "bg-sky-300/30", ink: "text-white" },
+  { surface: "bg-lime-600", soft: "bg-lime-200/35", ink: "text-lime-950" },
+  { surface: "bg-slate-700", soft: "bg-blue-300/25", ink: "text-white" },
+] as const;
+
+function hashSubject(value: string) {
+  let hash = 0;
+  for (const character of value) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
+  return Math.abs(hash);
+}
+
+function subjectInitials(title: string) {
+  const words = title.replace(/^Gia sư\s*/i, "").trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map((word) => Array.from(word)[0]).join("").toLocaleUpperCase("vi-VN") || "ED";
+}
+
+function subjectTheme(slug: string, title: string) {
+  const value = `${slug} ${title}`.toLowerCase();
+  if (value.includes("toan")) return subjectThemes.math;
+  if (value.includes("van") || value.includes("ngu-van")) return subjectThemes.literature;
+  if (value.includes("tin") || value.includes("cong-nghe") || value.includes("lap-trinh")) return subjectThemes.technology;
+  if (value.includes("anh") || value.includes("ielts") || value.includes("ngoai-ngu")) return subjectThemes.language;
+  if (value.includes("ly") || value.includes("hoa") || value.includes("sinh")) return subjectThemes.science;
+  const generated = generatedThemes[hashSubject(slug || title) % generatedThemes.length];
+  return {
+    ...generated,
+    glyph: subjectInitials(title),
+    label: `Khám phá ${title.replace(/^Gia sư\s*/i, "")}`,
+  };
+}
+
+function SubjectBanner({ category }: { category: TutorCategoryItem }) {
+  const visual = subjectTheme(category.filterSubjectSlug, category.title);
+  return (
+    <div className={`relative mb-5 h-36 w-full overflow-hidden rounded-2xl ${visual.surface} ${visual.ink}`}>
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 opacity-20"
+        style={{
+          backgroundImage: "linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      />
+      <div aria-hidden="true" className={`absolute -right-8 -top-10 h-32 w-32 rounded-full ${visual.soft}`} />
+      <div aria-hidden="true" className="absolute -bottom-12 right-14 h-28 w-28 rounded-full border-[18px] border-white/10" />
+      <div className="relative flex h-full flex-col justify-between p-5">
+        <div className="flex items-start justify-between gap-3">
+          <span className="max-w-[180px] text-xs font-semibold leading-5 opacity-90">{visual.label}</span>
+          <span aria-hidden="true" className="rounded-full border border-white/25 bg-white/15 px-2.5 py-1 text-[10px] font-bold backdrop-blur-sm">EduTutor</span>
+        </div>
+        <div className="flex items-end justify-between gap-3">
+          <span className="truncate text-sm font-bold opacity-90">{category.title.replace(/^Gia sư\s*/i, "")}</span>
+          <span aria-hidden="true" className="text-4xl font-black tracking-tighter drop-shadow-sm">{visual.glyph}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+async function loadAllSubjects() {
+  const firstPage = await edututorApi.subjects({ page: 1, page_size: 100 });
+  const subjects = [...firstPage.results];
+  let pageNumber = 2;
+  let hasNextPage = Boolean(firstPage.next);
+  while (hasNextPage) {
+    const nextPage = await edututorApi.subjects({ page: pageNumber, page_size: 100 });
+    subjects.push(...nextPage.results);
+    hasNextPage = Boolean(nextPage.next);
+    pageNumber += 1;
+  }
+  return subjects;
+}
+
 export function TutorCategories() {
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
+  const isTutorAccount = mounted && getAuthSession()?.actorType === "tutor";
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [tutorCount, setTutorCount] = useState<number | null>(null);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
+  const hasDraggedRef = useRef(false);
+  const dragFrameRef = useRef<number | null>(null);
+  const pendingScrollLeftRef = useRef(0);
   const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
-    edututorApi.subjects({ page_size: 100 })
-      .then((page) => {
+    loadAllSubjects()
+      .then((items) => {
         if (isCurrent) {
-          setSubjects(page.results);
+          setSubjects(items);
           setIsLoadingSubjects(false);
         }
       })
@@ -80,6 +162,10 @@ export function TutorCategories() {
   }, []);
 
   const categories = useMemo(() => subjects.map(toCategory), [subjects]);
+  const carouselCategories = useMemo(
+    () => categories.length > 1 ? [...categories, ...categories, ...categories] : categories,
+    [categories],
+  );
 
   const getCardStep = useCallback(() => {
     const container = scrollRef.current;
@@ -101,6 +187,25 @@ export function TutorCategories() {
       behavior: "smooth",
     });
   }, [getCardStep]);
+
+  const getCycleWidth = useCallback(() => categories.length * getCardStep(), [categories.length, getCardStep]);
+
+  const normalizeLoopPosition = useCallback(() => {
+    const container = scrollRef.current;
+    const cycleWidth = getCycleWidth();
+    if (!container || categories.length < 2 || cycleWidth <= 0) return;
+    if (container.scrollLeft >= cycleWidth * 2) container.scrollLeft -= cycleWidth;
+    else if (container.scrollLeft <= 1) container.scrollLeft += cycleWidth;
+  }, [categories.length, getCycleWidth]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || categories.length < 2) return;
+    const frame = window.requestAnimationFrame(() => {
+      container.scrollLeft = getCycleWidth();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [categories.length, getCycleWidth]);
 
   const clearAllTimers = () => {
     if (autoTimerRef.current) {
@@ -125,14 +230,19 @@ export function TutorCategories() {
 
     autoTimerRef.current = setTimeout(() => {
       if (isDraggingRef.current) return;
-
+      const container = scrollRef.current;
+      if (!container || categories.length < 2) {
+        scheduleNextAutoplayRef.current?.(CARD_HOLD_MS);
+        return;
+      }
       scrollOneCard("right");
 
       transitionTimerRef.current = setTimeout(() => {
+        normalizeLoopPosition();
         scheduleNextAutoplayRef.current?.(CARD_HOLD_MS);
       }, SLIDE_TRANSITION_MS);
     }, delay);
-  }, [scrollOneCard]);
+  }, [categories.length, normalizeLoopPosition, scrollOneCard]);
 
   useEffect(() => {
     scheduleNextAutoplayRef.current = scheduleNextAutoplay;
@@ -140,8 +250,12 @@ export function TutorCategories() {
 
   // Start autoplay loop on mount, cleanup on unmount
   useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     scheduleNextAutoplay(CARD_HOLD_MS);
-    return () => clearAllTimers();
+    return () => {
+      clearAllTimers();
+      if (dragFrameRef.current !== null) window.cancelAnimationFrame(dragFrameRef.current);
+    };
   }, [scheduleNextAutoplay]);
 
   // Manual scroll buttons
@@ -158,6 +272,8 @@ export function TutorCategories() {
     if (!scrollRef.current) return;
     clearAllTimers();
     isDraggingRef.current = true;
+    setIsDragging(true);
+    hasDraggedRef.current = false;
     startXRef.current = e.pageX - scrollRef.current.offsetLeft;
     scrollLeftRef.current = scrollRef.current.scrollLeft;
   };
@@ -167,12 +283,21 @@ export function TutorCategories() {
     e.preventDefault();
     const x = e.pageX - scrollRef.current.offsetLeft;
     const walk = (x - startXRef.current) * 1.2;
-    scrollRef.current.scrollLeft = scrollLeftRef.current - walk;
+    if (Math.abs(walk) > 6) hasDraggedRef.current = true;
+    pendingScrollLeftRef.current = scrollLeftRef.current - walk;
+    if (dragFrameRef.current === null) {
+      dragFrameRef.current = window.requestAnimationFrame(() => {
+        if (scrollRef.current) scrollRef.current.scrollLeft = pendingScrollLeftRef.current;
+        dragFrameRef.current = null;
+      });
+    }
   };
 
   const handleMouseUpOrLeave = () => {
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
+      setIsDragging(false);
+      normalizeLoopPosition();
       scheduleNextAutoplay(CARD_HOLD_MS);
     }
   };
@@ -180,10 +305,23 @@ export function TutorCategories() {
   const handleTouchStart = () => {
     clearAllTimers();
     isDraggingRef.current = true;
+    setIsDragging(true);
+  };
+
+  const handleCardClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (isTutorAccount) {
+      event.preventDefault();
+      return;
+    }
+    if (!hasDraggedRef.current) return;
+    event.preventDefault();
+    hasDraggedRef.current = false;
   };
 
   const handleTouchEnd = () => {
     isDraggingRef.current = false;
+    setIsDragging(false);
+    normalizeLoopPosition();
     scheduleNextAutoplay(CARD_HOLD_MS);
   };
 
@@ -240,26 +378,26 @@ export function TutorCategories() {
             onMouseLeave={handleMouseUpOrLeave}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
-            className="no-scrollbar flex cursor-grab snap-x snap-mandatory gap-5 overflow-x-auto pb-4 pt-2 select-none active:cursor-grabbing"
+            onScroll={() => {
+              if (!isDraggingRef.current) normalizeLoopPosition();
+            }}
+            className={`no-scrollbar flex cursor-grab gap-5 overflow-x-auto pb-4 pt-2 select-none active:cursor-grabbing ${isDragging ? "snap-none scroll-auto" : "snap-x snap-mandatory"}`}
             style={{ scrollBehavior: "auto" }}
           >
-            {categories.map((cat) => (
+            {carouselCategories.map((cat, index) => (
               <Link
-                key={cat.id}
+                key={`${cat.id}-${index}`}
                 href={`/tutors?subject=${encodeURIComponent(cat.filterSubjectSlug)}`}
-                className="tutor-category-card group flex w-[280px] shrink-0 snap-start select-none flex-col justify-between rounded-3xl border border-blue-100 bg-white p-5 shadow-xs transition-all duration-300 focus-visible:border-blue-500 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 sm:w-[320px]"
+                aria-disabled={isTutorAccount || undefined}
+                aria-hidden={categories.length > 1 && (index < categories.length || index >= categories.length * 2)}
+                tabIndex={isTutorAccount || (categories.length > 1 && (index < categories.length || index >= categories.length * 2)) ? -1 : undefined}
+                onClick={handleCardClick}
+                onDragStart={(event) => event.preventDefault()}
+                className={`tutor-category-card group flex w-[280px] shrink-0 snap-start select-none flex-col justify-between overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-xs transition-[border-color,box-shadow,transform] duration-300 focus-visible:border-blue-500 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 motion-reduce:transform-none sm:w-[320px] ${isTutorAccount ? "pointer-events-none" : "hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-950/10"}`}
               >
               <div>
                 {/* Subject Banner Illustration */}
-                <div className="relative w-full h-32 rounded-2xl overflow-hidden mb-4 bg-slate-100 border border-slate-100">
-                  <Image
-                    src={cat.imageSrc}
-                    alt={cat.title}
-                    fill
-                    sizes="(max-width: 768px) 280px, 320px"
-                    className="object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none"
-                  />
-                </div>
+                <SubjectBanner category={cat} />
 
                 {/* Subject Title */}
                 <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
@@ -278,10 +416,12 @@ export function TutorCategories() {
               </div>
 
               {/* View Tutors Action (styled text inside Link) */}
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 transition-all group-hover:gap-3 group-hover:text-blue-800">
-                <span>Xem gia sư</span>
-                <ArrowRightOutlined className="text-xs transition-transform group-hover:translate-x-0.5" />
-              </div>
+              {!isTutorAccount && (
+                <div className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 transition-all group-hover:gap-3 group-hover:text-blue-800">
+                  <span>Xem gia sư</span>
+                  <ArrowRightOutlined className="text-xs transition-transform group-hover:translate-x-0.5" />
+                </div>
+              )}
               </Link>
             ))}
             {isLoadingSubjects && categories.length === 0 && (
@@ -298,7 +438,7 @@ export function TutorCategories() {
         </div>
 
         {/* Bottom CTA Button */}
-        <div className="mt-12 text-center">
+        {!isTutorAccount && <div className="mt-12 text-center">
           <Link
             href="/tutors"
             className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-slate-900 hover:bg-blue-700 text-white text-sm font-bold shadow-lg shadow-slate-900/10 hover:shadow-xl hover:shadow-blue-600/20 transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -306,7 +446,7 @@ export function TutorCategories() {
             <span>Xem tất cả gia sư</span>
             <ArrowRightOutlined />
           </Link>
-        </div>
+        </div>}
       </div>
     </section>
   );
