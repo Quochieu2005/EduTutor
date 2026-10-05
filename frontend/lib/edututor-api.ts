@@ -4,7 +4,7 @@
  * Không hard-code host: Axios `api` lấy NEXT_PUBLIC_API_URL, nên local dùng
  * Django localhost còn Vercel dùng Render chỉ bằng biến môi trường.
  */
-import { api, type EduTutorRequestConfig } from "./api";
+import { api, dedupedApiGet, type EduTutorRequestConfig } from "./api";
 
 export type Page<T> = { count: number; next: string | null; previous: string | null; results: T[] };
 export type Banner = { id: number; slug: string | null; title: string | null; image: string; link_url: string | null; sort_order: number };
@@ -73,10 +73,64 @@ function page<T>(data: T[] | Page<T>): Page<T> {
 type CacheEntry = { expiresAt: number; value: unknown };
 const publicGetCache = new Map<string, CacheEntry>();
 const inFlightGets = new Map<string, Promise<unknown>>();
+const PUBLIC_CACHE_PREFIX = "edututor:public-api:v1:";
+
+function readSessionCache(key: string): CacheEntry | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = window.sessionStorage.getItem(`${PUBLIC_CACHE_PREFIX}${key}`);
+    if (!raw) return undefined;
+    const entry = JSON.parse(raw) as CacheEntry;
+    return entry;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeSessionCache(key: string, entry: CacheEntry) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(`${PUBLIC_CACHE_PREFIX}${key}`, JSON.stringify(entry));
+  } catch {
+    // Storage can be unavailable in private mode. The in-memory cache remains.
+  }
+}
+
+function refreshPublicGet<T>(
+  key: string,
+  path: string,
+  params: Record<string, unknown> | undefined,
+  ttlMs: number,
+): Promise<T> {
+  const pending = inFlightGets.get(key);
+  if (pending) return pending as Promise<T>;
+  const request = api.get<T>(path, { params }).then(({ data }) => {
+    const entry = { expiresAt: Date.now() + ttlMs, value: data };
+    publicGetCache.set(key, entry);
+    writeSessionCache(key, entry);
+    return data;
+  }).finally(() => {
+    inFlightGets.delete(key);
+  });
+  inFlightGets.set(key, request);
+  return request;
+}
 
 function invalidatePublicCache(pathPrefix: string) {
   for (const key of publicGetCache.keys()) {
     if (key.startsWith(pathPrefix)) publicGetCache.delete(key);
+  }
+  if (typeof window !== "undefined") {
+    try {
+      for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
+        const storageKey = window.sessionStorage.key(index);
+        if (storageKey?.startsWith(`${PUBLIC_CACHE_PREFIX}${pathPrefix}`)) {
+          window.sessionStorage.removeItem(storageKey);
+        }
+      }
+    } catch {
+      // Storage can be unavailable; the in-memory cache was still cleared.
+    }
   }
 }
 
@@ -98,18 +152,19 @@ async function cachedGet<T>(
   const now = Date.now();
   const cached = publicGetCache.get(key);
   if (cached && cached.expiresAt > now) return cached.value as T;
-
-  const pending = inFlightGets.get(key);
-  if (pending) return pending as Promise<T>;
-
-  const request = api.get<T>(path, { params }).then(({ data }) => {
-    publicGetCache.set(key, { expiresAt: Date.now() + ttlMs, value: data });
-    return data;
-  }).finally(() => {
-    inFlightGets.delete(key);
-  });
-  inFlightGets.set(key, request);
-  return request;
+  const stored = readSessionCache(key);
+  if (stored?.expiresAt && stored.expiresAt > now) {
+    publicGetCache.set(key, stored);
+    return stored.value as T;
+  }
+  // Render cached public data immediately after F5, then refresh it silently.
+  // The next focus/poll receives the fresh value without showing a loader.
+  const staleWindowMs = Math.max(ttlMs * 12, 60_000);
+  if (stored?.expiresAt && stored.expiresAt + staleWindowMs > now) {
+    void refreshPublicGet<T>(key, path, params, ttlMs).catch(() => undefined);
+    return stored.value as T;
+  }
+  return refreshPublicGet<T>(key, path, params, ttlMs);
 }
 
 export const edututorApi = {
@@ -148,8 +203,8 @@ export const edututorApi = {
   async tutor(slug: string) { return cachedGet<PublicTutor>(`/v1/tutors/${encodeURIComponent(slug)}/`, undefined, 30_000); },
   async tutorJob(slug: string) { return cachedGet<TutorJob>(`/v1/tutors/jobs/${encodeURIComponent(slug)}/`, undefined, 15_000); },
   async applyForTutorJob(slug: string, payload: { cover_letter?: string }) { return (await api.post(`/v1/tutors/jobs/${encodeURIComponent(slug)}/apply/`, payload)).data; },
-  async myTutorJobApplications() { return (await api.get<TutorJobApplication[]>("/v1/tutors/jobs/applications/mine/")).data; },
-  async myPostedClassApplications() { return (await api.get<PostedClassWithApplications[]>("/v1/tutors/jobs/requests/mine/applications/")).data; },
+  async myTutorJobApplications() { return dedupedApiGet<TutorJobApplication[]>("/v1/tutors/jobs/applications/mine/"); },
+  async myPostedClassApplications() { return dedupedApiGet<PostedClassWithApplications[]>("/v1/tutors/jobs/requests/mine/applications/"); },
   async decidePostedClassApplication(applicationId: number, status: "accepted" | "rejected") {
     const response = await api.patch<PostedClassWithApplications>(`/v1/tutors/jobs/requests/mine/applications/${applicationId}/`, { status });
     if (status === "accepted") invalidatePublicCache("/v1/tutors/jobs/");
@@ -162,9 +217,9 @@ export const edututorApi = {
   async tutorAvailability(slug: string) { return cachedGet<TutorAvailability>(`/v1/tutors/${encodeURIComponent(slug)}/availability/`, undefined, 30_000); },
   async tutorLogin(payload: { email: string; password: string }) { return (await api.post("/v1/tutors/auth/login/", payload)).data; },
   async refreshTutorSession(refresh: string) { return (await api.post("/v1/tutors/auth/refresh/", { refresh })).data; },
-  async myTutorAvailability() { return (await api.get<TutorAvailability>("/v1/tutors/me/availability/")).data; },
+  async myTutorAvailability() { return dedupedApiGet<TutorAvailability>("/v1/tutors/me/availability/"); },
   async updateMyTutorAvailability(slots: TutorAvailability["slots"]) { return (await api.put<TutorAvailability>("/v1/tutors/me/availability/", { slots })).data; },
-  async tutorSubjectChangeRequests() { return (await api.get<Array<TutorSubjectChangeRequest>>("/v1/tutors/auth/subject-change-requests/")).data; },
+  async tutorSubjectChangeRequests() { return dedupedApiGet<Array<TutorSubjectChangeRequest>>("/v1/tutors/auth/subject-change-requests/"); },
   async requestTutorSubjectChange(payload: { subject_id: number; action: "add" | "remove"; level?: string; price_per_hour?: number | null; note?: string }) {
     return (await api.post<TutorSubjectChangeRequest>(
       "/v1/tutors/auth/subject-change-requests/",
@@ -174,7 +229,7 @@ export const edututorApi = {
   },
 
   // Lịch học và hồ sơ
-  async lessons() { return page((await api.get("/v1/lessons/")).data); },
+  async lessons() { return page(await dedupedApiGet("/v1/lessons/")); },
   async createLesson(payload: Record<string, unknown>) { return (await api.post("/v1/lessons/", payload)).data; },
   async inviteTutor(slug: string, payload: { contact_name: string; contact_phone: string; student_name?: string; grade_subject?: string; message?: string }) {
     return (await api.post<{ id: number; status: string; email_sent: boolean; message: string }>(`/v1/lessons/invite/${encodeURIComponent(slug)}/`, payload)).data;
@@ -191,14 +246,14 @@ export const edututorApi = {
       _edututorSilentToast: true,
     } as EduTutorRequestConfig)).data;
   },
-  async lessonSessions() { return (await api.get<LessonSession[]>("/v1/lessons/sessions/")).data; },
+  async lessonSessions() { return dedupedApiGet<LessonSession[]>("/v1/lessons/sessions/"); },
   async markLessonAttendance(id: string, status: "completed" | "no_show") { return (await api.patch<LessonSession>(`/v1/lessons/sessions/${id}/attendance/`, { status })).data; },
-  async account() { return (await api.get("/v1/accounts/me/")).data; },
-  async accountProfile() { return (await api.get("/v1/accounts/profile/")).data; },
+  async account() { return dedupedApiGet("/v1/accounts/me/"); },
+  async accountProfile() { return dedupedApiGet("/v1/accounts/profile/"); },
   async updateAccountProfile(payload: FormData | Record<string, unknown>) { return (await api.patch("/v1/accounts/profile/", payload, payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined)).data; },
   async changeAccountPassword(payload: { current_password: string; new_password: string; confirm_password: string }) { return (await api.post("/v1/accounts/password/change/", payload)).data; },
-  async tutorAccount() { return (await api.get("/v1/tutors/auth/me/")).data; },
-  async tutorProfile() { return (await api.get("/v1/tutors/auth/profile/")).data; },
+  async tutorAccount() { return dedupedApiGet("/v1/tutors/auth/me/"); },
+  async tutorProfile() { return dedupedApiGet("/v1/tutors/auth/profile/"); },
   async updateTutorProfile(payload: FormData | Record<string, unknown>) { return (await api.patch("/v1/tutors/auth/profile/", payload, payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined)).data; },
   async changeTutorPassword(payload: { current_password: string; new_password: string; confirm_password: string }) { return (await api.post("/v1/tutors/auth/change-password/", payload)).data; },
 
@@ -233,7 +288,7 @@ export const edututorApi = {
     return (await api.post<TutorQuestion>(`/v1/feedback/questions/tutors/${encodeURIComponent(slug)}/`, payload)).data;
   },
   async tutorQuestionInbox() {
-    return (await api.get<TutorQuestion[]>("/v1/feedback/questions/tutor/me/")).data;
+    return dedupedApiGet<TutorQuestion[]>("/v1/feedback/questions/tutor/me/");
   },
   async answerTutorQuestion(id: number, payload: { answer: string }) {
     return (await api.patch<TutorQuestion>(`/v1/feedback/questions/tutor/me/${id}/answer/`, payload)).data;

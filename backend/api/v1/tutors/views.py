@@ -317,6 +317,7 @@ class TutorChangePasswordView(APIView):
         }, headers={'Cache-Control': 'no-store'})
 
 
+@method_decorator(cache_page(5), name='dispatch')
 class RecruitmentJobListView(PublicRecruitmentView):
     pagination_class = StandardResultsSetPagination
     @extend_schema(
@@ -377,6 +378,7 @@ class RecruitmentJobListView(PublicRecruitmentView):
         return paginator.get_paginated_response(serializer.data)
 
 
+@method_decorator(cache_page(5), name='dispatch')
 class RecruitmentJobDetailView(PublicRecruitmentView):
     @extend_schema(tags=['Tuyển dụng gia sư'], responses=RecruitmentJobSerializer)
     def get(self, request, slug):

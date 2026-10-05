@@ -51,6 +51,37 @@ export const api = axios.create({
   timeout: 15_000,
   headers: { "Content-Type": "application/json" },
 });
+
+const inFlightApiGets = new Map<string, Promise<unknown>>();
+
+/**
+ * Coalesce identical GETs that overlap during hydration, React Strict Mode,
+ * focus and visibility refreshes. This deliberately does not cache completed
+ * authenticated responses, so private account data can never become stale or
+ * leak between sessions.
+ */
+type UntypedApiData = AxiosRequestConfig["data"];
+
+export function dedupedApiGet<T = UntypedApiData>(
+  url: string,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const sessionKey = typeof window === "undefined"
+    ? "server"
+    : getAuthSession()?.access ?? "public";
+  const params = config?.params && typeof config.params === "object"
+    ? JSON.stringify(Object.entries(config.params as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+    : "";
+  const key = `${sessionKey}:${url}:${params}`;
+  const pending = inFlightApiGets.get(key);
+  if (pending) return pending as Promise<T>;
+
+  const request = api.get<T>(url, config)
+    .then(({ data }) => data)
+    .finally(() => inFlightApiGets.delete(key));
+  inFlightApiGets.set(key, request);
+  return request;
+}
 export type EduTutorRequestConfig = AxiosRequestConfig & {
   _edututorSkipAuth?: boolean;
   _edututorSilentToast?: boolean;
