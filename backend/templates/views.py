@@ -2603,9 +2603,25 @@ def _dashboard_data(today, week_end, *, finance_period='month', now=None):
     recent_applications = list(TutorApplication.objects.order_by('-created_at').limit(5))
     paid_count = len(paid_payments)
     finance_window = _finance_period_window(now, finance_period)
-    paid_in_period = list(Payment.objects(
-        status='paid', paid_at__gte=finance_window['start'], paid_at__lte=finance_window['end'],
-    ).order_by('-paid_at').select_related())
+    def comparable_datetime(value):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    def payments_in_window(start, end):
+        return sorted(
+            (
+                payment for payment in paid_payments
+                if payment.paid_at is not None
+                and start <= comparable_datetime(payment.paid_at) <= end
+            ),
+            key=lambda payment: comparable_datetime(payment.paid_at),
+            reverse=True,
+        )
+
+    paid_in_period = payments_in_window(finance_window['start'], finance_window['end'])
     pending_in_period = list(Payment.objects(
         status='pending', created_at__gte=finance_window['start'], created_at__lte=finance_window['end'],
     ).select_related())
@@ -2615,10 +2631,10 @@ def _dashboard_data(today, week_end, *, finance_period='month', now=None):
         if payment.tutor_payout_status == 'pending'
     )
     payout_paid = sum(
-        payment.tutor_payout_amount or 0 for payment in Payment.objects(
-            status='paid', tutor_payout_status='paid',
-            tutor_paid_at__gte=finance_window['start'], tutor_paid_at__lte=finance_window['end'],
-        )
+        payment.tutor_payout_amount or 0 for payment in paid_payments
+        if payment.tutor_payout_status == 'paid'
+        and payment.tutor_paid_at is not None
+        and finance_window['start'] <= comparable_datetime(payment.tutor_paid_at) <= finance_window['end']
     )
     recent_payments = paid_in_period[:8]
 
@@ -2639,9 +2655,9 @@ def _dashboard_data(today, week_end, *, finance_period='month', now=None):
     finance_reports = {}
     for key in ('day', 'week', 'month'):
         window = _finance_period_window(now, key)
-        records = paid_in_period if key == finance_period else list(Payment.objects(
-            status='paid', paid_at__gte=window['start'], paid_at__lte=window['end'],
-        ).order_by('-paid_at').select_related())
+        records = paid_in_period if key == finance_period else payments_in_window(
+            window['start'], window['end'],
+        )
         finance_reports[key] = {
             'label': window['label'],
             'total': _format_currency(sum(payment.total_amount or 0 for payment in records)),
@@ -2696,7 +2712,7 @@ def dashboard(request):
         dashboard_data = _dashboard_data(
             today, today + timedelta(days=7), finance_period=finance_period, now=now,
         )
-        cache.set(cache_key, dashboard_data, 30)
+        cache.set(cache_key, dashboard_data, 300)
     return render(request, 'admin/dashboard.html', {
         'welcome_email': welcome_email,
         'dashboard': dashboard_data,

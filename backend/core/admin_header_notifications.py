@@ -46,13 +46,15 @@ def _relative_time(value, now):
     return f'{seconds // 86400} ngày trước'
 
 
-def _notification_items():
+def _notification_items(*, load_if_missing=True):
     """Build small actionable inbox entries from the system's source tables."""
     cached_items = cache.get(NOTIFICATION_CACHE_KEY)
     if cached_items is not None:
         # ``admin_header_notifications`` adds request-specific fields below;
         # never mutate the cached dictionaries themselves.
         return [dict(item) for item in cached_items]
+    if not load_if_missing:
+        return None
 
     entries = []
     for item in TutorApplication.objects(status='pending').order_by('-created_at')[:3]:
@@ -115,7 +117,7 @@ def _notification_items():
     return [dict(item) for item in items]
 
 
-def admin_header_notifications(request):
+def admin_header_notifications(request, *, load_if_missing=False):
     """Context processor used by every authenticated Admin page."""
     admin = getattr(request, 'admin_account', None)
     if admin is None or admin.status != Admin.STATUS_ACTIVE:
@@ -123,7 +125,15 @@ def admin_header_notifications(request):
     try:
         now = datetime.now(timezone.utc)
         read_at = _as_utc(getattr(admin, 'notifications_read_at', None))
-        items = _notification_items()
+        items = _notification_items(load_if_missing=load_if_missing)
+        if items is None:
+            # Never hold up the first HTML response with notification queries.
+            # dashboard.js requests the live payload immediately after paint.
+            return {
+                'admin_notifications': [],
+                'admin_unread_notification_count': 0,
+                'admin_unread_notification_label': '0',
+            }
         for item in items:
             item['relative_time'] = _relative_time(item['created_at'], now)
             item['is_unread'] = read_at is None or (_as_utc(item['created_at']) or now) > read_at
@@ -153,7 +163,7 @@ def admin_notifications_live(request):
     """Small polling payload used by every Admin page without a full reload."""
     if request.method != 'GET':
         return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
-    context = admin_header_notifications(request)
+    context = admin_header_notifications(request, load_if_missing=True)
     admin = getattr(request, 'admin_account', None)
     if admin is None or admin.status != Admin.STATUS_ACTIVE:
         return JsonResponse({'ok': False, 'message': 'Phiên đăng nhập không hợp lệ.'}, status=403)
