@@ -1,7 +1,7 @@
-<details class="admin-notification-menu" data-notification-menu data-mark-read-url="{% url 'admin-notifications-mark-read' %}" data-csrf-token="{{ csrf_token }}">
+<details class="admin-notification-menu" data-notification-menu data-mark-read-url="{% url 'admin-notifications-mark-read' %}" data-live-url="{% url 'admin-notifications-live' %}" data-csrf-token="{{ csrf_token }}">
     <summary class="admin-icon-button" aria-label="Thông báo" title="Thông báo">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 21a2 2 0 0 0 3.4 0"></path><path d="M4 17h16a1 1 0 0 0 .7-1.7C19.4 14 18 12.5 18 8a6 6 0 0 0-12 0c0 4.5-1.4 6-2.7 7.3A1 1 0 0 0 4 17Z"></path></svg>
-        <b class="admin-notification-menu__badge" data-notification-count{% if not admin_unread_notification_count %} hidden{% endif %}>{{ admin_unread_notification_count }}</b>
+        <b class="admin-notification-menu__badge" data-notification-count{% if not admin_unread_notification_count %} hidden{% endif %}>{{ admin_unread_notification_label|default:admin_unread_notification_count }}</b>
     </summary>
     <section class="admin-notification-menu__content" aria-label="Thông báo">
         <header>

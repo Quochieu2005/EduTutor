@@ -126,7 +126,7 @@ export default function RecruitmentJobDetailClient({ slug }: { slug: string }) {
         [
           `Ứng tuyển tin: ${job.title}`,
           `Môn: ${job.subject.name}${job.grade ? ` · ${job.grade}` : ""}`,
-          `Khu vực: ${job.ward?.name || job.province.name}`,
+          `Khu vực: ${job.ward?.name || job.province?.name || "Trực tuyến"}`,
           "",
           form.coverLetter.trim(),
         ].join("\n"),
@@ -176,16 +176,16 @@ export default function RecruitmentJobDetailClient({ slug }: { slug: string }) {
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Đang tuyển</span>
               <span className="text-xs text-slate-500">Đăng ngày {formatDate(job.created_at)}</span>
             </div>
-            <h1 className="mt-5 text-3xl font-extrabold tracking-tight text-slate-950">{job.title}</h1>
+            <h1 className="mt-5 break-words [overflow-wrap:anywhere] text-3xl font-extrabold tracking-tight text-slate-950">{job.title}</h1>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs text-slate-500">Môn học / cấp lớp</p><p className="mt-1 font-bold">{job.subject.name}{job.grade ? ` · ${job.grade}` : ""}</p></div>
-              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs text-slate-500">Khu vực</p><p className="mt-1 font-bold">{job.ward?.name || job.province.name}</p></div>
+              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs text-slate-500">Khu vực</p><p className="mt-1 font-bold">{job.ward?.name || job.province?.name || "Trực tuyến"}</p></div>
               <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs text-slate-500">Học phí</p><p className="mt-1 font-bold text-blue-700">{job.budget_min != null && job.budget_max != null ? `${formatMoney(job.budget_min)} – ${new Intl.NumberFormat("vi-VN").format(job.budget_max)} VNĐ/tháng` : formatMoney(job.budget_min ?? job.budget_max)}</p></div>
-              <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs text-slate-500">Lịch dạy mong muốn</p><p className="mt-1 font-bold">{job.schedule_expect || "Trao đổi khi phỏng vấn"}</p></div>
+              <div className="min-w-0 rounded-2xl bg-slate-50 p-4"><p className="text-xs text-slate-500">Lịch dạy mong muốn</p><p className="mt-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-bold">{job.schedule_expect || "Trao đổi khi phỏng vấn"}</p></div>
             </div>
             <div className="mt-8 border-t border-slate-100 pt-6">
               <h2 className="text-lg font-bold">Mô tả tin tuyển dụng</h2>
-              <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-600">{job.description}</p>
+              <p className="mt-3 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-7 text-slate-600">{job.description}</p>
             </div>
             <div className="mt-8 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
               Đây là thông báo tuyển gia sư do Admin EduTutor đăng. Gia sư gửi CV tại biểu mẫu bên cạnh; không dùng luồng “Đề nghị dạy” của bảng Nhận lớp.

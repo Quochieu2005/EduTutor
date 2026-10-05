@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ClassListing } from "@/lib/home-mock-data";
+import type { ClassListing } from "@/lib/presentation-models";
 import { edututorApi } from "@/lib/edututor-api";
 import { toClassPresentation } from "@/lib/class-presenter";
 import { ClassDetailClient } from "./ClassDetailClient";

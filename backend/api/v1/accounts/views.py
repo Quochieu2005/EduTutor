@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 
 from .authentication import MongoJWTAuthentication
 from .serializers import (
-    AccountProfileSerializer, AccountProfileUpdateSerializer,
+    AccountProfileSerializer, AccountProfileUpdateSerializer, ChangePasswordSerializer,
     ClerkExchangeSerializer,
     ForgotPasswordSerializer, LoginSerializer, MessageSerializer, RefreshSerializer,
     RegisterSerializer, ResetPasswordSerializer, SocialLoginResponseSerializer,
@@ -122,6 +122,26 @@ class LoginView(PublicAuthView):
         except SocialTokenError as error:
             return Response({'detail': str(error)}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(token_pair_for(user))
+
+
+class ChangePasswordView(APIView):
+    authentication_classes = [MongoJWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(tags=['Tài khoản'], request=ChangePasswordSerializer, responses={200: MessageSerializer})
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = request.user.user
+        if not isinstance(user, User):
+            return Response({'detail': 'Loại tài khoản này sử dụng API đổi mật khẩu riêng.'}, status=status.HTTP_403_FORBIDDEN)
+        values = serializer.validated_data
+        if not user.check_password(values['current_password']):
+            return Response({'detail': 'Mật khẩu hiện tại không chính xác.'}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(values['new_password'])
+        user.token_version = (user.token_version or 1) + 1
+        user.save()
+        return Response({'message': 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.'}, headers={'Cache-Control': 'no-store'})
 
 
 class UnifiedLoginView(PublicAuthView):
@@ -385,6 +405,8 @@ class AccountProfileView(APIView):
                 student.name = values['display_name']
             if parent:
                 parent.name = values['display_name']
+        if 'phone' in values:
+            user.phone = values['phone'] or None
         if student and 'phone' in values:
             student.phone = values['phone'] or None
         if parent and 'phone' in values:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOutlined, CalendarOutlined, ClockCircleOutlined, KeyOutlined,
@@ -8,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import { clearAuthSession, getAuthSession, saveAuthSession } from "@/lib/auth-session";
 import { edututorApi, type LessonSession, type Subject, type TutorAvailability, type TutorQuestion, type TutorSubjectChangeRequest } from "@/lib/edututor-api";
-import { getLessons } from "@/lib/api";
+import { apiErrorMessage, getLessons } from "@/lib/api";
 import type { LessonRequest, ScheduleProposalPayload } from "@/lib/types";
 import { toast } from "@/lib/toast";
 import { ScheduleProposalForm } from "@/components/lessons/ScheduleProposalForm";
@@ -83,6 +83,20 @@ function toForm(profile: TutorProfile) {
   };
 }
 
+type ProfileFormContextValue = {
+  form: Record<string, string>;
+  setField: (name: string, value: string) => void;
+};
+
+const ProfileFormContext = createContext<ProfileFormContextValue | null>(null);
+
+function Input({ label, name, type = "text", placeholder = "" }: { label: string; name: string; type?: string; placeholder?: string }) {
+  const profileForm = useContext(ProfileFormContext);
+  if (!profileForm) return null;
+
+  return <label className="block text-sm font-semibold text-slate-700">{label}<input type={type} value={profileForm.form[name] ?? ""} onChange={(event) => profileForm.setField(name, event.target.value)} placeholder={placeholder} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>;
+}
+
 export function TutorPortal() {
   const router = useRouter();
   const [tab, setTab] = useState<PortalTab>("overview");
@@ -129,9 +143,16 @@ export function TutorPortal() {
 
   const refreshLessonData = async () => {
     try {
-      const [nextLessons, nextSessions] = await Promise.all([getLessons(), edututorApi.lessonSessions()]);
+      const [nextLessons, nextSessions, nextChanges, nextQuestions] = await Promise.all([
+        getLessons(),
+        edututorApi.lessonSessions(),
+        edututorApi.tutorSubjectChangeRequests(),
+        edututorApi.tutorQuestionInbox(),
+      ]);
       setLessons(nextLessons);
       setSessions(nextSessions);
+      setChanges(nextChanges);
+      setQuestions(nextQuestions);
     } catch {
       // Keep the last successful snapshot during a transient network error.
     }
@@ -142,7 +163,9 @@ export function TutorPortal() {
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshLessonData();
     };
-    const timer = window.setInterval(refreshWhenVisible, 8_000);
+    // Focus/visibility events refresh immediately. The slower safety poll keeps
+    // data current without making every open tutor tab hit the API 7-8 times a minute.
+    const timer = window.setInterval(refreshWhenVisible, 20_000);
     window.addEventListener("focus", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
@@ -203,7 +226,9 @@ export function TutorPortal() {
       setChanges((current) => [change, ...current]);
       if (action === "add") setSubjectRequest({ subject_id: "", level: "", price_per_hour: "", note: "" });
       toast.success("Đã gửi yêu cầu tới Admin để duyệt môn dạy.");
-    } catch { toast.error("Không thể gửi yêu cầu môn dạy. Có thể yêu cầu tương tự đang chờ duyệt."); }
+    } catch (error: unknown) {
+      toast.error(apiErrorMessage(error));
+    }
     finally { setSaving(false); }
   };
 
@@ -298,9 +323,7 @@ export function TutorPortal() {
   if (loading) return <main className="mx-auto min-h-[55vh] max-w-7xl px-4 py-12 text-center text-sm text-slate-500">Đang tải không gian làm việc của gia sư...</main>;
   if (!profile) return <main className="mx-auto min-h-[55vh] max-w-4xl px-4 py-12 text-center text-sm text-slate-600">Không tải được hồ sơ gia sư. Vui lòng đăng nhập lại.</main>;
 
-  const Input = ({ label, name, type = "text", placeholder = "" }: { label: string; name: string; type?: string; placeholder?: string }) => <label className="block text-sm font-semibold text-slate-700">{label}<input type={type} value={form[name] ?? ""} onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))} placeholder={placeholder} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>;
-
-  return <main className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
+  return <ProfileFormContext.Provider value={{ form, setField: (name, value) => setForm((current) => ({ ...current, [name]: value })) }}><main className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm font-semibold text-blue-600">Không gian gia sư</p><h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">Quản lý việc dạy</h1><p className="mt-1 text-sm text-slate-500">Hồ sơ, lịch rảnh và yêu cầu học đều đồng bộ với EduTutor.</p></div><span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">{profile.status === "active" ? "Tài khoản đang hoạt động" : profile.status}</span></div>
     <div className="grid gap-6 lg:grid-cols-[245px_minmax(0,1fr)]">
       <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-24 lg:h-fit">
@@ -320,5 +343,5 @@ export function TutorPortal() {
         {tab === "security" && <form onSubmit={changePassword} className="max-w-xl space-y-5"><div className="border-b border-slate-100 pb-4"><h2 className="text-xl font-bold">Đổi mật khẩu</h2><p className="mt-1 text-sm text-slate-500">Sau khi đổi mật khẩu, phiên hiện tại sẽ kết thúc và bạn cần đăng nhập lại.</p></div>{([ ["current_password", "Mật khẩu hiện tại"], ["new_password", "Mật khẩu mới"], ["confirm_password", "Xác nhận mật khẩu mới"]] as const).map(([key, label]) => <label key={key} className="block text-sm font-semibold text-slate-700">{label}<input required type="password" minLength={key === "current_password" ? undefined : 8} value={password[key]} onChange={(event) => setPassword((current) => ({ ...current, [key]: event.target.value }))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-blue-500" /></label>)}<button disabled={saving} className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60">{saving ? "Đang cập nhật..." : "Đổi mật khẩu"}</button></form>}
       </section>
     </div>
-  </main>;
+  </main></ProfileFormContext.Provider>;
 }

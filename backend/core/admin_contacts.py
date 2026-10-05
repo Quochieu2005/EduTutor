@@ -108,17 +108,28 @@ def contacts(request):
         return redirect('management-page', module='contacts')
 
     columns = [('name', 'Người gửi'), ('phone', 'Số điện thoại'), ('email', 'Email'),
-               ('subject', 'Môn học'), ('message', 'Nội dung'), ('time', 'Ngày gửi'), ('status', 'Trạng thái')]
+               ('subject', 'Môn học'), ('mode', 'Hình thức'), ('location', 'Khu vực'),
+               ('message', 'Nội dung'), ('time', 'Ngày gửi'), ('status', 'Trạng thái')]
     rows = []
     for contact in Contact.objects.order_by('-created_at', '-id'):
         try:
             subject = contact.subject.name if contact.subject else '—'
         except DoesNotExist:
             subject = '—'
+        mode = {'online': 'Online', 'offline': 'Trực tiếp', 'both': 'Online & trực tiếp'}.get(
+            getattr(contact, 'teaching_mode', 'both'), 'Online & trực tiếp',
+        )
+        try:
+            location = ', '.join(filter(None, [
+                contact.ward.name if contact.ward else None,
+                contact.province.name if contact.province else None,
+            ])) or 'Trực tuyến'
+        except DoesNotExist:
+            location = 'Trực tuyến' if getattr(contact, 'teaching_mode', 'both') == 'online' else '—'
         created = contact.created_at
         if created and timezone.is_naive(created):
             created = timezone.make_aware(created, timezone.get_fixed_timezone(0))
-        values = [contact.parent_name, contact.phone, contact.email or '—', subject,
+        values = [contact.parent_name, contact.phone, contact.email or '—', subject, mode, location,
                   contact.needs_description or '—',
                   timezone.localtime(created).strftime('%d/%m/%Y') if created else '—',
                   STATUSES[contact.status]]
@@ -131,7 +142,7 @@ def contacts(request):
             'contact_email': contact.email or '',
             'contact_subject': subject,
             'contact_message': contact.needs_description or '—',
-            'contact_created_at': values[5],
+            'contact_created_at': values[7],
             'cells': [
                 {'field': key, 'value': value, 'tone': TONES[contact.status] if key == 'status' else ''}
                 for (key, _), value in zip(columns, values)

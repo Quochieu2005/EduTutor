@@ -29,6 +29,7 @@ class User(Document):
     username = StringField(required=True, unique=True, max_length=50)
     email = EmailField(required=True, unique=True)
     display_name = StringField(max_length=150, null=True)
+    phone = StringField(max_length=20, null=True)
     avatar = StringField(max_length=1000, null=True)
     avatar_public_id = StringField(max_length=1000, null=True)
     password_hash = StringField(required=True)

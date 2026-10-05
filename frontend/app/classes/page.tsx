@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEduUser, useEduClerk } from "@/lib/auth";
@@ -21,11 +21,12 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import {
   type ClassListing,
-} from "@/lib/home-mock-data";
+} from "@/lib/presentation-models";
 import { edututorApi, type Province, type Subject, type Ward } from "@/lib/edututor-api";
 import { toClassPresentation } from "@/lib/class-presenter";
 import { getProvinceSlug, getSubjectSlug } from "@/lib/tutor-filter-mapping";
 import { toast } from "@/lib/toast";
+import { PaginationControls } from "@/components/PaginationControls";
 
 export function ClassesListContent({ recruitmentMode = false }: { recruitmentMode?: boolean } = {}) {
   // The two public boards intentionally use different JobPosting sources:
@@ -110,6 +111,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
   const [classesLoadError, setClassesLoadError] = useState<string | null>(null);
   const [appliedClassIds, setAppliedClassIds] = useState<string[]>([]);
   const [classesRefreshKey, setClassesRefreshKey] = useState(0);
+  const hasLoadedClasses = useRef(false);
 
   useEffect(() => {
     const refreshOpenClasses = () => setClassesRefreshKey((value) => value + 1);
@@ -118,7 +120,9 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
     };
     window.addEventListener("focus", refreshOpenClasses);
     document.addEventListener("visibilitychange", refreshWhenVisible);
+    const timer = window.setInterval(refreshWhenVisible, 20_000);
     return () => {
+      window.clearInterval(timer);
       window.removeEventListener("focus", refreshOpenClasses);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
@@ -155,8 +159,9 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
   }, []);
 
   useEffect(() => {
-    const provinceSlug = getProvinceSlug(paramCity);
+    const provinceSlug = getProvinceSlug(filterCity);
     if (!provinceSlug) {
+      setApiWardsState({ provinceSlug: null, wards: [] });
       return;
     }
     let isCurrent = true;
@@ -168,15 +173,15 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
         if (isCurrent) setApiWardsState({ provinceSlug, wards: [] });
       });
     return () => { isCurrent = false; };
-  }, [paramCity]);
+  }, [filterCity]);
 
-  const provinceSlug = getProvinceSlug(paramCity);
+  const provinceSlug = getProvinceSlug(filterCity);
   const apiWards = apiWardsState.provinceSlug === provinceSlug ? apiWardsState.wards : [];
 
   useEffect(() => {
     let isCurrent = true;
     async function loadClasses() {
-      setIsLoadingClasses(true);
+      if (!hasLoadedClasses.current) setIsLoadingClasses(true);
       setClassesLoadError(null);
       try {
         const page = await edututorApi.tutorJobs({
@@ -191,11 +196,14 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
         if (isCurrent) setClasses(page.results.map(toClassPresentation));
       } catch {
         if (isCurrent) {
-          setClasses([]);
+          if (!hasLoadedClasses.current) setClasses([]);
           setClassesLoadError("Không thể tải danh sách lớp từ hệ thống. Vui lòng thử lại sau.");
         }
       } finally {
-        if (isCurrent) setIsLoadingClasses(false);
+        if (isCurrent) {
+          hasLoadedClasses.current = true;
+          setIsLoadingClasses(false);
+        }
       }
     }
     void loadClasses();
@@ -238,6 +246,18 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
       return true;
     });
   }, [classes, paramSubject, paramMode, paramCity, paramKeyword]);
+
+  const pageSize = 8;
+  const totalPages = Math.max(1, Math.ceil(filteredClasses.length / pageSize));
+  const requestedPage = Number(searchParams.get("page") || "1");
+  const currentPage = Math.min(totalPages, Math.max(1, Number.isFinite(requestedPage) ? Math.trunc(requestedPage) : 1));
+  const paginatedClasses = filteredClasses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const changePage = (page: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (page <= 1) params.delete("page"); else params.set("page", String(page));
+    router.push(`${recruitmentMode ? "/recruitment" : "/classes"}${params.size ? `?${params}` : ""}`, { scroll: false });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // Click "Đề nghị dạy" handler
   const handleStartApply = (cls: ClassListing) => {
@@ -469,7 +489,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
         <>
           {/* BẢNG DESKTOP (Ảnh 5: 4 Cột - Mã lớp & Ngày đăng, Thông tin lớp học, Học phí tháng, Phí giao lớp & Đề nghị) */}
           <div className="hidden lg:block bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full table-fixed text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-700 uppercase tracking-wider">
                   <th className="py-4 px-5 w-44">Mã lớp & Ngày</th>
@@ -479,7 +499,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {filteredClasses.map((cls) => {
+                {paginatedClasses.map((cls) => {
                   const hasApplied = appliedClassIds.includes(cls.id);
                   const postedDate = cls.postedDate || "Hôm nay";
                   const contractFee = cls.contractFee || "25% - 30%";
@@ -488,7 +508,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
                   return (
                     <tr key={cls.id} className="hover:bg-blue-50/20 transition-colors group">
                       {/* Cột 1: Mã lớp & Ngày đăng */}
-                      <td className="py-5 px-5 align-top space-y-1.5">
+                      <td className="px-5 py-4 align-top space-y-1.5">
                         <Link
                           href={recruitmentMode ? `/recruitment/${cls.id}` : `/classes/${cls.id}`}
                           className="inline-block px-2.5 py-1 rounded-md bg-blue-100/80 text-blue-800 font-extrabold text-xs hover:bg-blue-200 transition-colors"
@@ -517,7 +537,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
                       </td>
 
                       {/* Cột 2: Thông tin lớp học */}
-                      <td className="py-5 px-5 align-top space-y-2">
+                      <td className="min-w-0 px-5 py-4 align-top space-y-2">
                         <div>
                           <h2 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
                             <Link href={recruitmentMode ? `/recruitment/${cls.id}` : `/classes/${cls.id}`}>
@@ -554,14 +574,14 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
                               <strong className="text-slate-800">Lịch học:</strong> {cls.schedule}
                             </span>
                           </p>
-                          <p>
+                          <p className="line-clamp-3 break-words [overflow-wrap:anywhere]">
                             <strong className="text-slate-800">Yêu cầu:</strong> {cls.requirements}
                           </p>
                         </div>
                       </td>
 
                       {/* Cột 3: Học phí tháng */}
-                      <td className="py-5 px-5 align-top space-y-1">
+                      <td className="px-5 py-4 align-top space-y-1">
                         <span className="text-sm font-extrabold text-blue-600 block">
                           {cls.fee}
                         </span>
@@ -571,7 +591,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
                       </td>
 
                       {/* Cột 4: Phí giao lớp & Nút đề nghị */}
-                      <td className="py-5 px-5 align-top space-y-2.5">
+                      <td className="px-5 py-4 align-top space-y-2.5">
                         <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-[11px] space-y-1">
                           <p className="text-slate-600">
                             Phí giao lớp: <strong className="text-slate-900">{contractFee}</strong>
@@ -616,8 +636,8 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
           </div>
 
           {/* DANH SÁCH MOBILE (Ảnh 5: Chuyển dạng card) */}
-          <div className="lg:hidden space-y-4">
-            {filteredClasses.map((cls) => {
+          <div className="space-y-3 lg:hidden">
+            {paginatedClasses.map((cls) => {
               const hasApplied = appliedClassIds.includes(cls.id);
               const postedDate = cls.postedDate || "Hôm nay";
               const contractFee = cls.contractFee || "25% - 30%";
@@ -647,7 +667,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
                   </div>
 
                   <div className="bg-slate-50 p-3 rounded-xl space-y-1.5 text-xs text-slate-700 border border-slate-100">
-                    <p>
+                    <p className="break-words [overflow-wrap:anywhere]">
                       <span className="text-slate-400">Môn & Lớp:</span>{" "}
                       <span className="font-semibold text-slate-900">
                         {cls.subject} • {cls.grade}
@@ -669,7 +689,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
                     </p>
                     <p>
                       <span className="text-slate-400">Yêu cầu:</span>{" "}
-                      <span className="font-semibold text-slate-900">{cls.requirements}</span>
+                      <span className="line-clamp-3 break-words font-semibold text-slate-900 [overflow-wrap:anywhere]">{cls.requirements}</span>
                     </p>
                     <div className="pt-1 flex justify-between border-t border-slate-200/60 text-[11px]">
                       <span>Phí nhận: <strong>{contractFee}</strong></span>
@@ -702,6 +722,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
               );
             })}
           </div>
+          <PaginationControls page={currentPage} totalPages={totalPages} onPageChange={changePage} />
         </>
       )}
 

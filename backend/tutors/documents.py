@@ -240,7 +240,7 @@ class JobPosting(TimestampedDocument):
     posted_by_type = StringField(required=True, choices=('admin', 'parent', 'student'))
     posted_by_id = LongField(required=True, min_value=1)
     subject = ReferenceField(Subject, required=True, db_field='subject_id')
-    province = ReferenceField(Province, required=True, db_field='province_id')
+    province = ReferenceField(Province, null=True, db_field='province_id')
     district = ReferenceField(District, null=True, db_field='district_id')
     ward = ReferenceField(Ward, null=True, db_field='ward_id')
     grade = StringField(max_length=100, null=True)

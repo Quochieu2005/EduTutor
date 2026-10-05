@@ -1,4 +1,6 @@
 from django.http import Http404
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema
 from mongoengine.queryset.visitor import Q
 from rest_framework import permissions
@@ -26,6 +28,7 @@ def _active_tutor_ids(query):
     })
 
 
+@method_decorator(cache_page(600), name='dispatch')
 class ProvinceListView(PublicGeographyView):
     @extend_schema(tags=['Địa giới hành chính'], responses={200: ProvinceSerializer(many=True)})
     def get(self, request):
@@ -71,6 +74,7 @@ class ProvinceListView(PublicGeographyView):
         return Response(result)
 
 
+@method_decorator(cache_page(600), name='dispatch')
 class ProvinceWardListView(PublicGeographyView):
     @extend_schema(tags=['Địa giới hành chính'], responses={200: WardSerializer(many=True)})
     def get(self, request, province_slug):
@@ -144,6 +148,7 @@ class AreaDetailView(PublicGeographyView):
         })
 
 
+@method_decorator(cache_page(600), name='dispatch')
 class ProvinceAreaDetailView(AreaDetailView):
     @extend_schema(
         tags=['Địa giới hành chính'], responses={200: AreaDetailSerializer},
@@ -153,6 +158,7 @@ class ProvinceAreaDetailView(AreaDetailView):
         return super().get(request, province_slug)
 
 
+@method_decorator(cache_page(600), name='dispatch')
 class WardAreaDetailView(AreaDetailView):
     @extend_schema(
         tags=['Địa giới hành chính'], responses={200: AreaDetailSerializer},

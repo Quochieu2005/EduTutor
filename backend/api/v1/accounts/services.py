@@ -243,6 +243,9 @@ def _ensure_student_profile(user, *, oauth_provider=None, oauth_uid=None):
         if display_name and existing.name != display_name[:150]:
             existing.name = display_name[:150]
             changed = True
+        if getattr(user, 'phone', None) and existing.phone != user.phone:
+            existing.phone = user.phone
+            changed = True
         if oauth_provider and oauth_uid and not existing.oauth_uid:
             existing.oauth_provider = oauth_provider
             existing.oauth_uid = oauth_uid
@@ -264,6 +267,7 @@ def _ensure_student_profile(user, *, oauth_provider=None, oauth_uid=None):
         slug=slug,
         name=(getattr(user, 'display_name', '') or user.username or email.split('@', 1)[0])[:150],
         email=email,
+        phone=getattr(user, 'phone', None) or None,
         status='active',
         oauth_provider=oauth_provider,
         oauth_uid=oauth_uid,
@@ -350,6 +354,7 @@ def user_payload(user):
         'username': user.username,
         'display_name': getattr(user, 'display_name', None) or user.username,
         'email': user.email,
+        'phone': getattr(user, 'phone', None),
         'avatar': getattr(user, 'avatar', None),
         'oauth_provider': user.oauth_provider or 'local',
         'account_type': getattr(user, 'account_type', None),
@@ -529,8 +534,10 @@ def register_user(*, username, email, password, account_type=None, display_name=
         assert_email_available(email)
     except ValueError as error:
         raise SocialTokenError(str(error)) from error
-    if User.objects(username=username).first() is not None:
-        raise SocialTokenError('Username này đã được sử dụng.')
+    # The public form derives this value from the display name. Two different
+    # people can share a name, so allocate a suffix instead of rejecting a
+    # perfectly new email as "already used".
+    username = unique_username(username)
     user = User(
         username=username,
         display_name=(display_name or username).strip(),

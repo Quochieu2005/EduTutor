@@ -6,8 +6,7 @@ import { useEduUser, useEduClerk } from "@/lib/auth";
 
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { CITIES, SUBJECTS } from "@/lib/home-mock-data";
-import { edututorApi } from "@/lib/edututor-api";
+import { edututorApi, type Province, type Subject } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
 
 export default function TutorRegisterPage() {
@@ -16,9 +15,9 @@ export default function TutorRegisterPage() {
 
   const [formData, setFormData] = useState({
     fullName: "",
-    subject: "Toán",
+    subject: "",
     grades: "",
-    city: "Hà Nội",
+    city: "",
     teachingMode: "both",
     experience: "3",
     desiredFee: "200.000đ/buổi",
@@ -30,6 +29,28 @@ export default function TutorRegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [cvFile, setCvFile] = useState<File | null>(null);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [provinces, setProvinces] = useState<Province[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      edututorApi.subjects({ page_size: 200 }),
+      edututorApi.provinces(),
+    ]).then(([subjectPage, provinceList]) => {
+      if (!active) return;
+      setSubjects(subjectPage.results);
+      setProvinces(provinceList);
+      setFormData((current) => ({
+        ...current,
+        subject: current.subject || subjectPage.results[0]?.name || "",
+        city: current.city || provinceList[0]?.name || "",
+      }));
+    }).catch(() => {
+      toast.error("Không tải được danh mục môn học và khu vực. Vui lòng thử lại.");
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -202,8 +223,8 @@ export default function TutorRegisterPage() {
                     onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                     className="w-full p-2.5 rounded-lg border border-gray-200 text-xs text-gray-900 bg-white focus:outline-hidden focus:border-blue-500"
                   >
-                    {SUBJECTS.filter((s) => s !== "Tất cả môn").map((sub) => (
-                      <option key={sub} value={sub}>{sub}</option>
+                    {subjects.map((subject) => (
+                      <option key={subject.id} value={subject.name}>{subject.name}</option>
                     ))}
                   </select>
                 </div>
@@ -265,8 +286,8 @@ export default function TutorRegisterPage() {
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                     className="w-full p-2.5 rounded-lg border border-gray-200 text-xs text-gray-900 bg-white focus:outline-hidden focus:border-blue-500"
                   >
-                    {CITIES.filter((c) => c !== "Tất cả tỉnh/thành").map((city) => (
-                      <option key={city} value={city}>{city}</option>
+                    {provinces.map((province) => (
+                      <option key={province.id} value={province.name}>{province.name}</option>
                     ))}
                   </select>
                 </div>

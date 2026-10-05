@@ -1,4 +1,4 @@
-import type { Tutor } from "./home-mock-data";
+import type { Tutor } from "./presentation-models";
 
 export interface TutorCategoryItem {
   id: string;

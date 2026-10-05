@@ -6,7 +6,7 @@ import {
   RIGHT_NEWS,
   ACCESS_STATISTICS,
   type NewsItem,
-} from "@/lib/home-mock-data";
+} from "@/lib/sidebar-content";
 
 export function RightSidebar() {
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);

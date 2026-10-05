@@ -4,7 +4,9 @@ from datetime import datetime, timezone
 
 from django.core.cache import cache
 from django.http import Http404
+from django.utils.decorators import method_decorator
 from django.utils.text import slugify
+from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema
 from mongoengine.queryset.visitor import Q
 from mongoengine import ValidationError
@@ -52,6 +54,20 @@ from .services import (
 def open_recruitment_jobs(posted_by_type=None):
     """Return only jobs that are eligible to appear on the public website."""
     active_subject_ids = list(Subject.objects(Q(status=1) | Q(status__exists=False)).scalar('id'))
+    # A posting stops being public as soon as its owner/Admin accepts someone.
+    # The exclusion also repairs legacy records whose application was accepted
+    # before the posting status was consistently changed to ``closed``.
+    filled_job_ids = {
+        int(application.job_posting.id)
+        for application in JobApplication.objects(status='accepted').only('job_posting').select_related()
+        if application.job_posting is not None
+    }
+    filled_job_ids.update(
+        int(application.job_posting.id)
+        for application in TutorApplication.objects(status='approved', job_posting__ne=None)
+        .only('job_posting').select_related()
+        if application.job_posting is not None
+    )
     filters = {
         'status': 'open',
         'subject__in': active_subject_ids,
@@ -60,12 +76,19 @@ def open_recruitment_jobs(posted_by_type=None):
         filters['posted_by_type__in'] = ('parent', 'student')
     elif posted_by_type:
         filters['posted_by_type'] = posted_by_type
-    return JobPosting.objects(**filters).order_by('-created_at', '-id')
+    jobs = JobPosting.objects(**filters)
+    if filled_job_ids:
+        jobs = jobs.filter(id__nin=list(filled_job_ids))
+    return jobs.order_by('-created_at', '-id')
 
 
-def _public_tutor_payload(tutor):
-    subject_links = TutorSubject.objects(tutor=tutor).select_related()
-    area_links = TutorTeachingArea.objects(tutor=tutor).select_related()
+def _public_tutor_payload(tutor, subject_links=None, area_links=None):
+    # List views pass preloaded links to avoid two MongoDB queries per tutor.
+    # Detail views keep the same behavior by loading only this tutor's links.
+    if subject_links is None:
+        subject_links = TutorSubject.objects(tutor=tutor).select_related()
+    if area_links is None:
+        area_links = TutorTeachingArea.objects(tutor=tutor).select_related()
     return {
         # This endpoint is public: never reuse the authenticated account
         # payload here because it contains private fields such as email and
@@ -103,6 +126,7 @@ def _public_tutor_payload(tutor):
     }
 
 
+@method_decorator(cache_page(30), name='dispatch')
 class PublicTutorListView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -139,10 +163,31 @@ class PublicTutorListView(APIView):
         if values.get('search'):
             tutors = tutors.filter(Q(name__icontains=values['search']) | Q(headline__icontains=values['search']) | Q(bio__icontains=values['search']))
         paginator = self.pagination_class()
-        page = paginator.paginate_queryset(tutors.order_by('-is_verified', '-rating_avg', 'name'), request, view=self)
-        return paginator.get_paginated_response([_public_tutor_payload(tutor) for tutor in page])
+        page = list(paginator.paginate_queryset(
+            tutors.order_by('-is_verified', '-rating_avg', 'name'),
+            request,
+            view=self,
+        ))
+        tutor_ids = [tutor.id for tutor in page]
+        subjects_by_tutor = {tutor_id: [] for tutor_id in tutor_ids}
+        areas_by_tutor = {tutor_id: [] for tutor_id in tutor_ids}
+        if tutor_ids:
+            for link in TutorSubject.objects(tutor__in=tutor_ids).select_related():
+                subjects_by_tutor.setdefault(link.tutor.id, []).append(link)
+            for link in TutorTeachingArea.objects(tutor__in=tutor_ids).select_related():
+                areas_by_tutor.setdefault(link.tutor.id, []).append(link)
+        payload = [
+            _public_tutor_payload(
+                tutor,
+                subjects_by_tutor.get(tutor.id, []),
+                areas_by_tutor.get(tutor.id, []),
+            )
+            for tutor in page
+        ]
+        return paginator.get_paginated_response(payload)
 
 
+@method_decorator(cache_page(30), name='dispatch')
 class PublicTutorDetailView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -318,7 +363,18 @@ class RecruitmentJobListView(PublicRecruitmentView):
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(jobs, request, view=self)
         page = DeReference()(page, max_depth=1)
-        return paginator.get_paginated_response(RecruitmentJobSerializer(page, many=True).data)
+        application_counts = {str(job.id): 0 for job in page}
+        if page:
+            applications = JobApplication.objects(job_posting__in=page).only('job_posting').select_related()
+            for application in applications:
+                job_id = str(application.job_posting.id)
+                application_counts[job_id] = application_counts.get(job_id, 0) + 1
+        serializer = RecruitmentJobSerializer(
+            page,
+            many=True,
+            context={'applications_count': application_counts},
+        )
+        return paginator.get_paginated_response(serializer.data)
 
 
 class RecruitmentJobDetailView(PublicRecruitmentView):
@@ -392,9 +448,10 @@ class TutorRequestCreateView(APIView):
         subject = Subject.objects(id=values['subject_id']).first()
         if subject is None or getattr(subject, 'status', 1) == 0:
             return Response({'detail': 'Môn học không tồn tại hoặc đang ngưng hoạt động.'}, status=400)
-        province = Province.objects(id=values['province_id']).first()
-        ward = Ward.objects(id=values['ward_id'], province=province).first() if province else None
-        if province is None or ward is None:
+        teaching_mode = values.get('teaching_mode', 'both')
+        province = Province.objects(id=values.get('province_id')).first() if values.get('province_id') else None
+        ward = Ward.objects(id=values.get('ward_id'), province=province).first() if province and values.get('ward_id') else None
+        if teaching_mode != 'online' and (province is None or ward is None):
             return Response({'detail': 'Tỉnh/thành và xã/phường không hợp lệ.'}, status=400)
 
         try:
@@ -406,7 +463,7 @@ class TutorRequestCreateView(APIView):
                 grade=values.get('grade', '').strip() or None,
                 budget_min=values.get('budget_min'), budget_max=values.get('budget_max'),
                 schedule_expect=values.get('schedule_expect', '').strip() or None,
-                teaching_mode=values.get('teaching_mode', 'both'),
+                teaching_mode=teaching_mode,
                 status='open',
             ).save()
         except (ValidationError, NotUniqueError) as error:
@@ -416,7 +473,7 @@ class TutorRequestCreateView(APIView):
             title='Có yêu cầu đăng lớp mới',
             message=(
                 f'{requester_label} vừa đăng nhu cầu "{job.title}" '
-                f'({subject.name} · {province.name}).'
+                f'({subject.name} · {province.name if province else "Học online"}).'
             ),
             kind='system',
             url='/admin/management/tutor-requests/',
@@ -500,6 +557,7 @@ def _availability_payload(tutor):
     }
 
 
+@method_decorator(cache_page(30), name='dispatch')
 class TutorAvailabilityView(PublicRecruitmentView):
     @extend_schema(tags=['Gia sư'], responses=TutorAvailabilityResponseSerializer)
     def get(self, request, slug):
@@ -587,7 +645,12 @@ class TutorSubjectChangeRequestView(APIView):
         serializer.is_valid(raise_exception=True)
         tutor = request.user.tutor
         values = serializer.validated_data
-        subject = Subject.objects(id=values['subject_id'], status=1).first()
+        # Legacy subjects created before the status field was introduced are
+        # active in the public catalogue, so this write endpoint must apply
+        # the same rule as the catalogue endpoint.
+        subject = Subject.objects(
+            Q(id=values['subject_id']) & (Q(status=1) | Q(status__exists=False)),
+        ).first()
         if subject is None:
             return Response({'subject_id': ['Môn học không tồn tại hoặc đang ngưng hoạt động.']}, status=400)
         assignment = TutorSubject.objects(tutor=tutor, subject=subject).first()

@@ -10,9 +10,10 @@ import {
   SendOutlined,
 } from "@ant-design/icons";
 import { useEduClerk, useEduUser } from "@/lib/auth";
-import { getAuthSession } from "@/lib/auth-session";
+import { getAuthSession, promoteAuthSessionToStudent } from "@/lib/auth-session";
 import { edututorApi, type Province, type Subject, type Ward } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
+import { apiErrorMessage } from "@/lib/api";
 
 const GRADE_OPTIONS = [
   "Lớp 1", "Lớp 2", "Lớp 3", "Lớp 4", "Lớp 5", "Lớp 6", "Lớp 7",
@@ -119,8 +120,9 @@ export function ClassRequestForm() {
       setError("Tài khoản gia sư chỉ có thể đề nghị dạy. Phụ huynh hoặc học viên mới có thể đăng lớp.");
       return;
     }
-    if (!form.title.trim() || !form.subjectId || !form.grade || !form.provinceId || !form.wardId || !form.description.trim()) {
-      setError("Vui lòng điền tiêu đề, môn học, lớp học, khu vực và mô tả yêu cầu.");
+    const needsLocation = form.teachingMode !== "online";
+    if (!form.title.trim() || !form.subjectId || !form.grade || (needsLocation && (!form.provinceId || !form.wardId)) || !form.description.trim()) {
+      setError(needsLocation ? "Vui lòng điền tiêu đề, môn học, lớp học, khu vực và mô tả yêu cầu." : "Vui lòng điền tiêu đề, môn học, lớp học và mô tả yêu cầu.");
       return;
     }
     const minimum = form.budgetMin ? Number(form.budgetMin) : null;
@@ -152,21 +154,19 @@ export function ClassRequestForm() {
         title: form.title.trim(),
         subject_id: Number(form.subjectId),
         grade: form.grade,
-        province_id: Number(form.provinceId),
-        ward_id: Number(form.wardId),
+        province_id: needsLocation ? Number(form.provinceId) : null,
+        ward_id: needsLocation ? Number(form.wardId) : null,
         budget_min: minimum,
         budget_max: maximum,
         schedule_expect: scheduleExpect,
         teaching_mode: form.teachingMode,
         description: form.description.trim(),
       });
+      promoteAuthSessionToStudent();
       setSubmitted(true);
       toast.success("Đã đăng lớp. Gia sư phù hợp có thể gửi đề nghị dạy.");
     } catch (requestError: unknown) {
-      const detail = requestError && typeof requestError === "object" && "response" in requestError
-        ? (requestError as { response?: { data?: { detail?: string } } }).response?.data?.detail
-        : undefined;
-      setError(detail || "Không thể đăng lớp lúc này. Kiểm tra thông tin và thử lại.");
+      setError(apiErrorMessage(requestError));
     } finally {
       setSubmitting(false);
     }
@@ -204,9 +204,13 @@ export function ClassRequestForm() {
             <label className="sm:col-span-2 text-sm font-semibold text-slate-700">Tiêu đề lớp <span className="text-rose-500">*</span><input value={form.title} onChange={(event) => update("title", event.target.value)} placeholder="Ví dụ: Tìm gia sư Toán lớp 10 tại Thủ Đức" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
             <label className="text-sm font-semibold text-slate-700">Môn học <span className="text-rose-500">*</span><select value={form.subjectId} onChange={(event) => update("subjectId", event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-blue-500"><option value="">Chọn môn học</option>{subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
             <label className="text-sm font-semibold text-slate-700">Lớp học <span className="text-rose-500">*</span><select value={form.grade} onChange={(event) => update("grade", event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-blue-500"><option value="">Chọn lớp học</option>{GRADE_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-            <label className="sm:col-span-2 text-sm font-semibold text-slate-700">Hình thức học <span className="text-rose-500">*</span><select value={form.teachingMode} onChange={(event) => update("teachingMode", event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-blue-500"><option value="both">Online &amp; trực tiếp</option><option value="online">Chỉ học online</option><option value="offline">Chỉ học trực tiếp</option></select><span className="mt-1 block text-xs font-normal text-slate-500">Chọn hình thức gia sư có thể đề nghị dạy.</span></label>
-            <label className="text-sm font-semibold text-slate-700">Tỉnh/thành <span className="text-rose-500">*</span><select value={form.provinceId} onChange={(event) => void chooseProvince(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-blue-500"><option value="">Chọn tỉnh/thành</option>{provinces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <label className="text-sm font-semibold text-slate-700">Xã/phường <span className="text-rose-500">*</span><select disabled={!form.provinceId} value={form.wardId} onChange={(event) => update("wardId", event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-blue-500 disabled:bg-slate-50"><option value="">Chọn xã/phường</option>{wards.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label className="sm:col-span-2 text-sm font-semibold text-slate-700">Hình thức học <span className="text-rose-500">*</span><select value={form.teachingMode} onChange={(event) => {
+              const value = event.target.value as FormState["teachingMode"];
+              setForm((current) => ({ ...current, teachingMode: value, ...(value === "online" ? { provinceId: "", wardId: "" } : {}) }));
+              if (value === "online") setWards([]);
+            }} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-blue-500"><option value="both">Online &amp; trực tiếp</option><option value="online">Chỉ học online</option><option value="offline">Chỉ học trực tiếp</option></select><span className="mt-1 block text-xs font-normal text-slate-500">Chọn hình thức gia sư có thể đề nghị dạy.</span></label>
+            <label className="text-sm font-semibold text-slate-700">Tỉnh/thành {form.teachingMode !== "online" && <span className="text-rose-500">*</span>}<select disabled={form.teachingMode === "online"} value={form.provinceId} onChange={(event) => void chooseProvince(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"><option value="">{form.teachingMode === "online" ? "Không áp dụng khi học online" : "Chọn tỉnh/thành"}</option>{provinces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label className="text-sm font-semibold text-slate-700">Xã/phường {form.teachingMode !== "online" && <span className="text-rose-500">*</span>}<select disabled={form.teachingMode === "online" || !form.provinceId} value={form.wardId} onChange={(event) => update("wardId", event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"><option value="">{form.teachingMode === "online" ? "Không áp dụng khi học online" : "Chọn xã/phường"}</option>{wards.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
             <label className="text-sm font-semibold text-slate-700">Học phí từ (VNĐ/tháng)<input min="0" type="number" value={form.budgetMin} onChange={(event) => update("budgetMin", event.target.value)} placeholder="Ví dụ: 1500000" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500" /></label>
             <label className="text-sm font-semibold text-slate-700">Học phí đến (VNĐ/tháng)<input min="0" type="number" value={form.budgetMax} onChange={(event) => update("budgetMax", event.target.value)} placeholder="Ví dụ: 2500000" className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500" /></label>
             <fieldset className="sm:col-span-2">

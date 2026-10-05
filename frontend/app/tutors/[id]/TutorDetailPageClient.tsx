@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Tutor, TutorOpenClass } from "@/lib/home-mock-data";
+import type { Tutor, TutorOpenClass } from "@/lib/presentation-models";
 import { edututorApi } from "@/lib/edututor-api";
 import { toTutorPresentation } from "@/lib/tutor-presenter";
 import { TutorDetailClient } from "./TutorDetailClient";

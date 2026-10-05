@@ -71,6 +71,16 @@ export function saveAuthSession(session: StoredAuthSession) {
   window.dispatchEvent(new Event(AUTH_SESSION_EVENT));
 }
 
+export function promoteAuthSessionToStudent() {
+  const session = getAuthSession();
+  if (!session || session.actorType !== "user") return;
+  saveAuthSession({
+    ...session,
+    actorType: "student",
+    account: { ...session.account, account_type: "student" },
+  });
+}
+
 export function touchAuthSession() {
   const session = getAuthSession();
   if (!session || typeof window === "undefined") return;

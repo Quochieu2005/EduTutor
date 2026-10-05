@@ -22,11 +22,12 @@ import {
   getTutorRoleTitle,
   getTutorInstitution,
   getTutorMajor,
-} from "@/lib/home-mock-data";
+} from "@/lib/presentation-models";
 import { edututorApi, type Province, type Ward } from "@/lib/edututor-api";
 import { toTutorPresentation } from "@/lib/tutor-presenter";
 import { getProvinceSlug } from "@/lib/tutor-filter-mapping";
 import { toast } from "@/lib/toast";
+import { PaginationControls } from "@/components/PaginationControls";
 import { getAuthSession } from "@/lib/auth-session";
 
 const emptySubscribe = () => () => {};
@@ -111,8 +112,9 @@ function TutorsListContent() {
   }, []);
 
   useEffect(() => {
-    const provinceSlug = getProvinceSlug(paramCity);
+    const provinceSlug = getProvinceSlug(filterCity);
     if (!provinceSlug) {
+      setApiWardsState({ provinceSlug: null, wards: [] });
       return;
     }
     let isCurrent = true;
@@ -124,9 +126,9 @@ function TutorsListContent() {
         if (isCurrent) setApiWardsState({ provinceSlug, wards: [] });
       });
     return () => { isCurrent = false; };
-  }, [paramCity]);
+  }, [filterCity]);
 
-  const provinceSlug = getProvinceSlug(paramCity);
+  const provinceSlug = getProvinceSlug(filterCity);
   const apiWards = apiWardsState.provinceSlug === provinceSlug ? apiWardsState.wards : [];
 
   useEffect(() => {
@@ -225,6 +227,18 @@ function TutorsListContent() {
       return true;
     });
   }, [tutors, paramGrade, paramMode, paramCity]);
+
+  const pageSize = 8;
+  const totalPages = Math.max(1, Math.ceil(filteredTutors.length / pageSize));
+  const requestedPage = Number(searchParams.get("page") || "1");
+  const currentPage = Math.min(totalPages, Math.max(1, Number.isFinite(requestedPage) ? Math.trunc(requestedPage) : 1));
+  const paginatedTutors = filteredTutors.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const changePage = (page: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (page <= 1) params.delete("page"); else params.set("page", String(page));
+    router.push(`/tutors${params.size ? `?${params}` : ""}`, { scroll: false });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const selectedSubjectName = subjectOptions.find((subject) => subject.slug === paramSubject)?.name;
   const noResultMessage = selectedSubjectName
@@ -432,7 +446,7 @@ function TutorsListContent() {
         <>
           {/* BẢNG DESKTOP (Ảnh 2: 3 Cột - Hình ảnh, Thông tin tóm tắt, Hồ sơ) */}
           <div className="hidden lg:block bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full table-fixed text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-bold text-slate-700 uppercase tracking-wider">
                   <th className="py-4 px-6 w-44">Hình ảnh</th>
@@ -441,7 +455,7 @@ function TutorsListContent() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {filteredTutors.map((tutor) => {
+                {paginatedTutors.map((tutor) => {
                   const code = getTutorCode(tutor);
                   const roleTitle = getTutorRoleTitle(tutor);
                   const institution = getTutorInstitution(tutor);
@@ -453,7 +467,7 @@ function TutorsListContent() {
                       className="hover:bg-blue-50/30 transition-colors group"
                     >
                       {/* Cột 1: Hình ảnh */}
-                      <td className="py-5 px-6 align-top">
+                      <td className="px-6 py-4 align-top">
                         <div className="flex flex-col items-center gap-2 text-center w-28">
                           <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-xl shadow-xs border border-white">
                             {tutor.avatarUrl ? (
@@ -478,7 +492,7 @@ function TutorsListContent() {
                       </td>
 
                       {/* Cột 2: Thông tin tóm tắt */}
-                      <td className="py-5 px-6 align-top space-y-2">
+                      <td className="min-w-0 px-6 py-4 align-top space-y-2">
                         <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded-md bg-blue-100/70 text-blue-800 font-bold text-[11px]">
                             {code}
@@ -515,7 +529,7 @@ function TutorsListContent() {
                       </td>
 
                       {/* Cột 3: Hồ sơ */}
-                      <td className="py-5 px-6 align-top space-y-3">
+                      <td className="min-w-0 px-6 py-4 align-top space-y-3">
                         <div className="grid grid-cols-2 gap-3 max-w-md">
                           <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
                             <span className="text-slate-400 block text-[11px]">Môn dạy:</span>
@@ -545,7 +559,7 @@ function TutorsListContent() {
                         </div>
 
                         <p className="text-slate-600 line-clamp-2 italic text-[11px] leading-relaxed">
-                          &ldquo;{tutor.bio}&rdquo;
+                          <span className="line-clamp-4 break-words [overflow-wrap:anywhere]">&ldquo;{tutor.bio}&rdquo;</span>
                         </p>
 
                         <div className="pt-1 flex items-center gap-3">
@@ -574,8 +588,8 @@ function TutorsListContent() {
           </div>
 
           {/* DANH SÁCH MOBILE (Ảnh 2: Chuyển dạng card, không ép bảng tràn ngang) */}
-          <div className="lg:hidden space-y-4">
-            {filteredTutors.map((tutor) => {
+          <div className="space-y-3 lg:hidden">
+            {paginatedTutors.map((tutor) => {
               const code = getTutorCode(tutor);
               const roleTitle = getTutorRoleTitle(tutor);
               const institution = getTutorInstitution(tutor);
@@ -608,7 +622,7 @@ function TutorsListContent() {
                       <h3 className="font-extrabold text-slate-900 text-base leading-tight truncate">
                         {tutor.name}
                       </h3>
-                      <p className="text-xs font-bold text-blue-600 mt-0.5">
+                      <p className="mt-0.5 break-words [overflow-wrap:anywhere] text-xs font-bold text-blue-600">
                         {roleTitle} • {tutor.subject}
                       </p>
                       <div className="flex items-center gap-1 text-amber-500 font-bold text-xs mt-1">
@@ -620,7 +634,7 @@ function TutorsListContent() {
                   </div>
 
                   <div className="bg-slate-50 p-3 rounded-xl space-y-1.5 text-xs text-slate-700 border border-slate-100">
-                    <p>
+                    <p className="break-words [overflow-wrap:anywhere]">
                       <span className="text-slate-400">Trường/Nơi làm:</span>{" "}
                       <span className="font-semibold text-slate-900">{institution}</span>
                     </p>
@@ -664,6 +678,7 @@ function TutorsListContent() {
               );
             })}
           </div>
+          <PaginationControls page={currentPage} totalPages={totalPages} onPageChange={changePage} />
         </>
       )}
 

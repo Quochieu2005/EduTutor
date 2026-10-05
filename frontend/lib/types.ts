@@ -1,4 +1,4 @@
-export type UserRole = "student" | "parent" | "tutor" | "admin";
+export type UserRole = "user" | "student" | "parent" | "tutor" | "admin";
 
 export interface User {
   id: string;
@@ -114,7 +114,6 @@ export interface RegisterPayload {
   email: string;
   password: string;
   fullName: string;
-  role: UserRole;
   phone?: string;
 }
 

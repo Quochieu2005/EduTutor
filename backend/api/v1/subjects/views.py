@@ -1,4 +1,6 @@
 from django.http import Http404
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema
 from mongoengine.queryset.visitor import Q
 from rest_framework.permissions import AllowAny
@@ -29,6 +31,7 @@ def active_subjects():
     return Subject.objects(Q(status=1) | Q(status__exists=False))
 
 
+@method_decorator(cache_page(300), name='dispatch')
 class SubjectListView(PublicSubjectView):
     pagination_class = StandardResultsSetPagination
 
@@ -54,6 +57,7 @@ class SubjectListView(PublicSubjectView):
         ])
 
 
+@method_decorator(cache_page(300), name='dispatch')
 class SubjectDetailView(PublicSubjectView):
     @extend_schema(tags=['Môn học'], responses={200: SubjectSerializer})
     def get(self, request, slug):
@@ -64,6 +68,7 @@ class SubjectDetailView(PublicSubjectView):
         return Response(subject_payload(subject, tutor_map.get(int(subject.id), set())))
 
 
+@method_decorator(cache_page(300), name='dispatch')
 class SubjectCategoryListView(PublicSubjectView):
     @extend_schema(tags=['Môn học'], responses={200: SubjectCategorySerializer(many=True)})
     def get(self, request):
@@ -84,6 +89,7 @@ class SubjectCategoryListView(PublicSubjectView):
         ])
 
 
+@method_decorator(cache_page(30), name='dispatch')
 class SubjectTutorListView(PublicSubjectView):
     pagination_class = StandardResultsSetPagination
 

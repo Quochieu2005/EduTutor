@@ -6,7 +6,7 @@ import {
   ArrowRightOutlined,
   StarFilled,
 } from "@ant-design/icons";
-import type { Tutor } from "@/lib/home-mock-data";
+import type { Tutor } from "@/lib/presentation-models";
 
 interface TutorCardProps {
   tutor: Tutor;

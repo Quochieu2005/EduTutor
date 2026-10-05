@@ -83,7 +83,7 @@ export function SocialLoginButtons({ returnTo }: { returnTo: string }) {
     }, { scope: "public_profile,email" });
   }
 
-  if (!googleClientId && !facebookAppId) return <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">Chưa cấu hình Google/Facebook OAuth cho frontend.</p>;
+  if (!googleClientId && !facebookAppId) return null;
   return <div className="mb-7 space-y-3">
     {googleClientId && <div ref={googleButton} className="flex min-h-11 w-full justify-center overflow-hidden rounded-lg" />}
     {facebookAppId && <button type="button" disabled={!facebookReady} onClick={facebookLogin} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"><FacebookFilled className="text-lg text-blue-600" />Tiếp tục với Facebook</button>}

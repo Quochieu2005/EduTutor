@@ -187,7 +187,7 @@ class RecruitmentJobSerializer(serializers.Serializer):
     posted_by_type = serializers.CharField()
     title = serializers.CharField()
     subject = RecruitmentReferenceSerializer()
-    province = RecruitmentReferenceSerializer()
+    province = RecruitmentReferenceSerializer(allow_null=True)
     district = RecruitmentReferenceSerializer(allow_null=True)
     ward = RecruitmentWardSerializer(allow_null=True)
     grade = serializers.CharField(allow_null=True)
@@ -202,6 +202,9 @@ class RecruitmentJobSerializer(serializers.Serializer):
     applications_count = serializers.SerializerMethodField()
 
     def get_applications_count(self, job):
+        counts = self.context.get('applications_count')
+        if counts is not None:
+            return counts.get(str(job.id), 0)
         from tutors.documents import JobApplication
         return JobApplication.objects(job_posting=job).count()
 
@@ -210,8 +213,8 @@ class TutorRequestCreateSerializer(serializers.Serializer):
     """Payload for a signed-in student/parent tutor-finding request."""
 
     subject_id = serializers.IntegerField(min_value=1)
-    province_id = serializers.IntegerField(min_value=1)
-    ward_id = serializers.IntegerField(min_value=1)
+    province_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    ward_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     title = serializers.CharField(max_length=250)
     description = serializers.CharField(max_length=5000)
     grade = serializers.CharField(max_length=100, required=False, allow_blank=True)
@@ -231,6 +234,8 @@ class TutorRequestCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({'budget_max': 'Ngân sách tối đa phải lớn hơn hoặc bằng tối thiểu.'})
         if not attrs.get('title', '').strip() or not attrs.get('description', '').strip():
             raise serializers.ValidationError('Tiêu đề và mô tả nhu cầu không được để trống.')
+        if attrs.get('teaching_mode', 'both') != 'online' and (not attrs.get('province_id') or not attrs.get('ward_id')):
+            raise serializers.ValidationError({'province_id': 'Học trực tiếp cần chọn đầy đủ tỉnh/thành và xã/phường.'})
         return attrs
 
 

@@ -5,8 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEduClerk, useEduUser } from "@/lib/auth";
-import { AUTH_SESSION_EVENT, getAuthSession, type ActorType } from "@/lib/auth-session";
-import { saveAuthSession } from "@/lib/auth-session";
+import { AUTH_SESSION_EVENT, clearAuthSession, getAuthSession, saveAuthSession, type ActorType } from "@/lib/auth-session";
 import { edututorApi } from "@/lib/edututor-api";
 import type { LessonSession, PostedClassWithApplications, TutorAvailability } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
@@ -64,7 +63,11 @@ export default function ProfilePage() {
   const [authResolved, setAuthResolved] = useState(false);
   const [apiAccount, setApiAccount] = useState<Record<string, unknown>>({});
   const [profileForm, setProfileForm] = useState({ displayName: "", username: "", phone: "" });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [passwordSaving, setPasswordSaving] = useState(false);
   const [tutorRequests, setTutorRequests] = useState<LessonRequest[]>([]);
   const [tutorRequestsLoading, setTutorRequestsLoading] = useState(false);
   const [availabilitySlots, setAvailabilitySlots] = useState<TutorAvailability["slots"]>([]);
@@ -92,7 +95,7 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
-    if (!authResolved || !isSignedIn || !["student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return;
+    if (!authResolved || !isSignedIn || !["user", "student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return;
     let cancelled = false;
     edututorApi.accountProfile().then((profile) => {
       if (cancelled) return;
@@ -100,7 +103,7 @@ export default function ProfilePage() {
       setProfileForm({
         displayName: String(profile.account?.display_name ?? detail.name ?? ""),
         username: String(profile.account?.username ?? ""),
-        phone: String(detail.phone ?? ""),
+        phone: String(detail.phone ?? profile.account?.phone ?? ""),
       });
     }).catch(() => toast.error("Không tải được hồ sơ tài khoản."));
     return () => { cancelled = true; };
@@ -139,9 +142,14 @@ export default function ProfilePage() {
   useEffect(() => {
     void refreshLearnerData(true);
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") void refreshLearnerData(false);
+      if (document.visibilityState === "visible") {
+        void refreshLearnerData(false);
+        void refreshPostedClasses();
+      }
     };
-    const timer = window.setInterval(refreshWhenVisible, 8_000);
+    // Focus/visibility events refresh immediately. Keep the background poll
+    // deliberately light so many signed-in users do not overload the API.
+    const timer = window.setInterval(refreshWhenVisible, 20_000);
     window.addEventListener("focus", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
@@ -149,7 +157,7 @@ export default function ProfilePage() {
       window.removeEventListener("focus", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [refreshLearnerData]);
+  }, [refreshLearnerData, refreshPostedClasses]);
 
   useEffect(() => {
     if (!authResolved || !isSignedIn || actorType !== "tutor" || getAuthSession()?.actorType !== "tutor") return;
@@ -201,17 +209,43 @@ export default function ProfilePage() {
     event.preventDefault();
     setProfileSaving(true);
     try {
-      const profile = await edututorApi.updateAccountProfile({ display_name: profileForm.displayName.trim(), username: profileForm.username.trim(), phone: profileForm.phone.trim() });
+      const payload = new FormData();
+      payload.append("display_name", profileForm.displayName.trim());
+      payload.append("username", profileForm.username.trim());
+      payload.append("phone", profileForm.phone.trim());
+      if (avatarFile) payload.append("avatar", avatarFile);
+      const profile = await edututorApi.updateAccountProfile(payload);
       const session = getAuthSession();
       const detail = profile.student ?? profile.parent ?? {};
       const nextAccount = { ...(session?.account ?? {}), ...(profile.account ?? {}), name: detail.name ?? profileForm.displayName, phone: detail.phone ?? profileForm.phone, avatar: detail.avatar ?? profile.account?.avatar };
       if (session) saveAuthSession({ ...session, account: nextAccount, source: "local" });
       setApiAccount(nextAccount);
+      setAvatarFile(null);
+      setAvatarPreview("");
       toast.success("Đã cập nhật hồ sơ.");
-    } catch {
-      toast.error("Không thể cập nhật hồ sơ. Vui lòng kiểm tra lại thông tin.");
+    } catch (error: unknown) {
+      const data = (error as { response?: { data?: Record<string, unknown> } })?.response?.data;
+      const detail = typeof data?.detail === "string" ? data.detail : Object.values(data ?? {}).flat().find((value) => typeof value === "string");
+      toast.error(typeof detail === "string" ? detail : "Không thể cập nhật hồ sơ. Vui lòng kiểm tra lại thông tin.");
     } finally {
       setProfileSaving(false);
+    }
+  }
+
+  async function handlePasswordChange(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPasswordSaving(true);
+    try {
+      const result = await edututorApi.changeAccountPassword(passwordForm);
+      toast.success(result.message || "Đã đổi mật khẩu. Vui lòng đăng nhập lại.");
+      clearAuthSession();
+      router.replace("/login");
+    } catch (error: unknown) {
+      const data = (error as { response?: { data?: Record<string, unknown> } })?.response?.data;
+      const detail = typeof data?.detail === "string" ? data.detail : Object.values(data ?? {}).flat().find((value) => typeof value === "string");
+      toast.error(typeof detail === "string" ? detail : "Không thể đổi mật khẩu. Vui lòng kiểm tra lại thông tin.");
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -332,17 +366,20 @@ export default function ProfilePage() {
   const profileName = String(apiAccount.name ?? apiAccount.display_name ?? user?.fullName ?? "Thành viên EduTutor");
   const profileEmail = String(apiAccount.email ?? user?.primaryEmailAddress?.emailAddress ?? "");
   const profileAvatar = String(apiAccount.avatar ?? user?.imageUrl ?? "");
-  const roleLabel = actorType === "admin" ? "Quản trị viên" : actorType === "tutor" ? "Gia sư" : actorType === "parent" ? "Phụ huynh" : "Học viên";
-  const profileTitle = actorType === "admin" ? "Hồ sơ quản trị viên" : actorType === "tutor" ? "Hồ sơ gia sư" : actorType === "parent" ? "Hồ sơ phụ huynh" : "Hồ sơ học viên";
+  const roleLabel = actorType === "admin" ? "Quản trị viên" : actorType === "tutor" ? "Gia sư" : actorType === "parent" ? "Phụ huynh" : actorType === "student" ? "Học viên" : "Người dùng";
+  const profileTitle = actorType === "admin" ? "Hồ sơ quản trị viên" : actorType === "tutor" ? "Hồ sơ gia sư" : actorType === "parent" ? "Hồ sơ phụ huynh" : actorType === "student" ? "Hồ sơ học viên" : "Hồ sơ tài khoản";
   const isLearner = actorType === "student" || actorType === "parent";
+  const hasAccountSidebar = actorType === "user" || isLearner;
 
-  const learnerNavigation = [
+  const accountNavigation = [
     { key: "overview" as const, label: "Tổng quan", icon: <AppstoreOutlined /> },
     { key: "profile" as const, label: "Cập nhật hồ sơ", icon: <UserOutlined /> },
-    { key: "applications" as const, label: "Gia sư ứng tuyển", icon: <BookOutlined /> },
-    { key: "lessons" as const, label: "Chốt lịch & buổi học", icon: <CalendarOutlined /> },
-    { key: "schedule" as const, label: "Lịch học", icon: <CalendarOutlined /> },
-    { key: "timetable" as const, label: "Thời khóa biểu", icon: <TableOutlined /> },
+    ...(isLearner ? [
+      { key: "applications" as const, label: "Gia sư ứng tuyển", icon: <BookOutlined /> },
+      { key: "lessons" as const, label: "Chốt lịch & buổi học", icon: <CalendarOutlined /> },
+      { key: "schedule" as const, label: "Lịch học", icon: <CalendarOutlined /> },
+      { key: "timetable" as const, label: "Thời khóa biểu", icon: <TableOutlined /> },
+    ] : []),
     { key: "security" as const, label: "Bảo mật", icon: <LockOutlined /> },
   ];
 
@@ -375,8 +412,8 @@ export default function ProfilePage() {
       <Header />
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-        <div className={isLearner ? "grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]" : "space-y-6"}>
-          {isLearner && <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-xs lg:sticky lg:top-24">
+        <div className={hasAccountSidebar ? "grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]" : "space-y-6"}>
+          {hasAccountSidebar && <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-xs lg:sticky lg:top-24">
             <div className="flex items-center gap-3 border-b border-slate-100 px-2 pb-4">
               <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-blue-600 font-bold text-white">
                 {profileAvatar ? <Image src={profileAvatar} alt="Ảnh đại diện" width={44} height={44} className="h-full w-full object-cover" /> : (profileName[0] || "U")}
@@ -384,18 +421,18 @@ export default function ProfilePage() {
               <div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{profileName}</p><p className="truncate text-xs text-slate-500">{roleLabel}</p></div>
             </div>
             <nav className="mt-3 space-y-1" aria-label="Quản lý tài khoản">
-              {learnerNavigation.map((item) => <button key={item.key} type="button" onClick={() => setUserTab(item.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${userTab === item.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"}`}><span>{item.icon}</span>{item.label}</button>)}
+              {accountNavigation.map((item) => <button key={item.key} type="button" onClick={() => setUserTab(item.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${userTab === item.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"}`}><span>{item.icon}</span>{item.label}</button>)}
             </nav>
             <button type="button" onClick={() => void signOut().then(() => router.replace("/login"))} className="mt-4 flex w-full items-center gap-3 border-t border-slate-100 px-3 pt-4 text-sm font-semibold text-slate-600 hover:text-rose-600"><LogoutOutlined />Đăng xuất</button>
           </aside>}
           <div className="min-w-0 space-y-6">
 
-        {(!isLearner || userTab === "overview") && <div>
+        {(!hasAccountSidebar || userTab === "overview") && <div>
           <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Tài khoản {roleLabel}</p>
           <h1 className="text-3xl font-bold mt-1">{profileTitle}</h1>
         </div>}
 
-        {(!isLearner || userTab === "overview") && <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 flex flex-col sm:flex-row gap-4 items-start">
+        {(!hasAccountSidebar || userTab === "overview") && <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 flex flex-col sm:flex-row gap-4 items-start">
           <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-600 to-purple-600 text-white flex items-center justify-center text-xl font-bold shrink-0">
             {profileAvatar ? <Image src={profileAvatar} alt="Ảnh đại diện" width={64} height={64} className="w-full h-full object-cover" /> : (profileName[0] || "U")}
           </div>
@@ -439,13 +476,35 @@ export default function ProfilePage() {
           ))}</div>}
         </section>}
 
-        {isLearner && userTab === "profile" && (
+        {hasAccountSidebar && userTab === "profile" && (
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs">
             <div className="border-b border-gray-100 pb-4">
               <h2 className="text-xl font-bold">Cập nhật hồ sơ</h2>
               <p className="mt-1 text-xs text-gray-500">Thông tin này sẽ được tự động điền khi bạn đăng ký lớp hoặc gửi yêu cầu mời gia sư.</p>
             </div>
             <form onSubmit={handleProfileSave} className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex items-center gap-4 sm:col-span-2">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-xl font-bold text-white">
+                  {avatarPreview || profileAvatar ? <Image src={avatarPreview || profileAvatar} alt="Ảnh đại diện" width={80} height={80} unoptimized={Boolean(avatarPreview)} className="h-full w-full object-cover" /> : (profileName[0] || "U")}
+                </div>
+                <div>
+                  <label className="inline-flex cursor-pointer rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Chọn ảnh đại diện<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) {
+                      toast.error("Ảnh đại diện không được vượt quá 5 MB.");
+                      event.target.value = "";
+                      return;
+                    }
+                    setAvatarFile(file);
+                    const reader = new FileReader();
+                    reader.onload = () => setAvatarPreview(typeof reader.result === "string" ? reader.result : "");
+                    reader.readAsDataURL(file);
+                  }} /></label>
+                  <p className="mt-2 text-xs text-slate-500">JPG, PNG, WEBP hoặc GIF · tối đa 5 MB.</p>
+                  {avatarFile && <p className="mt-1 max-w-xs truncate text-xs font-medium text-blue-600">{avatarFile.name}</p>}
+                </div>
+              </div>
               <label className="text-sm font-semibold">Họ và tên
                 <input required value={profileForm.displayName} onChange={(event) => setProfileForm((current) => ({ ...current, displayName: event.target.value }))} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-blue-500" placeholder="Nhập họ và tên" />
               </label>
@@ -628,7 +687,7 @@ export default function ProfilePage() {
           </section>
         )}
 
-        {(!isLearner || userTab === "security") && <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
+        {(!hasAccountSidebar || userTab === "security") && <section className="bg-white rounded-2xl border border-gray-200 shadow-xs p-6 space-y-4">
           <div className="border-b border-gray-100 pb-4">
             <h2 className="text-xl font-bold">Bảo mật & tài khoản</h2>
             <p className="text-xs text-gray-500 mt-1">Đăng nhập hiện tại được API EduTutor quản lý.</p>
@@ -637,6 +696,13 @@ export default function ProfilePage() {
             <div><strong>Phương thức đăng nhập</strong><p className="text-xs text-gray-500 mt-1">Email và mật khẩu EduTutor.</p></div>
             <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">Đang hoạt động</span>
           </div>
+          {hasAccountSidebar && <form onSubmit={handlePasswordChange} className="grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2">
+            <h3 className="font-bold sm:col-span-2">Đổi mật khẩu</h3>
+            <label className="text-sm font-semibold">Mật khẩu hiện tại<input required type="password" value={passwordForm.current_password} onChange={(event) => setPasswordForm((current) => ({ ...current, current_password: event.target.value }))} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-blue-500" /></label>
+            <label className="text-sm font-semibold">Mật khẩu mới<input required type="password" minLength={8} value={passwordForm.new_password} onChange={(event) => setPasswordForm((current) => ({ ...current, new_password: event.target.value }))} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-blue-500" /></label>
+            <label className="text-sm font-semibold">Xác nhận mật khẩu mới<input required type="password" minLength={8} value={passwordForm.confirm_password} onChange={(event) => setPasswordForm((current) => ({ ...current, confirm_password: event.target.value }))} className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-blue-500" /></label>
+            <div className="flex items-end"><button disabled={passwordSaving} className="h-11 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60">{passwordSaving ? "Đang cập nhật..." : "Đổi mật khẩu"}</button></div>
+          </form>}
           <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-4">
             <div><strong className="text-sm">Xóa tài khoản</strong><p className="text-xs text-gray-500 mt-1">Hành động này là vĩnh viễn và không thể hoàn tác.</p></div>
             <button type="button" onClick={() => setDeleteDialogOpen(true)} className="text-sm font-semibold text-rose-600 hover:text-rose-700 cursor-pointer">Xóa tài khoản</button>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   LEFT_PROVINCES,
   LEFT_FIND_CATEGORIES,
-} from "@/lib/home-mock-data";
+} from "@/lib/sidebar-content";
 
 interface LeftSidebarProps {
   activeKey?: string | null;

@@ -1,4 +1,4 @@
-import type { GradeLevelSlug, Tutor } from "@/lib/home-mock-data";
+import type { GradeLevelSlug, Tutor } from "@/lib/presentation-models";
 import type { PublicTutor } from "@/lib/edututor-api";
 
 function gradeLevelsFromSubjects(subjects: PublicTutor["subjects"]): GradeLevelSlug[] {

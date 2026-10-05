@@ -650,17 +650,6 @@ document.addEventListener("DOMContentLoaded", () => {
     syncScheduleStatusAuthority(row, savedValues);
     filterTutorRequestCandidates();
     filterFeedbackStatusOptions(row);
-    if (resourceKey === "tutors") {
-      form.elements.password.required = !row;
-      // The default password is intended for a newly created tutor only.
-      // Never pre-fill it while editing, otherwise a save would reset it.
-      form.elements.password.value = row ? "" : "123456789";
-      form
-        .querySelector("[data-resource-password-toggle]")
-        ?.classList.remove("is-visible");
-      if (form.elements.password.type !== "password")
-        form.elements.password.type = "password";
-    }
     if (resourceKey === "administrators") {
       form.elements.role.value = row?.dataset.role || "admin";
       form.elements.permissions.value = row?.dataset.permissions || "";

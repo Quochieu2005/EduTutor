@@ -150,10 +150,13 @@ class Contact(BaseDocument):
     phone = StringField(required=True, max_length=20)
     grade = StringField(max_length=100, null=True)
     subject = ReferenceField('Subject', null=True, db_field='subject_id')
+    province = ReferenceField('Province', null=True, db_field='province_id')
+    ward = ReferenceField('Ward', null=True, db_field='ward_id')
+    teaching_mode = StringField(choices=('online', 'offline', 'both'), default='both')
     needs_description = StringField(null=True)
     status = StringField(required=True, choices=('new', 'contacted', 'closed'), default='new')
 
-    meta = {'collection': 'contacts', 'indexes': ['status', 'subject', '-created_at']}
+    meta = {'collection': 'contacts', 'indexes': ['status', 'subject', 'province', 'ward', '-created_at']}
 
 
 class Banner(BaseDocument):

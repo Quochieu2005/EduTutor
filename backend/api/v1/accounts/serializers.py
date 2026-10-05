@@ -21,6 +21,21 @@ class LoginSerializer(serializers.Serializer):
     validate_password = RegisterSerializer.validate_password
 
 
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(max_length=72, trim_whitespace=False, write_only=True)
+    new_password = serializers.CharField(min_length=8, max_length=72, trim_whitespace=False, write_only=True)
+    confirm_password = serializers.CharField(min_length=8, max_length=72, trim_whitespace=False, write_only=True)
+
+    def validate(self, attrs):
+        RegisterSerializer.validate_password(self, attrs['current_password'])
+        RegisterSerializer.validate_password(self, attrs['new_password'])
+        if attrs['new_password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({'confirm_password': 'Mật khẩu xác nhận không trùng khớp.'})
+        if attrs['new_password'] == attrs['current_password']:
+            raise serializers.ValidationError({'new_password': 'Mật khẩu mới phải khác mật khẩu hiện tại.'})
+        return attrs
+
+
 class UnifiedLoginSerializer(LoginSerializer):
     """Credentials for the public, shared login screen.
 
@@ -81,6 +96,7 @@ class UserSerializer(serializers.Serializer):
     username = serializers.CharField()
     display_name = serializers.CharField()
     email = serializers.EmailField()
+    phone = serializers.CharField(allow_null=True)
     avatar = serializers.CharField(allow_null=True)
     oauth_provider = serializers.CharField()
     account_type = serializers.ChoiceField(choices=('student', 'parent'), allow_null=True)

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   CloseOutlined,
   CheckCircleFilled,
@@ -25,10 +26,11 @@ import {
   getTutorHometown,
   getTutorDegree,
   type DayPeriod,
-} from "@/lib/home-mock-data";
+} from "@/lib/presentation-models";
 import { edututorApi } from "@/lib/edututor-api";
 import { useEduUser } from "@/lib/auth";
-import { getAuthSession } from "@/lib/auth-session";
+import { getAuthSession, promoteAuthSessionToStudent } from "@/lib/auth-session";
+import { apiErrorMessage } from "@/lib/api";
 
 interface TutorProfileModalProps {
   tutor: Tutor | null;
@@ -213,8 +215,11 @@ export function TutorProfileModal({
           email: formData.email.trim(),
           phone: formData.phoneNumber.trim(),
           grade: formData.grade.trim() || undefined,
+          teaching_mode: "online",
           needs_description: [
             `Cần tư vấn về gia sư ${tutor.name} (${tutor.subject}).`,
+            `Học phí đề xuất: ${tutor.hourlyRate}.`,
+            `Hồ sơ gia sư: /tutors/${tutor.id}.`,
             formData.notes.trim(),
           ].filter(Boolean).join(" "),
         });
@@ -236,12 +241,10 @@ export function TutorProfileModal({
           : `${result.message} Yêu cầu đã vào tài khoản gia sư và Admin, nhưng email chưa gửi được. Vui lòng kiểm tra cấu hình SMTP.`);
       }
 
+      promoteAuthSessionToStudent();
       setFormSuccess(true);
     } catch (error: unknown) {
-      const detail = typeof error === "object" && error !== null && "response" in error
-        ? (error as { response?: { data?: { detail?: string; message?: string } } }).response?.data
-        : undefined;
-      setFormError(detail?.detail || detail?.message || "Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại!");
+      setFormError(apiErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -493,6 +496,13 @@ export function TutorProfileModal({
               {/* Form Action Container (Mời dạy / Cần tư vấn) */}
               {activeTab === "profile" && (
                 <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
+                  <Link
+                    href={`/tutors/${tutor.id}`}
+                    onClick={onClose}
+                    className="w-full sm:flex-1 py-3 px-5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold text-xs transition-colors text-center"
+                  >
+                    Mở hồ sơ riêng · {tutor.hourlyRate}
+                  </Link>
                   <button
                     type="button"
                     onClick={() => {

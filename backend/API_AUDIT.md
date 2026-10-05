@@ -56,17 +56,9 @@ Render Free chặn SMTP 25/465/587 theo [tài liệu Render](https://render.com/
 ## Phần chưa thể coi là hoàn tất
 
 - Frontend `/login` đang dùng Clerk; API tài khoản này dùng MongoDB User/JWT. Reset User **không** đổi password Clerk. Chưa tự chuyển hệ thống đăng nhập hoặc đồng bộ hai nơi.
-- `api/v1/lessons/urls.py` đã có API đề xuất và đề xuất lại lịch theo phiên bản; chỉ khi học viên và gia sư cùng xác nhận một phương án thì hệ thống mới tạo buổi học. Backend có API lịch rảnh của gia sư và API đề nghị nhận lớp từ bảng lớp. Giao diện Đội ngũ gia sư/Nhận lớp hiện vẫn còn dữ liệu mock/localStorage ở một số đoạn, vì vậy cần hoàn tất đấu nối dữ liệu thật. Frontend Clerk và MongoDB User/JWT vẫn cần được đồng bộ trước khi có thể coi luồng production là hoàn chỉnh.
+- `api/v1/lessons/urls.py` đã có API đề xuất và đề xuất lại lịch theo phiên bản; chỉ khi học viên và gia sư cùng xác nhận một phương án thì hệ thống mới tạo buổi học. Backend có API lịch rảnh của gia sư và API đề nghị nhận lớp từ bảng lớp. Các danh sách gia sư, lớp, môn học và địa giới trên frontend đã lấy từ API thật; localStorage chỉ còn giữ trạng thái cho luồng ghi danh lớp mở chưa có endpoint backend tương ứng. Frontend Clerk và MongoDB User/JWT vẫn cần được đồng bộ trước khi có thể coi luồng production là hoàn chỉnh.
 - OAuth live cần Google/Facebook token thật đúng ứng dụng; trong kiểm thử đã giả lập nhà cung cấp, không giả lập nghiệp vụ lưu User.
 - Upload hồ sơ Cloudinary chưa được xác minh live. Hiện hồ sơ lưu URL asset; chưa có endpoint tải tài liệu riêng kiểm tra quyền admin. Cần thiết kế delivery riêng cho CV/CCCD trước khi thu thập tài liệu nhạy cảm trên production.
 - SMTP vẫn là bước I/O đồng bộ; chưa có worker/queue gửi email. Latency production còn phụ thuộc Render cold start, region, Atlas, Redis và nhà cung cấp. Không tuyên bố mọi API trên Render đã nhanh hoặc đã load-test.
 - Chưa commit, push, deploy hay sửa biến môi trường Render.
 
-## Chạy lại kiểm thử an toàn
-
-```powershell
-python -m pip install -r requirements-test.txt
-python run_api_tests.py core
-```
-
-`run_api_tests.py` ép URI local trước khi Django đọc cấu hình và dùng mongomock; không dùng credentials Atlas từ `.env`. Bộ test kiểm tra kết nối thực sự là mongomock trước khi dọn dữ liệu kiểm thử. Không dùng settings test cho production.

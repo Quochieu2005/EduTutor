@@ -87,6 +87,7 @@ from templates.views import (
     users,
 )
 from core.admin_contacts import contact_delete
+from core.admin_header_notifications import admin_notifications_live
 from core.admin_tutor_subject_changes import tutor_subject_change_requests, tutor_subject_change_review
 
 handler404 = page_not_found
@@ -99,6 +100,7 @@ urlpatterns = [
     path('admin/dashboard/', dashboard, name='dashboard-slash'),
     path('admin/chats/', chats, name='chats'),
     path('admin/notifications/mark-read/', mark_admin_notifications_read, name='admin-notifications-mark-read'),
+    path('admin/notifications/live/', admin_notifications_live, name='admin-notifications-live'),
     path('admin/management/reviews-complaints/<str:record_key>/update/', review_complaint_update, name='review-complaint-update'),
     path('admin/students/', students, name='students'),
     path('admin/students/<slug:slug>/edit/', student_edit, name='student-edit'),

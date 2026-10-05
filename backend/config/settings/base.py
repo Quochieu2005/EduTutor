@@ -37,7 +37,16 @@ MONGO_URI = (
     or 'mongodb://localhost:27017'
 )
 MONGO_DB_NAME = _configured_value('MONGO_DB_NAME', 'edututor')
-connect(db=MONGO_DB_NAME, host=MONGO_URI, serverSelectionTimeoutMS=5000)
+connect(
+    db=MONGO_DB_NAME,
+    host=MONGO_URI,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=15000,
+    maxPoolSize=int(os.getenv('MONGO_MAX_POOL_SIZE', '100')),
+    minPoolSize=int(os.getenv('MONGO_MIN_POOL_SIZE', '0')),
+    waitQueueTimeoutMS=int(os.getenv('MONGO_WAIT_QUEUE_TIMEOUT_MS', '5000')),
+)
 
 # Admin accounts must authenticate again after one hour by default.
 ADMIN_SESSION_MAX_AGE = int(os.getenv('ADMIN_SESSION_MAX_AGE', '3600'))

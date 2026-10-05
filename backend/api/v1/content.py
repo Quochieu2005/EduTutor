@@ -9,16 +9,19 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_field
 from mongoengine.queryset.visitor import Q
 from mongoengine.dereference import DeReference
-from rest_framework import serializers
+from rest_framework import serializers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.views import APIView
 
+from accounts.documents import User
+from api.v1.accounts.authentication import MongoJWTAuthentication
+from api.v1.accounts.services import SocialTokenError, ensure_student_profile
 from core.admin_contacts import ADMIN_HEADER_NOTIFICATION_CACHE_KEY, NEW_CONTACT_COUNT_CACHE_KEY
 from core.documents import Banner, BlogCategory, BlogPost, Contact
-from tutors.documents import Subject
+from tutors.documents import Province, Subject, Ward
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +142,9 @@ class ContactSerializer(serializers.Serializer):
     phone = serializers.RegexField(r'^\+?[0-9 () .-]{7,20}$', max_length=20)
     grade = serializers.CharField(max_length=100, required=False, allow_blank=True)
     subject_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    province_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    ward_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    teaching_mode = serializers.ChoiceField(choices=('online', 'offline', 'both'), default='both', required=False)
     needs_description = serializers.CharField(max_length=3000)
 
     def validate(self, attrs):
@@ -155,6 +161,16 @@ class ContactSerializer(serializers.Serializer):
             if subject is None:
                 raise serializers.ValidationError({'subject_id': 'Môn học không tồn tại hoặc đã tắt.'})
             attrs['subject'] = subject
+        province_id = attrs.pop('province_id', None)
+        ward_id = attrs.pop('ward_id', None)
+        teaching_mode = attrs.get('teaching_mode', 'both')
+        if teaching_mode != 'online':
+            province = Province.objects(id=province_id).first() if province_id else None
+            ward = Ward.objects(id=ward_id, province=province).first() if province and ward_id else None
+            if province is None or ward is None:
+                raise serializers.ValidationError({'province_id': 'Học trực tiếp cần chọn đầy đủ tỉnh/thành và xã/phường.'})
+            attrs['province'] = province
+            attrs['ward'] = ward
         return attrs
 
 
@@ -171,12 +187,22 @@ class ContactResponseSerializer(serializers.Serializer):
 
 
 class ContactCreateView(PublicView):
+    # Keep this endpoint usable for visitors, while recognizing a signed-in
+    # website account so "Cần tư vấn" can start its learner profile.
+    authentication_classes = [MongoJWTAuthentication]
     throttle_classes = [ContactThrottle]
 
     @extend_schema(tags=['Liên hệ'], request=ContactSerializer, responses={201: ContactResponseSerializer})
     def post(self, request):
         serializer = ContactSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        principal = getattr(request, 'user', None)
+        user = getattr(principal, 'user', None)
+        if isinstance(user, User):
+            try:
+                ensure_student_profile(user)
+            except SocialTokenError as error:
+                return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
         Contact(**serializer.validated_data, status='new').save()
         try:
             cache.delete_many((NEW_CONTACT_COUNT_CACHE_KEY, ADMIN_HEADER_NOTIFICATION_CACHE_KEY))

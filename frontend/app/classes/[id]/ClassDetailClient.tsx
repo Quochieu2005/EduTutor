@@ -8,7 +8,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { edututorApi } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
-import type { ClassListing, ClassComment } from "@/lib/home-mock-data";
+import type { ClassListing, ClassComment } from "@/lib/presentation-models";
 import {
   addEnrollmentRequest,
   getEnrollmentRequests,
@@ -372,7 +372,7 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
       <Header />
 
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main className="min-w-0 flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="text-xs text-gray-500">
           <ol className="flex items-center gap-1.5 flex-wrap">
@@ -503,7 +503,7 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
         )}
 
         {/* 9. THÔNG TIN CHI TIẾT LỚP HỌC */}
-        <article className="bg-white rounded-2xl p-6 sm:p-8 shadow-xs border border-gray-200 space-y-6">
+        <article className="min-w-0 overflow-hidden bg-white rounded-2xl p-6 sm:p-8 shadow-xs border border-gray-200 space-y-6">
           {/* Header chi tiết: Mã lớp, Trạng thái, Tiêu đề */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-6 border-b border-gray-100">
             <div className="space-y-1.5">
@@ -587,20 +587,20 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
           </div>
 
           {/* Bảng thuộc tính chi tiết */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs">
-            <div>
+          <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-4 rounded-xl bg-gray-50 border border-gray-100 text-xs">
+            <div className="min-w-0">
               <span className="text-gray-400 block">Môn học & Khối:</span>
               <span className="font-bold text-gray-900 text-sm">{classItem.subject} – {classItem.grade}</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-gray-400 block">Hình thức học:</span>
               <span className="font-semibold text-purple-700 text-sm capitalize">
                 {classItem.teachingMode === "online" ? "Online" : classItem.teachingMode === "both" ? "Online & Trực tiếp" : "Trực tiếp tại nhà"}
               </span>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-gray-400 block">Thời gian học:</span>
-              <span className="font-semibold text-gray-900 text-sm">{classItem.schedule}</span>
+              <span className="font-semibold text-gray-900 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{classItem.schedule}</span>
             </div>
             <div>
               <span className="text-gray-400 block">Số buổi mỗi tuần:</span>
@@ -629,17 +629,17 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
           </div>
 
           {/* Mô tả chi tiết */}
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <h2 className="text-base font-bold text-gray-900">Mô tả chi tiết lớp học</h2>
-            <p className="text-sm text-gray-700 leading-relaxed bg-white p-4 rounded-xl border border-gray-100">
+            <p className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-gray-700 leading-relaxed bg-white p-4 rounded-xl border border-gray-100">
               {classItem.description}
             </p>
           </div>
 
           {/* Yêu cầu đối với gia sư */}
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <h2 className="text-base font-bold text-gray-900">Yêu cầu đối với gia sư</h2>
-            <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-100 text-sm text-blue-900 leading-relaxed">
+            <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] p-4 rounded-xl bg-blue-50/60 border border-blue-100 text-sm text-blue-900 leading-relaxed">
               {classItem.requirements}
             </div>
           </div>

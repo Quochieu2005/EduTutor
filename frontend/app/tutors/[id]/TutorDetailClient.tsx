@@ -31,10 +31,11 @@ import {
   getTutorHometown,
   getTutorDegree,
   getTutorAvailability,
-} from "@/lib/home-mock-data";
+} from "@/lib/presentation-models";
 import { edututorApi, type TutorQuestion, type TutorReview } from "@/lib/edututor-api";
-import { getAuthSession } from "@/lib/auth-session";
+import { getAuthSession, promoteAuthSessionToStudent } from "@/lib/auth-session";
 import { toast } from "@/lib/toast";
+import { apiErrorMessage } from "@/lib/api";
 import {
   addEnrollmentRequest,
   getEnrollmentRequestsForUser,
@@ -225,9 +226,12 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
           email: user?.primaryEmailAddress?.emailAddress ?? "",
           phone: directForm.phoneNumber.trim(),
           grade: directForm.grade || tutor.grades,
+          teaching_mode: "online",
           needs_description: [
             `Yêu cầu tư vấn về gia sư ${tutor.name}.`,
             `Môn học: ${directForm.subject || tutor.subject}.`,
+            `Học phí đề xuất: ${tutor.hourlyRate}.`,
+            `Hồ sơ gia sư: /tutors/${tutor.id}.`,
             directForm.notes.trim(),
           ].filter(Boolean).join(" "),
         });
@@ -242,9 +246,10 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
         });
         setDirectSuccessMessage(result.message);
       }
+      promoteAuthSessionToStudent();
       setDirectSuccess(true);
-    } catch {
-      setDirectError("Không thể gửi thông tin lúc này. Vui lòng thử lại!");
+    } catch (error: unknown) {
+      setDirectError(apiErrorMessage(error));
     } finally {
       setIsSubmittingDirect(false);
     }

@@ -9,6 +9,7 @@ from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpRespo
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
+from mongoengine.queryset.visitor import Q
 
 from accounts.documents import Admin
 from core.admin_audit import record_admin_activity
@@ -110,7 +111,12 @@ def tutor_subject_change_review(request, change_id):
     approved = decision == 'approve'
     if approved:
         if change.action == TutorSubjectChangeRequest.ACTION_ADD:
-            subject = Subject.objects(id=change.subject.id, status=1).first()
+            # Keep the Admin review rule consistent with both the public
+            # subject catalogue and the tutor request endpoint. Older subject
+            # records legitimately have no persisted status and are active.
+            subject = Subject.objects(
+                Q(id=change.subject.id) & (Q(status=1) | Q(status__exists=False)),
+            ).first()
             if subject is None:
                 messages.error(request, 'Môn học đã bị xóa hoặc ngưng hoạt động; không thể duyệt.')
                 return redirect('admin-tutor-subject-changes')

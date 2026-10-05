@@ -4,9 +4,9 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
-    # Two workers let MongoDB/Atlas I/O from one admin request not block every
-    # other visitor. Keep the number modest for Render's memory limits.
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 60
+    # Two modest threaded workers handle concurrent MongoDB/Atlas I/O without
+    # multiplying memory usage excessively. Recycling limits long-lived leaks.
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --worker-class gthread --workers 2 --threads 4 --timeout 60 --max-requests 1000 --max-requests-jitter 100
     healthCheckPath: /admin/sign-in
     envVars:
       - key: PYTHON_VERSION

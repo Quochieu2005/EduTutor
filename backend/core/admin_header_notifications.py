@@ -18,7 +18,8 @@ from tutors.documents import TutorApplication
 # source list briefly removes several Atlas round trips on page navigation,
 # while keeping notifications fresh enough for an admin dashboard.
 NOTIFICATION_CACHE_KEY = 'admin-header-notification-items:v1'
-NOTIFICATION_CACHE_SECONDS = 30
+NOTIFICATION_CACHE_SECONDS = 10
+NOTIFICATION_ITEM_LIMIT = 12
 
 
 def _as_utc(value):
@@ -109,7 +110,7 @@ def _notification_items():
         entries,
         key=lambda item: _as_utc(item['created_at']) or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
-    )[:6]
+    )[:NOTIFICATION_ITEM_LIMIT]
     cache.set(NOTIFICATION_CACHE_KEY, items, NOTIFICATION_CACHE_SECONDS)
     return [dict(item) for item in items]
 
@@ -126,12 +127,52 @@ def admin_header_notifications(request):
         for item in items:
             item['relative_time'] = _relative_time(item['created_at'], now)
             item['is_unread'] = read_at is None or (_as_utc(item['created_at']) or now) > read_at
+        unread_count = _unread_notification_count(read_at)
         return {
             'admin_notifications': items,
-            'admin_unread_notification_count': sum(item['is_unread'] for item in items),
+            'admin_unread_notification_count': unread_count,
+            'admin_unread_notification_label': '99+' if unread_count > 99 else str(unread_count),
         }
     except PyMongoError:
         return {'admin_notifications': [], 'admin_unread_notification_count': 0}
+
+
+def _unread_notification_count(read_at):
+    """Count every new actionable record, not only the menu preview rows."""
+    created_filter = {'created_at__gt': read_at} if read_at is not None else {}
+    return sum((
+        TutorApplication.objects(status='pending', **created_filter).count(),
+        LearningRequest.objects(status='pending', **created_filter).count(),
+        Contact.objects(status='new', **created_filter).count(),
+        Message.objects(is_read=False, **created_filter).count(),
+        AdminNotification.objects(**created_filter).count(),
+    ))
+
+
+def admin_notifications_live(request):
+    """Small polling payload used by every Admin page without a full reload."""
+    if request.method != 'GET':
+        return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
+    context = admin_header_notifications(request)
+    admin = getattr(request, 'admin_account', None)
+    if admin is None or admin.status != Admin.STATUS_ACTIVE:
+        return JsonResponse({'ok': False, 'message': 'Phiên đăng nhập không hợp lệ.'}, status=403)
+    count = context['admin_unread_notification_count']
+    return JsonResponse({
+        'ok': True,
+        'count': count,
+        'count_label': '99+' if count > 99 else str(count),
+        'summary': f'Bạn có {"99+" if count > 99 else count} thông báo mới' if count else 'Bạn không có thông báo mới',
+        'new_contact_count': Contact.objects(status='new').count(),
+        'items': [{
+            'title': item['title'],
+            'message': item['message'],
+            'relative_time': item['relative_time'],
+            'url': item['url'],
+            'icon': item['icon'],
+            'is_unread': item['is_unread'],
+        } for item in context['admin_notifications']],
+    })
 
 
 def mark_admin_notifications_read(request):

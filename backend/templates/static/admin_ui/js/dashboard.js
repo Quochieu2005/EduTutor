@@ -23,6 +23,8 @@
 	const userMenu = document.querySelector('.admin-user-menu');
 	const notificationMenu = document.querySelector('[data-notification-menu]');
 	const markNotificationsRead = document.querySelector('[data-mark-notifications-read]');
+	const notificationList = notificationMenu?.querySelector('.admin-notification-menu__list');
+	const contactLink = document.querySelector('[data-live-contact-link]');
 	const viewAllNotifications = document.querySelector('[data-view-all-notifications]');
 	const settingsToggle = document.querySelector('[data-settings-not-used]');
 	let settingsSubmenu = document.querySelector('[data-collapsible-menu]');
@@ -227,6 +229,99 @@
 		if (summary) summary.textContent = 'Bạn không có thông báo mới';
 		if (markNotificationsRead) markNotificationsRead.hidden = true;
 	};
+
+	const notificationIcon = (kind) => {
+		if (kind === 'approval') return '<path d="m5 12 4 4L19 6"></path>';
+		if (kind === 'request') return '<circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4M8 11h6M11 8v6"></path>';
+		if (kind === 'payment') return '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18M8 15h4"></path>';
+		return '<path d="M20 11a8 8 0 0 1-8 8H5l-2 2V11a8 8 0 0 1 8-8h1a8 8 0 0 1 8 8Z"></path><path d="M8 11h.01M12 11h.01M16 11h.01"></path>';
+	};
+
+	const renderLiveNotifications = (payload) => {
+		const count = notificationMenu?.querySelector('[data-notification-count]');
+		if (count) {
+			count.textContent = payload.count_label;
+			count.hidden = payload.count === 0;
+		}
+		const summary = notificationMenu?.querySelector('[data-notification-summary]');
+		if (summary) summary.textContent = payload.summary;
+		if (markNotificationsRead) markNotificationsRead.hidden = payload.count === 0;
+
+		if (notificationList) {
+			notificationList.replaceChildren();
+			if (!payload.items.length) {
+				const empty = document.createElement('p');
+				empty.className = 'admin-notification-menu__empty';
+				empty.textContent = 'Chưa có thông báo cần xử lý.';
+				notificationList.append(empty);
+			} else {
+				payload.items.forEach((item) => {
+					const link = document.createElement('a');
+					link.className = `admin-notification-menu__item${item.is_unread ? ' is-unread' : ''}`;
+					link.href = item.url;
+					const icon = document.createElement('span');
+					icon.className = 'admin-notification-menu__icon';
+					icon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${notificationIcon(item.icon)}</svg>`;
+					const body = document.createElement('span');
+					const title = document.createElement('strong');
+					title.textContent = item.title;
+					const message = document.createElement('span');
+					message.className = 'admin-notification-menu__message';
+					message.textContent = item.message;
+					const time = document.createElement('time');
+					time.textContent = item.relative_time;
+					body.append(title, message, time);
+					link.append(icon, body);
+					notificationList.append(link);
+				});
+			}
+		}
+
+		if (contactLink) {
+			let badge = contactLink.querySelector('[data-live-contact-count]');
+			if (payload.new_contact_count && !badge) {
+				badge = document.createElement('b');
+				badge.dataset.liveContactCount = '';
+				contactLink.append(badge);
+			}
+			if (badge) {
+				badge.textContent = payload.new_contact_count > 99 ? '99+' : String(payload.new_contact_count);
+				badge.hidden = payload.new_contact_count === 0;
+				badge.setAttribute('aria-label', `${payload.new_contact_count} liên hệ mới`);
+			}
+		}
+	};
+
+	let notificationRefreshPending = false;
+	const refreshNotifications = async () => {
+		const endpoint = notificationMenu?.dataset.liveUrl;
+		if (!endpoint || notificationRefreshPending || document.hidden) return;
+		notificationRefreshPending = true;
+		try {
+			const response = await fetch(endpoint, {
+				headers: { 'X-Requested-With': 'XMLHttpRequest' },
+				credentials: 'same-origin',
+				cache: 'no-store',
+			});
+			if (!response.ok) return;
+			const payload = await response.json();
+			if (payload.ok) renderLiveNotifications(payload);
+		} catch {
+			// A temporary network failure must not interrupt Admin work.
+		} finally {
+			notificationRefreshPending = false;
+		}
+	};
+
+	if (notificationMenu) {
+		window.setTimeout(refreshNotifications, 1500);
+		window.setInterval(refreshNotifications, 15000);
+		window.addEventListener('focus', refreshNotifications);
+		document.addEventListener('visibilitychange', refreshNotifications);
+		notificationMenu.addEventListener('toggle', () => {
+			if (notificationMenu.open) refreshNotifications();
+		});
+	}
 
 	markNotificationsRead?.addEventListener('click', async () => {
 		const endpoint = notificationMenu?.dataset.markReadUrl;

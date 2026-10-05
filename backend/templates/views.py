@@ -1432,6 +1432,12 @@ def _tutor_redirect(request, message, *, error=False):
     return redirect('management-page', module='tutors')
 
 
+def _random_tutor_password(length=12):
+    """Generate a one-time password without ambiguous characters."""
+    alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
 def _tutor_form_values(request, tutor=None):
     name = request.POST.get('name', '').strip()
     email = request.POST.get('email', '').strip().lower()
@@ -1440,21 +1446,12 @@ def _tutor_form_values(request, tutor=None):
     ward_id = request.POST.get('ward_id', '').strip()
     teaching_mode = request.POST.get('teaching_mode', '').strip().lower()
     status = request.POST.get('status', Tutor.STATUS_ACTIVE).strip().lower()
-    # Accounts created from the admin form receive the requested initial
-    # password even if a client submits the form without its prefilled value.
-    password = request.POST.get('password', '') or ('123456789' if tutor is None else '')
     if not all((name, email, subject_id, province_id, ward_id)):
         raise ValueError('Họ tên, email, môn dạy và khu vực dạy không được để trống.')
     if teaching_mode not in ('online', 'offline', 'both'):
         raise ValueError('Hình thức dạy không hợp lệ.')
     if status not in Tutor.STATUS_CHOICES:
         raise ValueError('Trạng thái gia sư chỉ có thể là active hoặc inactive.')
-    if tutor is None and not password:
-        raise ValueError('Mật khẩu đăng nhập là bắt buộc khi tạo gia sư.')
-    if password and len(password) < 8:
-        raise ValueError('Mật khẩu phải có ít nhất 8 ký tự.')
-    if password and len(password.encode('utf-8')) > 72:
-        raise ValueError('Mật khẩu không được vượt quá 72 byte.')
     email_query = Tutor.objects(email=email)
     if tutor:
         email_query = email_query.filter(id__ne=tutor.id)
@@ -1487,7 +1484,7 @@ def _tutor_form_values(request, tutor=None):
         'education_level': request.POST.get('education_level', '').strip() or None,
         'experience_years': _optional_nonnegative_int(request.POST.get('experience_years', '0'), 'Số năm kinh nghiệm') or 0,
         'hourly_rate_min': minimum, 'hourly_rate_max': maximum, 'teaching_mode': teaching_mode,
-        'status': status, 'is_verified': True, 'password': password, 'subject': subject,
+        'status': status, 'is_verified': True, 'subject': subject,
         'province': province, 'ward': ward,
         'availability_slots': availability_slots,
         'subject_level': request.POST.get('subject_level', '').strip() or None,
@@ -1516,10 +1513,11 @@ def tutor_create(request):
     try:
         values = _tutor_form_values(request)
         assert_email_available(values['email'])
+        temporary_password = _random_tutor_password()
         tutor = Tutor(slug=_catalogue_slug(Tutor, values['name'], 'tutor'))
         for field in ('name', 'email', 'phone', 'headline', 'bio', 'education_level', 'experience_years', 'hourly_rate_min', 'hourly_rate_max', 'teaching_mode', 'status', 'is_verified'):
             setattr(tutor, field, values[field])
-        tutor.set_password(values['password'])
+        tutor.set_password(temporary_password)
         tutor.must_change_password = True
         if values['avatar_upload']:
             asset = upload_tutor_avatar(values['avatar_upload'], tutor.slug)
@@ -1536,7 +1534,7 @@ def tutor_create(request):
                 f'Xin chào {tutor.name},\n\n'
                 'Tài khoản gia sư EduTutor của bạn đã được tạo.\n'
                 f'Email đăng nhập: {tutor.email}\n'
-                f'Mật khẩu tạm thời: {values["password"]}\n\n'
+                f'Mật khẩu tạm thời: {temporary_password}\n\n'
                 'Bạn có thể đăng nhập bằng mật khẩu này. '
                 'Hệ thống sẽ yêu cầu bạn đổi mật khẩu để bảo mật tài khoản.\n\n'
                 'Trân trọng,\nEduTutor'
@@ -1567,10 +1565,6 @@ def tutor_edit(request, slug):
         old_public_id = tutor.avatar_public_id
         for field in ('name', 'email', 'phone', 'headline', 'bio', 'education_level', 'experience_years', 'hourly_rate_min', 'hourly_rate_max', 'teaching_mode', 'status', 'is_verified'):
             setattr(tutor, field, values[field])
-        if values['password']:
-            tutor.set_password(values['password'])
-            tutor.must_change_password = True
-            tutor.token_version = (tutor.token_version or 1) + 1
         if values['avatar_upload']:
             asset = upload_tutor_avatar(values['avatar_upload'], tutor.slug)
             tutor.avatar, tutor.avatar_public_id = asset['secure_url'], asset['public_id']
@@ -1603,7 +1597,6 @@ def tutor_send_credentials(request):
     if len(tutors) != len(set(slugs)):
         return JsonResponse({'ok': False, 'message': 'Có gia sư không còn tồn tại. Vui lòng tải lại trang.'}, status=404)
 
-    alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
     sent_count = 0
     failed_names = []
     # Open SMTP once for the whole selection. The old ``send_mail`` call opened
@@ -1613,7 +1606,7 @@ def tutor_send_credentials(request):
     try:
         connection.open()
         for tutor in tutors:
-            temporary_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+            temporary_password = _random_tutor_password()
             try:
                 EmailMessage(
                     subject='Thông tin đăng nhập tài khoản gia sư EduTutor',
@@ -2199,11 +2192,6 @@ def management_page(request, module):
             {'name': 'cv_file', 'label': 'Tự động điền từ CV', 'type': 'cv_extract', 'accept': '.pdf,.docx', 'extract_url': reverse('tutor-extract-cv')},
             {'name': 'name', 'label': 'Họ và tên', 'type': 'text', 'placeholder': 'Họ tên gia sư'},
             {'name': 'email', 'label': 'Email', 'type': 'email', 'placeholder': 'email@example.com'},
-            {
-                'name': 'password', 'label': 'Mật khẩu đăng nhập', 'type': 'password',
-                'placeholder': 'Tối thiểu 8 ký tự; để trống khi không đổi',
-                'value': '123456789', 'required': False,
-            },
             {'name': 'phone', 'label': 'Số điện thoại', 'type': 'tel', 'placeholder': 'Không bắt buộc', 'required': False},
             {'name': 'avatar', 'label': 'Ảnh đại diện', 'type': 'file', 'accept': 'image/jpeg,image/png,image/webp,image/gif', 'required': False},
             {'name': 'headline', 'label': 'Tiêu đề CV', 'type': 'text', 'placeholder': 'Ví dụ: Gia sư Toán THPT · 5 năm kinh nghiệm', 'required': False},

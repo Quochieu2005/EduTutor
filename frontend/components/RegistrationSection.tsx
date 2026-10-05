@@ -11,7 +11,7 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { edututorApi, type Subject } from "@/lib/edututor-api";
-import { useEduUser } from "@/lib/auth";
+import { promoteAuthSessionToStudent } from "@/lib/auth-session";
 import { toast } from "@/lib/toast";
 
 const GRADE_OPTIONS = [
@@ -38,6 +38,7 @@ export function RegistrationSection() {
     phoneNumber: "",
     grade: "",
     subjectId: "",
+    teachingMode: "both" as "online" | "offline" | "both",
     provinceId: "",
     wardId: "",
     notes: "",
@@ -49,8 +50,6 @@ export function RegistrationSection() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [provinces, setProvinces] = useState<Array<{ id: number; slug: string; name: string }>>([]);
   const [wards, setWards] = useState<Array<{ id: number; slug: string; name: string; type: string }>>([]);
-  const { isSignedIn } = useEduUser();
-
   useEffect(() => {
     Promise.all([edututorApi.subjects({ page_size: 50 }), edututorApi.provinces()])
       .then(([page, areas]) => {
@@ -93,8 +92,8 @@ export function RegistrationSection() {
     if (!formData.subjectId) {
       err.subject = "Vui lòng chọn môn học cần gia sư.";
     }
-    if (isSignedIn && !formData.provinceId) err.province = "Vui lòng chọn tỉnh/thành.";
-    if (isSignedIn && !formData.wardId) err.ward = "Vui lòng chọn xã/phường.";
+    if (formData.teachingMode !== "online" && !formData.provinceId) err.province = "Vui lòng chọn tỉnh/thành.";
+    if (formData.teachingMode !== "online" && !formData.wardId) err.ward = "Vui lòng chọn xã/phường.";
     setErrors(err);
     return Object.keys(err).length === 0;
   };
@@ -107,38 +106,31 @@ export function RegistrationSection() {
 
     try {
       const selectedSubject = subjects.find((subject) => String(subject.id) === formData.subjectId);
-      if (isSignedIn) {
-        const province = provinces.find((item) => String(item.id) === formData.provinceId);
-        await edututorApi.createTutorRequest({
-          subject_id: Number(formData.subjectId),
-          province_id: Number(formData.provinceId),
-          ward_id: Number(formData.wardId),
-          title: `Tìm gia sư ${selectedSubject?.name ?? ""} ${formData.grade}`,
-          description: [`Nhu cầu học ${selectedSubject?.name ?? ""} cho ${formData.grade}.`, formData.notes.trim(), `Khu vực: ${province?.name ?? ""}`].filter(Boolean).join(" "),
-          grade: formData.grade,
-        });
-      } else {
-        await edututorApi.sendContact({
-          parent_name: formData.parentName.trim(),
-          email: formData.email.trim(),
-          phone: formData.phoneNumber.trim(),
-          grade: formData.grade,
-          subject_id: Number(formData.subjectId),
-          needs_description: [
-            `Nhu cầu học thử ${selectedSubject?.name ?? ""} cho ${formData.grade}.`,
-            formData.notes.trim(),
-          ].filter(Boolean).join(" "),
-        });
-      }
+      await edututorApi.sendContact({
+        parent_name: formData.parentName.trim(),
+        email: formData.email.trim(),
+        phone: formData.phoneNumber.trim(),
+        grade: formData.grade,
+        subject_id: Number(formData.subjectId),
+        province_id: formData.teachingMode === "online" ? null : Number(formData.provinceId),
+        ward_id: formData.teachingMode === "online" ? null : Number(formData.wardId),
+        teaching_mode: formData.teachingMode,
+        needs_description: [
+          `Nhu cầu học thử ${selectedSubject?.name ?? ""} cho ${formData.grade}.`,
+          formData.notes.trim(),
+        ].filter(Boolean).join(" "),
+      });
 
+      promoteAuthSessionToStudent();
       setSubmitSuccess(true);
-      toast.success(isSignedIn ? "Đã đăng yêu cầu tìm gia sư. Gia sư phù hợp có thể gửi đề nghị dạy." : "Đã gửi yêu cầu tư vấn thành công. EduTutor sẽ sớm liên hệ với bạn.");
+      toast.success("Đã gửi yêu cầu tư vấn thành công. EduTutor sẽ sớm liên hệ với bạn.");
       setFormData({
         parentName: "",
         email: "",
         phoneNumber: "",
         grade: "",
         subjectId: "",
+        teachingMode: "both",
         provinceId: "",
         wardId: "",
         notes: "",
@@ -336,45 +328,64 @@ export function RegistrationSection() {
                   </div>
                 </div>
 
-                {isSignedIn && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="teachingMode" className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Hình thức học <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    id="teachingMode"
+                    value={formData.teachingMode}
+                    onChange={(e) => {
+                      const teachingMode = e.target.value as "online" | "offline" | "both";
+                      setFormData((current) => ({ ...current, teachingMode, ...(teachingMode === "online" ? { provinceId: "", wardId: "" } : {}) }));
+                      if (teachingMode === "online") setWards([]);
+                    }}
+                    className="w-full p-3 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="both">Online và trực tiếp</option>
+                    <option value="online">Chỉ học online</option>
+                    <option value="offline">Chỉ học trực tiếp</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="requestProvince" className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Tỉnh/thành <span className="text-rose-500">*</span>
+                        Tỉnh/thành {formData.teachingMode !== "online" && <span className="text-rose-500">*</span>}
                       </label>
                       <select
                         id="requestProvince"
                         value={formData.provinceId}
+                        disabled={formData.teachingMode === "online"}
                         onChange={(e) => {
                           const value = e.target.value;
                           setFormData({ ...formData, provinceId: value, wardId: "" });
                           void loadWards(value);
                         }}
-                        className="w-full p-3 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        className="w-full p-3 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                       >
-                        <option value="">Chọn tỉnh/thành</option>
+                        <option value="">{formData.teachingMode === "online" ? "Không áp dụng khi học online" : "Chọn tỉnh/thành"}</option>
                         {provinces.map((province) => <option key={province.id} value={province.id}>{province.name}</option>)}
                       </select>
                       {errors.province && <p className="text-xs text-rose-600 mt-1 font-medium">{errors.province}</p>}
                     </div>
                     <div>
                       <label htmlFor="requestWard" className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Xã/phường <span className="text-rose-500">*</span>
+                        Xã/phường {formData.teachingMode !== "online" && <span className="text-rose-500">*</span>}
                       </label>
                       <select
                         id="requestWard"
                         value={formData.wardId}
                         onChange={(e) => setFormData({ ...formData, wardId: e.target.value })}
-                        disabled={!formData.provinceId || wards.length === 0}
-                        className="w-full p-3 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+                        disabled={formData.teachingMode === "online" || !formData.provinceId || wards.length === 0}
+                        className="w-full p-3 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                       >
-                        <option value="">Chọn xã/phường</option>
+                        <option value="">{formData.teachingMode === "online" ? "Không áp dụng khi học online" : "Chọn xã/phường"}</option>
                         {wards.map((ward) => <option key={ward.id} value={ward.id}>{ward.name}</option>)}
                       </select>
                       {errors.ward && <p className="text-xs text-rose-600 mt-1 font-medium">{errors.ward}</p>}
                     </div>
-                  </div>
-                )}
+                </div>
 
                 {/* Ghi chú thêm */}
                 <div>
