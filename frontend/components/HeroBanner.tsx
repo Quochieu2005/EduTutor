@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { edututorApi, type Banner } from "@/lib/edututor-api";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 import {
   TeamOutlined,
   ClockCircleOutlined,
@@ -39,6 +40,7 @@ const BENEFIT_CARDS: BenefitCard[] = [
 ];
 
 export function HeroBanner() {
+  const apiRevision = useLiveApiRevision();
   const [banner, setBanner] = useState<Banner | null>(null);
   const [isLoadingBanner, setIsLoadingBanner] = useState(true);
 
@@ -55,7 +57,7 @@ export function HeroBanner() {
         if (isCurrent) setIsLoadingBanner(false);
       });
     return () => { isCurrent = false; };
-  }, []);
+  }, [apiRevision]);
 
   const bannerContent = banner ? (
     <div className="relative w-full aspect-[16/7] sm:aspect-[21/9] min-h-[260px] sm:min-h-[380px] lg:min-h-[460px]">

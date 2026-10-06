@@ -31,6 +31,7 @@ import { edututorApi } from "@/lib/edututor-api";
 import { useEduUser } from "@/lib/auth";
 import { getAuthSession, promoteAuthSessionToStudent } from "@/lib/auth-session";
 import { apiErrorMessage } from "@/lib/api";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 interface TutorProfileModalProps {
   tutor: Tutor | null;
@@ -61,6 +62,7 @@ export function TutorProfileModal({
   onClose,
   triggerElement,
 }: TutorProfileModalProps) {
+  const apiRevision = useLiveApiRevision();
   const { isSignedIn, user } = useEduUser();
   const modalRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<"profile" | "hire" | "consult">("profile");
@@ -109,7 +111,7 @@ export function TutorProfileModal({
         if (current) setAvailabilityLoading(false);
       });
     return () => { current = false; };
-  }, [isOpen, tutor]);
+  }, [apiRevision, isOpen, tutor]);
 
   useEffect(() => {
     // Tutors and Admins do not own a student/parent account profile. Avoid

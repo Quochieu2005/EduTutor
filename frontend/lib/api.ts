@@ -145,6 +145,8 @@ function firstErrorText(value: unknown): string | null {
 }
 
 export function apiErrorMessage(error: unknown, status?: number): string {
+  if (axios.isAxiosError(error) && error.code === "ECONNABORTED")
+    return "Máy chủ phản hồi quá chậm. Yêu cầu có thể đã được lưu; vui lòng kiểm tra mục yêu cầu trước khi gửi lại.";
   if (status === 401)
     return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
   if (status === 403) return "Bạn không có quyền thực hiện thao tác này.";

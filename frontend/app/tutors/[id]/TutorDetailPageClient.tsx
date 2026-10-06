@@ -5,8 +5,10 @@ import type { Tutor, TutorOpenClass } from "@/lib/presentation-models";
 import { edututorApi } from "@/lib/edututor-api";
 import { toTutorPresentation } from "@/lib/tutor-presenter";
 import { TutorDetailClient } from "./TutorDetailClient";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 export function TutorDetailPageClient({ slug }: { slug: string }) {
+  const apiRevision = useLiveApiRevision();
   const [tutor, setTutor] = useState<Tutor | null>(null);
   const [error, setError] = useState(false);
 
@@ -20,7 +22,7 @@ export function TutorDetailPageClient({ slug }: { slug: string }) {
         if (isCurrent) setError(true);
       });
     return () => { isCurrent = false; };
-  }, [slug]);
+  }, [apiRevision, slug]);
 
   if (error) {
     return <main className="mx-auto min-h-[50vh] max-w-4xl px-4 py-16 text-center text-sm text-slate-600">Không tìm thấy hồ sơ gia sư hoặc dữ liệu hiện chưa sẵn sàng.</main>;

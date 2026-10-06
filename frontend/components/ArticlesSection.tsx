@@ -8,6 +8,7 @@ import {
   BookOutlined,
 } from "@ant-design/icons";
 import { edututorApi } from "@/lib/edututor-api";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 interface Article {
   id: string;
@@ -64,6 +65,7 @@ Tùy vào mục tiêu cụ thể và tính cách của con, trung tâm EduTutor 
 ];
 
 export function ArticlesSection() {
+  const apiRevision = useLiveApiRevision();
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [showAllArticles, setShowAllArticles] = useState(false);
   const [articles, setArticles] = useState<Article[]>(ARTICLES);
@@ -82,7 +84,7 @@ export function ArticlesSection() {
     }).catch(() => {
       // Keep local editorial content readable if the public API is temporarily unavailable.
     });
-  }, []);
+  }, [apiRevision]);
 
   const openArticle = async (article: Article) => {
     setSelectedArticle(article);

@@ -139,9 +139,13 @@ function invalidatePublicCache(pathPrefix: string) {
   }
 }
 
+export function invalidatePublicApiCache() {
+  invalidatePublicCache("");
+}
+
 // Writes can affect cards, counters, details, and filter options elsewhere.
 // Clear this small cache after every successful mutation to keep views live.
-registerApiMutationHandler(() => invalidatePublicCache(""));
+registerApiMutationHandler(invalidatePublicApiCache);
 
 function getKey(path: string, params?: Record<string, unknown>) {
   const normalized = params
@@ -236,7 +240,11 @@ export const edututorApi = {
   async lessons() { return page(await dedupedApiGet("/v1/lessons/")); },
   async createLesson(payload: Record<string, unknown>) { return (await api.post("/v1/lessons/", payload)).data; },
   async inviteTutor(slug: string, payload: { contact_name: string; contact_phone: string; student_name?: string; grade_subject?: string; message?: string }) {
-    return (await api.post<{ id: number; status: string; email_sent: boolean; message: string }>(`/v1/lessons/invite/${encodeURIComponent(slug)}/`, payload)).data;
+    return (await api.post<{ id: number; status: string; email_sent: boolean; message: string }>(
+      `/v1/lessons/invite/${encodeURIComponent(slug)}/`,
+      payload,
+      { timeout: 30_000 },
+    )).data;
   },
   async updateLessonStatus(id: number | string, status: string) {
     return (await api.patch(`/v1/lessons/${id}/`, { status }, {

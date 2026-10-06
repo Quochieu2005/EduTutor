@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { edututorApi, type TutorJob } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100";
@@ -54,6 +55,7 @@ function FileField({
 }
 
 export default function RecruitmentJobDetailClient({ slug }: { slug: string }) {
+  const apiRevision = useLiveApiRevision();
   const { user } = useEduUser();
   const [job, setJob] = useState<TutorJob | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,7 +87,7 @@ export default function RecruitmentJobDetailClient({ slug }: { slug: string }) {
         if (active) setIsLoading(false);
       });
     return () => { active = false; };
-  }, [slug]);
+  }, [apiRevision, slug]);
 
   useEffect(() => {
     if (!user) return;

@@ -8,6 +8,7 @@ import {
   CalendarOutlined,
 } from "@ant-design/icons";
 import { edututorApi, type BlogPost } from "@/lib/edututor-api";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 function formatDate(value: string | null) {
   if (!value) return "Mới cập nhật";
@@ -25,6 +26,7 @@ function blogHref(post: BlogPost) {
 
 /** Bài viết xuất bản từ API Blog; không dùng dữ liệu mẫu trên trang chủ. */
 export function BlogSection() {
+  const apiRevision = useLiveApiRevision();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -43,7 +45,7 @@ export function BlogSection() {
       });
 
     return () => { isCurrent = false; };
-  }, []);
+  }, [apiRevision]);
 
   return (
     <section id="blog" className="border-t border-blue-50 bg-slate-50 py-16 sm:py-24">
