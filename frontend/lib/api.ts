@@ -53,6 +53,21 @@ export const api = axios.create({
 });
 
 const inFlightApiGets = new Map<string, Promise<unknown>>();
+export const API_DATA_CHANGED_EVENT = "edututor:api-data-changed";
+
+export type ApiMutationDetail = {
+  method: string;
+  url: string;
+};
+
+const apiMutationHandlers = new Set<(detail: ApiMutationDetail) => void>();
+
+export function registerApiMutationHandler(
+  handler: (detail: ApiMutationDetail) => void,
+) {
+  apiMutationHandlers.add(handler);
+  return () => apiMutationHandlers.delete(handler);
+}
 
 /**
  * Coalesce identical GETs that overlap during hydration, React Strict Mode,
@@ -147,7 +162,22 @@ export function apiErrorMessage(error: unknown, status?: number): string {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = response.config.method?.toUpperCase() ?? "GET";
+    if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+      const detail = { method, url: response.config.url ?? "" };
+      // A successful write makes overlapping reads and screen snapshots stale.
+      // Notify mounted views immediately so users never need to press F5.
+      inFlightApiGets.clear();
+      apiMutationHandlers.forEach((handler) => handler(detail));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent<ApiMutationDetail>(API_DATA_CHANGED_EVENT, { detail }),
+        );
+      }
+    }
+    return response;
+  },
   async (error) => {
     const original = error.config as EduTutorRequestConfig | undefined;
     const status = error.response?.status;

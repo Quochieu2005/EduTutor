@@ -4,7 +4,12 @@
  * Không hard-code host: Axios `api` lấy NEXT_PUBLIC_API_URL, nên local dùng
  * Django localhost còn Vercel dùng Render chỉ bằng biến môi trường.
  */
-import { api, dedupedApiGet, type EduTutorRequestConfig } from "./api";
+import {
+  api,
+  dedupedApiGet,
+  registerApiMutationHandler,
+  type EduTutorRequestConfig,
+} from "./api";
 
 export type Page<T> = { count: number; next: string | null; previous: string | null; results: T[] };
 export type Banner = { id: number; slug: string | null; title: string | null; image: string; link_url: string | null; sort_order: number };
@@ -134,6 +139,10 @@ function invalidatePublicCache(pathPrefix: string) {
   }
 }
 
+// Writes can affect cards, counters, details, and filter options elsewhere.
+// Clear this small cache after every successful mutation to keep views live.
+registerApiMutationHandler(() => invalidatePublicCache(""));
+
 function getKey(path: string, params?: Record<string, unknown>) {
   const normalized = params
     ? Object.entries(params)
@@ -157,13 +166,8 @@ async function cachedGet<T>(
     publicGetCache.set(key, stored);
     return stored.value as T;
   }
-  // Render cached public data immediately after F5, then refresh it silently.
-  // The next focus/poll receives the fresh value without showing a loader.
-  const staleWindowMs = Math.max(ttlMs * 12, 60_000);
-  if (stored?.expiresAt && stored.expiresAt + staleWindowMs > now) {
-    void refreshPublicGet<T>(key, path, params, ttlMs).catch(() => undefined);
-    return stored.value as T;
-  }
+  // Never return an expired snapshot while refreshing only storage in the
+  // background. That left React showing old data until a second F5.
   return refreshPublicGet<T>(key, path, params, ttlMs);
 }
 

@@ -8,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import { clearAuthSession, getAuthSession, saveAuthSession } from "@/lib/auth-session";
 import { edututorApi, type LessonSession, type Subject, type TutorAvailability, type TutorQuestion, type TutorSubjectChangeRequest } from "@/lib/edututor-api";
-import { apiErrorMessage, getLessons } from "@/lib/api";
+import { API_DATA_CHANGED_EVENT, apiErrorMessage, getLessons } from "@/lib/api";
 import type { LessonRequest, ScheduleProposalPayload } from "@/lib/types";
 import { toast } from "@/lib/toast";
 import { ScheduleProposalForm } from "@/components/lessons/ScheduleProposalForm";
@@ -167,10 +167,12 @@ export function TutorPortal() {
     // data current without making every open tutor tab hit the API 7-8 times a minute.
     const timer = window.setInterval(refreshWhenVisible, 20_000);
     window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", refreshWhenVisible);
+      window.removeEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, []);

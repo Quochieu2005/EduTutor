@@ -27,6 +27,7 @@ import { toClassPresentation } from "@/lib/class-presenter";
 import { getProvinceSlug, getSubjectSlug } from "@/lib/tutor-filter-mapping";
 import { toast } from "@/lib/toast";
 import { PaginationControls } from "@/components/PaginationControls";
+import { API_DATA_CHANGED_EVENT } from "@/lib/api";
 
 export function ClassesListContent({ recruitmentMode = false }: { recruitmentMode?: boolean } = {}) {
   // The two public boards intentionally use different JobPosting sources:
@@ -119,11 +120,13 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
       if (document.visibilityState === "visible") refreshOpenClasses();
     };
     window.addEventListener("focus", refreshOpenClasses);
+    window.addEventListener(API_DATA_CHANGED_EVENT, refreshOpenClasses);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     const timer = window.setInterval(refreshWhenVisible, 20_000);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", refreshOpenClasses);
+      window.removeEventListener(API_DATA_CHANGED_EVENT, refreshOpenClasses);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, []);
