@@ -126,6 +126,7 @@ api.interceptors.request.use((config) => {
 
 let refreshPromise: Promise<string | null> | null = null;
 let sessionExpiredToastShown = false;
+let lastApiErrorToast = { message: "", shownAt: 0 };
 
 function firstErrorText(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) return value.trim();
@@ -145,8 +146,12 @@ function firstErrorText(value: unknown): string | null {
 }
 
 export function apiErrorMessage(error: unknown, status?: number): string {
-  if (axios.isAxiosError(error) && error.code === "ECONNABORTED")
-    return "Máy chủ phản hồi quá chậm. Yêu cầu có thể đã được lưu; vui lòng kiểm tra mục yêu cầu trước khi gửi lại.";
+  if (axios.isAxiosError(error) && error.code === "ECONNABORTED") {
+    const method = error.config?.method?.toUpperCase() ?? "GET";
+    return ["GET", "HEAD", "OPTIONS"].includes(method)
+      ? "Máy chủ phản hồi quá chậm. Dữ liệu sẽ tự tải lại khi kết nối ổn định."
+      : "Máy chủ phản hồi quá chậm. Yêu cầu có thể đã được lưu; vui lòng kiểm tra mục yêu cầu trước khi gửi lại.";
+  }
   if (status === 401)
     return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
   if (status === 403) return "Bạn không có quyền thực hiện thao tác này.";
@@ -161,6 +166,17 @@ export function apiErrorMessage(error: unknown, status?: number): string {
   const message = firstErrorText(responseData);
   if (message) return message;
   return "Không thể kết nối tới hệ thống. Vui lòng thử lại.";
+}
+
+function showApiErrorToast(error: unknown, status?: number) {
+  const message = apiErrorMessage(error, status);
+  const now = Date.now();
+  if (
+    lastApiErrorToast.message === message &&
+    now - lastApiErrorToast.shownAt < 5_000
+  ) return;
+  lastApiErrorToast = { message, shownAt: now };
+  toast.error(message);
 }
 
 api.interceptors.response.use(
@@ -186,10 +202,15 @@ api.interceptors.response.use(
     const clerkExchange =
       original?.url?.includes("/v1/accounts/clerk/exchange/") ?? false;
     const skipAuth = original?._edututorSkipAuth ?? false;
+    const method = original?.method?.toUpperCase() ?? "GET";
+    const isReadRequest = ["GET", "HEAD", "OPTIONS"].includes(method);
     const notify =
       typeof window !== "undefined" &&
       !clerkExchange &&
-      !original?._edututorSilentToast;
+      !original?._edututorSilentToast &&
+      // Read requests are rendered by each page's loading/error state. A
+      // global toast for every parallel GET caused four identical warnings.
+      (!isReadRequest || status === 401);
     if (
       clerkExchange ||
       skipAuth ||
@@ -199,14 +220,14 @@ api.interceptors.response.use(
       original._edututorRetried
     ) {
       if (notify && (status !== 401 || !sessionExpiredToastShown)) {
-        toast.error(apiErrorMessage(error, status));
+        showApiErrorToast(error, status);
         if (status === 401) sessionExpiredToastShown = true;
       }
       return Promise.reject(error);
     }
     const session = getAuthSession();
     if (!session?.refresh || original.url?.includes("/refresh/")) {
-      if (notify) toast.error(apiErrorMessage(error, status));
+      if (notify) showApiErrorToast(error, status);
       return Promise.reject(error);
     }
     original._edututorRetried = true;
@@ -242,7 +263,7 @@ api.interceptors.response.use(
     if (!access) {
       if (notify && !sessionExpiredToastShown) {
         sessionExpiredToastShown = true;
-        toast.error(apiErrorMessage(error, status));
+        showApiErrorToast(error, status);
       }
       return Promise.reject(error);
     }
