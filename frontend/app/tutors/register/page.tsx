@@ -8,8 +8,10 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { edututorApi, type Province, type Subject } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 export default function TutorRegisterPage() {
+  const apiRevision = useLiveApiRevision();
   const { isSignedIn, user } = useEduUser();
   const { openSignIn } = useEduClerk();
 
@@ -50,7 +52,7 @@ export default function TutorRegisterPage() {
       toast.error("Không tải được danh mục môn học và khu vực. Vui lòng thử lại.");
     });
     return () => { active = false; };
-  }, []);
+  }, [apiRevision]);
 
   useEffect(() => {
     if (!user) return;

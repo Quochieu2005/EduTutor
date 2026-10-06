@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 
 import { edututorApi, type Subject } from "@/lib/edututor-api";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 import { getAuthSession } from "@/lib/auth-session";
 import { TUTOR_CATEGORIES, type TutorCategoryItem } from "@/lib/tutor-filter-mapping";
 
@@ -121,6 +122,7 @@ async function loadAllSubjects() {
 }
 
 export function TutorCategories() {
+  const apiRevision = useLiveApiRevision();
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const isTutorAccount = mounted && getAuthSession()?.actorType === "tutor";
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -159,7 +161,7 @@ export function TutorCategories() {
       })
       .catch(() => undefined);
     return () => { isCurrent = false; };
-  }, []);
+  }, [apiRevision]);
 
   const categories = useMemo(() => subjects.map(toCategory), [subjects]);
   const carouselCategories = useMemo(

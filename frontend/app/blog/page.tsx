@@ -11,6 +11,7 @@ import {
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { edututorApi, type BlogCategory, type BlogPost, type BlogPostDetail } from "@/lib/edututor-api";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 function formatDate(value: string | null) {
   if (!value) return "Mới cập nhật";
@@ -18,6 +19,7 @@ function formatDate(value: string | null) {
 }
 
 function BlogContent() {
+  const apiRevision = useLiveApiRevision();
   const router = useRouter();
   const searchParams = useSearchParams();
   const paramCategory = searchParams.get("category") || "";
@@ -38,7 +40,7 @@ function BlogContent() {
         if (isCurrent) setCategoriesError(true);
       });
     return () => { isCurrent = false; };
-  }, []);
+  }, [apiRevision]);
 
   const selectedCategory = useMemo(
     () => categories.find((category) => category.slug === paramCategory)?.slug || "",
@@ -63,7 +65,7 @@ function BlogContent() {
         }
       });
     return () => { isCurrent = false; };
-  }, [selectedCategory]);
+  }, [apiRevision, selectedCategory]);
 
   const visiblePosts = loadedCategory === selectedCategory ? posts : [];
   const postsError = postsErrorCategory === selectedCategory;

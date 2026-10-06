@@ -70,6 +70,22 @@ class TutorInvitationCreateView(APIView):
         if student.phone != contact_phone:
             student.phone = contact_phone
             student.save()
+        # A slow/unconfigured SMTP connection used to make the browser time out
+        # after the request had already been saved. A retry then created a
+        # duplicate invitation. Return the pending request idempotently.
+        existing = LearningRequest.objects(
+            student=student,
+            tutor=tutor,
+            source='tutor_directory',
+            status='pending',
+        ).order_by('-created_at').first()
+        if existing is not None:
+            return Response({
+                'id': int(existing.id),
+                'status': existing.status,
+                'email_sent': False,
+                'message': 'Yêu cầu mời dạy này đã được lưu và đang chờ gia sư phản hồi.',
+            }, status=status.HTTP_200_OK)
         detail = ' | '.join(filter(None, [
             f"Người liên hệ: {values['contact_name'].strip()} - {contact_phone}",
             f"Học sinh: {values.get('student_name', '').strip()}" if values.get('student_name', '').strip() else '',
@@ -104,20 +120,31 @@ class TutorInvitationCreateView(APIView):
         ).save()
 
         email_sent = False
-        try:
-            email_sent = send_mail(
-                subject=f'EduTutor: Yêu cầu mời dạy mới từ {values["contact_name"].strip()}',
-                message=(
-                    f'Xin chào {tutor.name},\n\n'
-                    f'Bạn vừa nhận được một yêu cầu mời dạy trên EduTutor.\n'
-                    f'{detail}\n\n'
-                    f'Vui lòng đăng nhập EduTutor để xem và phản hồi yêu cầu #{record.id}.'
-                ),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[tutor.email], fail_silently=False,
-            ) > 0
-        except Exception:
-            logger.exception('Could not send tutor invitation email for request %s', record.id)
+        smtp_backend = settings.EMAIL_BACKEND.endswith('smtp.EmailBackend')
+        email_configured = (
+            not smtp_backend
+            or bool(settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD)
+        )
+        if email_configured and tutor.email:
+            try:
+                email_sent = send_mail(
+                    subject=f'EduTutor: Yêu cầu mời dạy mới từ {values["contact_name"].strip()}',
+                    message=(
+                        f'Xin chào {tutor.name},\n\n'
+                        f'Bạn vừa nhận được một yêu cầu mời dạy trên EduTutor.\n'
+                        f'{detail}\n\n'
+                        f'Vui lòng đăng nhập EduTutor để xem và phản hồi yêu cầu #{record.id}.'
+                    ),
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[tutor.email], fail_silently=False,
+                ) > 0
+            except Exception:
+                logger.exception('Could not send tutor invitation email for request %s', record.id)
+        elif smtp_backend:
+            logger.info(
+                'Tutor invitation %s saved without email because SMTP is not configured',
+                record.id,
+            )
 
         return Response({
             'id': int(record.id), 'status': record.status, 'email_sent': email_sent,

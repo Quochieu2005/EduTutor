@@ -14,6 +14,7 @@ import { getAuthSession, promoteAuthSessionToStudent } from "@/lib/auth-session"
 import { edututorApi, type Province, type Subject, type Ward } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
 import { apiErrorMessage } from "@/lib/api";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 const GRADE_OPTIONS = [
   "Lớp 1", "Lớp 2", "Lớp 3", "Lớp 4", "Lớp 5", "Lớp 6", "Lớp 7",
@@ -57,6 +58,7 @@ const initialForm: FormState = {
 };
 
 export function ClassRequestForm() {
+  const apiRevision = useLiveApiRevision();
   const { isSignedIn } = useEduUser();
   const { openSignIn } = useEduClerk();
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -77,7 +79,7 @@ export function ClassRequestForm() {
       })
       .catch(() => active && setError("Không tải được dữ liệu môn học hoặc khu vực. Hãy tải lại trang."));
     return () => { active = false; };
-  }, []);
+  }, [apiRevision]);
 
   const update = (key: keyof FormState, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));

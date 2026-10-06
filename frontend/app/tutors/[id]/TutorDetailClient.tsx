@@ -36,6 +36,7 @@ import { edututorApi, type TutorQuestion, type TutorReview } from "@/lib/edututo
 import { getAuthSession, promoteAuthSessionToStudent } from "@/lib/auth-session";
 import { toast } from "@/lib/toast";
 import { apiErrorMessage } from "@/lib/api";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 import {
   addEnrollmentRequest,
   getEnrollmentRequestsForUser,
@@ -64,6 +65,7 @@ const PERIODS: { key: "morning" | "afternoon" | "evening"; label: "Sáng" | "Chi
 ];
 
 export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClientProps) {
+  const apiRevision = useLiveApiRevision();
   const { isSignedIn, user } = useEduUser();
   const { openSignIn } = useEduClerk();
 
@@ -162,7 +164,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
         }
       });
     return () => { isCurrent = false; };
-  }, [tutor.id]);
+  }, [apiRevision, tutor.id]);
 
   useEffect(() => {
     let current = true;
@@ -178,7 +180,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
       if (current) setApiAvailability({});
     });
     return () => { current = false; };
-  }, [tutor.id]);
+  }, [apiRevision, tutor.id]);
 
   const isLoadingFeedback = feedbackLoadedTutorId !== tutor.id && feedbackErrorTutorId !== tutor.id;
   const visibleFeedbackError = feedbackErrorTutorId === tutor.id ? feedbackError : null;

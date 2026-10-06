@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LessonRequest, ScheduleProposalPayload } from "@/lib/types";
 import { edututorApi, type Province, type Ward } from "@/lib/edututor-api";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 type Props = {
   lesson: LessonRequest;
@@ -41,6 +42,7 @@ const localDate = (value: Date) => {
 };
 
 export function ScheduleProposalForm({ lesson, counterpartName, proposalRole, availability = lesson.tutorAvailability ?? [], onSubmit, onCancel }: Props) {
+  const apiRevision = useLiveApiRevision();
   const isCounterProposal = proposalRole !== "learner";
   const today = localDate(new Date());
   const latestDate = localDate(new Date(Date.now() + 31 * 24 * 60 * 60 * 1000));
@@ -61,7 +63,7 @@ export function ScheduleProposalForm({ lesson, counterpartName, proposalRole, av
     let active = true;
     edututorApi.provinces().then((items) => active && setProvinces(items)).catch(() => active && setError("Không tải được danh mục tỉnh/thành."));
     return () => { active = false; };
-  }, []);
+  }, [apiRevision]);
 
   useEffect(() => {
     const province = provinces.find((item) => String(item.id) === provinceId);

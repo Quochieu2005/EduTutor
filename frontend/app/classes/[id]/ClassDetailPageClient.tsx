@@ -6,8 +6,10 @@ import type { ClassListing } from "@/lib/presentation-models";
 import { edututorApi } from "@/lib/edututor-api";
 import { toClassPresentation } from "@/lib/class-presenter";
 import { ClassDetailClient } from "./ClassDetailClient";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 export function ClassDetailPageClient({ slug }: { slug: string }) {
+  const apiRevision = useLiveApiRevision();
   const router = useRouter();
   const [classItem, setClassItem] = useState<ClassListing | null>(null);
   const [error, setError] = useState(false);
@@ -31,7 +33,7 @@ export function ClassDetailPageClient({ slug }: { slug: string }) {
         if (isCurrent) setError(true);
       });
     return () => { isCurrent = false; };
-  }, [router, slug]);
+  }, [apiRevision, router, slug]);
 
   if (error) {
     return <main className="mx-auto min-h-[50vh] max-w-4xl px-4 py-16 text-center text-sm text-slate-600">Không tìm thấy yêu cầu tìm gia sư hoặc dữ liệu hiện chưa sẵn sàng.</main>;

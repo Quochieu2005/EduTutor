@@ -29,10 +29,12 @@ import { getProvinceSlug } from "@/lib/tutor-filter-mapping";
 import { toast } from "@/lib/toast";
 import { PaginationControls } from "@/components/PaginationControls";
 import { getAuthSession } from "@/lib/auth-session";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 const emptySubscribe = () => () => {};
 
 function TutorsListContent() {
+  const apiRevision = useLiveApiRevision();
   const router = useRouter();
   const searchParams = useSearchParams();
   // useSyncExternalStore supplies the same `false` snapshot during SSR and
@@ -109,7 +111,7 @@ function TutorsListContent() {
         if (isCurrent) setReferenceLoadError("Không thể tải môn học và khu vực từ Admin.");
       });
     return () => { isCurrent = false; };
-  }, []);
+  }, [apiRevision]);
 
   useEffect(() => {
     const provinceSlug = getProvinceSlug(filterCity);
@@ -126,7 +128,7 @@ function TutorsListContent() {
         if (isCurrent) setApiWardsState({ provinceSlug, wards: [] });
       });
     return () => { isCurrent = false; };
-  }, [filterCity]);
+  }, [apiRevision, filterCity]);
 
   const provinceSlug = getProvinceSlug(filterCity);
   const apiWards = apiWardsState.provinceSlug === provinceSlug ? apiWardsState.wards : [];
@@ -162,7 +164,7 @@ function TutorsListContent() {
     return () => {
       isCurrent = false;
     };
-  }, [paramCity, paramMode, paramSubject, paramWard]);
+  }, [apiRevision, paramCity, paramMode, paramSubject, paramWard]);
 
   const subjectOptions = apiSubjects;
   const provinceOptions = apiProvinces.map((province) => ({ value: province.name, label: province.name }));

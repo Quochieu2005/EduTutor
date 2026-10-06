@@ -8,6 +8,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { edututorApi } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 import type { ClassListing, ClassComment } from "@/lib/presentation-models";
 import {
   addEnrollmentRequest,
@@ -22,11 +23,15 @@ interface ClassDetailClientProps {
 }
 
 export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
+  const apiRevision = useLiveApiRevision();
   const { isSignedIn, user } = useEduUser();
   const { openSignIn } = useEduClerk();
   const actorType = user?.publicMetadata.role ?? null;
 
-  const [classItem] = useState<ClassListing>(initialClass);
+  // Keep API-driven class details live when the parent refreshes its snapshot.
+  // Storing the initial prop in state permanently made later API responses
+  // invisible until a full page reload.
+  const classItem = initialClass;
   const [isApplied, setIsApplied] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [applyNotification, setApplyNotification] = useState<string | null>(null);
@@ -115,7 +120,7 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
       })
       .catch(() => undefined);
     return () => { isCurrent = false; };
-  }, [actorType, classItem.id]);
+  }, [actorType, apiRevision, classItem.id]);
 
   // Tính toán số lượng slot và trạng thái lớp
   const tutorPhone = getTutorPhoneForClass(classItem);

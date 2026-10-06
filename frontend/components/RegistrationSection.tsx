@@ -13,6 +13,7 @@ import {
 import { edututorApi, type Subject } from "@/lib/edututor-api";
 import { promoteAuthSessionToStudent } from "@/lib/auth-session";
 import { toast } from "@/lib/toast";
+import { useLiveApiRevision } from "@/lib/use-live-api-revision";
 
 const GRADE_OPTIONS = [
   "Lớp 1",
@@ -32,6 +33,7 @@ const GRADE_OPTIONS = [
 ];
 
 export function RegistrationSection() {
+  const apiRevision = useLiveApiRevision();
   const [formData, setFormData] = useState({
     parentName: "",
     email: "",
@@ -57,7 +59,7 @@ export function RegistrationSection() {
         setProvinces(areas);
       })
       .catch(() => setErrors({ form: "Chưa tải được danh sách môn học. Vui lòng thử lại." }));
-  }, []);
+  }, [apiRevision]);
 
   const loadWards = async (provinceId: string) => {
     const province = provinces.find((item) => String(item.id) === provinceId);
