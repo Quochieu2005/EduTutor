@@ -81,17 +81,24 @@ export function dedupedApiGet<T = UntypedApiData>(
   url: string,
   config?: AxiosRequestConfig,
 ): Promise<T> {
-  const sessionKey = typeof window === "undefined"
-    ? "server"
-    : getAuthSession()?.access ?? "public";
-  const params = config?.params && typeof config.params === "object"
-    ? JSON.stringify(Object.entries(config.params as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
-    : "";
+  const sessionKey =
+    typeof window === "undefined"
+      ? "server"
+      : (getAuthSession()?.access ?? "public");
+  const params =
+    config?.params && typeof config.params === "object"
+      ? JSON.stringify(
+          Object.entries(config.params as Record<string, unknown>).sort(
+            ([a], [b]) => a.localeCompare(b),
+          ),
+        )
+      : "";
   const key = `${sessionKey}:${url}:${params}`;
   const pending = inFlightApiGets.get(key);
   if (pending) return pending as Promise<T>;
 
-  const request = api.get<T>(url, config)
+  const request = api
+    .get<T>(url, config)
     .then(({ data }) => data)
     .finally(() => inFlightApiGets.delete(key));
   inFlightApiGets.set(key, request);
@@ -126,6 +133,7 @@ api.interceptors.request.use((config) => {
 
 let refreshPromise: Promise<string | null> | null = null;
 let sessionExpiredToastShown = false;
+let lastApiErrorToast = { message: "", shownAt: 0 };
 
 function firstErrorText(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) return value.trim();
@@ -145,8 +153,12 @@ function firstErrorText(value: unknown): string | null {
 }
 
 export function apiErrorMessage(error: unknown, status?: number): string {
-  if (axios.isAxiosError(error) && error.code === "ECONNABORTED")
-    return "Máy chủ phản hồi quá chậm. Yêu cầu có thể đã được lưu; vui lòng kiểm tra mục yêu cầu trước khi gửi lại.";
+  if (axios.isAxiosError(error) && error.code === "ECONNABORTED") {
+    const method = error.config?.method?.toUpperCase() ?? "GET";
+    return ["GET", "HEAD", "OPTIONS"].includes(method)
+      ? "Máy chủ phản hồi quá chậm. Dữ liệu sẽ tự tải lại khi kết nối ổn định."
+      : "Máy chủ phản hồi quá chậm. Yêu cầu có thể đã được lưu; vui lòng kiểm tra mục yêu cầu trước khi gửi lại.";
+  }
   if (status === 401)
     return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
   if (status === 403) return "Bạn không có quyền thực hiện thao tác này.";
@@ -163,6 +175,18 @@ export function apiErrorMessage(error: unknown, status?: number): string {
   return "Không thể kết nối tới hệ thống. Vui lòng thử lại.";
 }
 
+function showApiErrorToast(error: unknown, status?: number) {
+  const message = apiErrorMessage(error, status);
+  const now = Date.now();
+  if (
+    lastApiErrorToast.message === message &&
+    now - lastApiErrorToast.shownAt < 5_000
+  )
+    return;
+  lastApiErrorToast = { message, shownAt: now };
+  toast.error(message);
+}
+
 api.interceptors.response.use(
   (response) => {
     const method = response.config.method?.toUpperCase() ?? "GET";
@@ -174,7 +198,9 @@ api.interceptors.response.use(
       apiMutationHandlers.forEach((handler) => handler(detail));
       if (typeof window !== "undefined") {
         window.dispatchEvent(
-          new CustomEvent<ApiMutationDetail>(API_DATA_CHANGED_EVENT, { detail }),
+          new CustomEvent<ApiMutationDetail>(API_DATA_CHANGED_EVENT, {
+            detail,
+          }),
         );
       }
     }
@@ -186,10 +212,15 @@ api.interceptors.response.use(
     const clerkExchange =
       original?.url?.includes("/v1/accounts/clerk/exchange/") ?? false;
     const skipAuth = original?._edututorSkipAuth ?? false;
+    const method = original?.method?.toUpperCase() ?? "GET";
+    const isReadRequest = ["GET", "HEAD", "OPTIONS"].includes(method);
     const notify =
       typeof window !== "undefined" &&
       !clerkExchange &&
-      !original?._edututorSilentToast;
+      !original?._edututorSilentToast &&
+      // Read requests are rendered by each page's loading/error state. A
+      // global toast for every parallel GET caused four identical warnings.
+      (!isReadRequest || status === 401);
     if (
       clerkExchange ||
       skipAuth ||
@@ -199,14 +230,14 @@ api.interceptors.response.use(
       original._edututorRetried
     ) {
       if (notify && (status !== 401 || !sessionExpiredToastShown)) {
-        toast.error(apiErrorMessage(error, status));
+        showApiErrorToast(error, status);
         if (status === 401) sessionExpiredToastShown = true;
       }
       return Promise.reject(error);
     }
     const session = getAuthSession();
     if (!session?.refresh || original.url?.includes("/refresh/")) {
-      if (notify) toast.error(apiErrorMessage(error, status));
+      if (notify) showApiErrorToast(error, status);
       return Promise.reject(error);
     }
     original._edututorRetried = true;
@@ -242,7 +273,7 @@ api.interceptors.response.use(
     if (!access) {
       if (notify && !sessionExpiredToastShown) {
         sessionExpiredToastShown = true;
-        toast.error(apiErrorMessage(error, status));
+        showApiErrorToast(error, status);
       }
       return Promise.reject(error);
     }
@@ -419,9 +450,7 @@ export async function proposeLessonSchedule(
     } as EduTutorRequestConfig)
   ).data;
 }
-export async function getPublishedTutorAvailability(
-  slug: string,
-): Promise<{
+export async function getPublishedTutorAvailability(slug: string): Promise<{
   tutor: { id: number; slug: string; name: string };
   slots: Array<{
     weekday: number;
