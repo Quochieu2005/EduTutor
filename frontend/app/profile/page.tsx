@@ -9,7 +9,7 @@ import { AUTH_SESSION_EVENT, clearAuthSession, getAuthSession, saveAuthSession, 
 import { edututorApi } from "@/lib/edututor-api";
 import type { LessonSession, PostedClassWithApplications, TutorAvailability } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
-import { getLessons, proposeLessonSchedule, updateLessonStatus } from "@/lib/api";
+import { API_DATA_CHANGED_EVENT, getLessons, proposeLessonSchedule, updateLessonStatus } from "@/lib/api";
 import type { LessonRequest, ScheduleProposalPayload } from "@/lib/types";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -151,10 +151,12 @@ export default function ProfilePage() {
     // deliberately light so many signed-in users do not overload the API.
     const timer = window.setInterval(refreshWhenVisible, 20_000);
     window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", refreshWhenVisible);
+      window.removeEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [refreshLearnerData, refreshPostedClasses]);
