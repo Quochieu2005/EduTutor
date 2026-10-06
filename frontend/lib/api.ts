@@ -81,17 +81,24 @@ export function dedupedApiGet<T = UntypedApiData>(
   url: string,
   config?: AxiosRequestConfig,
 ): Promise<T> {
-  const sessionKey = typeof window === "undefined"
-    ? "server"
-    : getAuthSession()?.access ?? "public";
-  const params = config?.params && typeof config.params === "object"
-    ? JSON.stringify(Object.entries(config.params as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
-    : "";
+  const sessionKey =
+    typeof window === "undefined"
+      ? "server"
+      : (getAuthSession()?.access ?? "public");
+  const params =
+    config?.params && typeof config.params === "object"
+      ? JSON.stringify(
+          Object.entries(config.params as Record<string, unknown>).sort(
+            ([a], [b]) => a.localeCompare(b),
+          ),
+        )
+      : "";
   const key = `${sessionKey}:${url}:${params}`;
   const pending = inFlightApiGets.get(key);
   if (pending) return pending as Promise<T>;
 
-  const request = api.get<T>(url, config)
+  const request = api
+    .get<T>(url, config)
     .then(({ data }) => data)
     .finally(() => inFlightApiGets.delete(key));
   inFlightApiGets.set(key, request);
@@ -174,7 +181,8 @@ function showApiErrorToast(error: unknown, status?: number) {
   if (
     lastApiErrorToast.message === message &&
     now - lastApiErrorToast.shownAt < 5_000
-  ) return;
+  )
+    return;
   lastApiErrorToast = { message, shownAt: now };
   toast.error(message);
 }
@@ -190,7 +198,9 @@ api.interceptors.response.use(
       apiMutationHandlers.forEach((handler) => handler(detail));
       if (typeof window !== "undefined") {
         window.dispatchEvent(
-          new CustomEvent<ApiMutationDetail>(API_DATA_CHANGED_EVENT, { detail }),
+          new CustomEvent<ApiMutationDetail>(API_DATA_CHANGED_EVENT, {
+            detail,
+          }),
         );
       }
     }
@@ -440,9 +450,7 @@ export async function proposeLessonSchedule(
     } as EduTutorRequestConfig)
   ).data;
 }
-export async function getPublishedTutorAvailability(
-  slug: string,
-): Promise<{
+export async function getPublishedTutorAvailability(slug: string): Promise<{
   tutor: { id: number; slug: string; name: string };
   slots: Array<{
     weekday: number;
