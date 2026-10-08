@@ -24,6 +24,7 @@ from api.v1.accounts.services import SocialTokenError, ensure_student_profile
 from core.admin_contacts import ADMIN_HEADER_NOTIFICATION_CACHE_KEY, NEW_CONTACT_COUNT_CACHE_KEY
 from core.documents import Banner, BlogCategory, BlogPost, Contact
 from tutors.documents import Province, Subject, Ward
+from api.v1.validation import SafeQuerySerializer
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class BlogDetailSerializer(BlogSerializer):
     content = serializers.CharField()
 
 
-class BlogQuerySerializer(serializers.Serializer):
+class BlogQuerySerializer(SafeQuerySerializer):
     category = serializers.SlugField(required=False, max_length=180)
     search = serializers.CharField(required=False, max_length=150)
 

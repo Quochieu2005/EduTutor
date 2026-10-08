@@ -1,6 +1,7 @@
 """Live, per-admin notification menu for the back-office header."""
 
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 
 from django.core.cache import cache
 from django.http import JsonResponse
@@ -20,6 +21,15 @@ from tutors.documents import TutorApplication
 NOTIFICATION_CACHE_KEY = 'admin-header-notification-items:v1'
 NOTIFICATION_CACHE_SECONDS = 10
 NOTIFICATION_ITEM_LIMIT = 12
+
+
+def _safe_admin_url(value, fallback):
+    """Allow only local admin paths in notification links."""
+    candidate = str(value or '').strip()
+    parsed = urlsplit(candidate)
+    if candidate.startswith('/') and not candidate.startswith('//') and not parsed.scheme and not parsed.netloc and '\\' not in candidate:
+        return candidate
+    return fallback
 
 
 def _as_utc(value):
@@ -101,11 +111,12 @@ def _notification_items(*, load_if_missing=True):
             'icon': 'message',
         })
     for item in AdminNotification.objects.order_by('-created_at')[:4]:
+        fallback_url = reverse('management-page', kwargs={'module': 'notifications'})
         entries.append({
             'title': item.title,
             'message': item.message,
             'created_at': item.created_at,
-            'url': item.url or reverse('management-page', kwargs={'module': 'notifications'}),
+            'url': _safe_admin_url(item.url, fallback_url),
             'icon': 'payment' if item.kind == 'payment' else 'message',
         })
     items = sorted(
