@@ -37,7 +37,8 @@ export default function TutorRegisterPage() {
   useEffect(() => {
     let active = true;
     Promise.all([
-      edututorApi.subjects({ page_size: 200 }),
+      // Keep the shared public cache key within the API's 100-item limit.
+      edututorApi.subjects({ page_size: 100 }),
       edututorApi.provinces(),
     ]).then(([subjectPage, provinceList]) => {
       if (!active) return;

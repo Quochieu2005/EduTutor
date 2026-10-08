@@ -3,7 +3,7 @@ from django.urls import path
 from .views import (
     AccountProfileView, ChangePasswordView, FacebookLoginView, ForgotPasswordView, GoogleLoginView, LoginView, MeView,
     ClerkExchangeView,
-    RefreshView, RegisterView, ResetPasswordView,
+    LogoutView, RefreshView, RegisterView, ResetPasswordView,
     UnifiedLoginView,
 )
 
@@ -18,6 +18,7 @@ urlpatterns = [
     path('google/', GoogleLoginView.as_view(), name='api-login-google'),
     path('facebook/', FacebookLoginView.as_view(), name='api-login-facebook'),
     path('refresh/', RefreshView.as_view(), name='api-refresh'),
+    path('logout/', LogoutView.as_view(), name='api-logout'),
     path('me/', MeView.as_view(), name='api-me'),
     path('profile/', AccountProfileView.as_view(), name='api-account-profile'),
 ]

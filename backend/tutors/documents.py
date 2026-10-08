@@ -158,7 +158,14 @@ class TutorSubject(BigIntDocument):
     subject = ReferenceField(Subject, required=True, db_field='subject_id')
     level = StringField(max_length=150, null=True)
     price_per_hour = IntField(null=True, min_value=0)
-    meta = {'collection': 'tutor_subjects', 'indexes': [{'fields': ['tutor', 'subject', 'level'], 'unique': True}]}
+    meta = {
+        'collection': 'tutor_subjects',
+        'indexes': [
+            {'fields': ['tutor', 'subject', 'level'], 'unique': True},
+            # Public filters start from a subject and then resolve tutors.
+            'subject',
+        ],
+    }
 
 
 class TutorSubjectChangeRequest(TimestampedDocument):
@@ -274,4 +281,12 @@ class JobApplication(TimestampedDocument):
     tutor = ReferenceField(Tutor, required=True, db_field='tutor_id')
     cover_letter = StringField(null=True)
     status = StringField(required=True, choices=('pending', 'accepted', 'rejected'), default='pending')
-    meta = {'collection': 'job_applications', 'indexes': [{'fields': ['job_posting', 'tutor'], 'unique': True}, 'status']}
+    meta = {
+        'collection': 'job_applications',
+        'indexes': [
+            {'fields': ['job_posting', 'tutor'], 'unique': True},
+            'status',
+            # Used by public job counters and the filled-posting exclusion.
+            {'fields': ['status', 'job_posting']},
+        ],
+    }

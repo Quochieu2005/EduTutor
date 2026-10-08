@@ -53,7 +53,7 @@ export function RegistrationSection() {
   const [provinces, setProvinces] = useState<Array<{ id: number; slug: string; name: string }>>([]);
   const [wards, setWards] = useState<Array<{ id: number; slug: string; name: string; type: string }>>([]);
   useEffect(() => {
-    Promise.all([edututorApi.subjects({ page_size: 50 }), edututorApi.provinces()])
+    Promise.all([edututorApi.subjects({ page_size: 100 }), edututorApi.provinces()])
       .then(([page, areas]) => {
         setSubjects(page.results);
         setProvinces(areas);

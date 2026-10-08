@@ -116,7 +116,9 @@ function TutorsListContent() {
   useEffect(() => {
     const provinceSlug = getProvinceSlug(filterCity);
     if (!provinceSlug) {
-      setApiWardsState({ provinceSlug: null, wards: [] });
+      // The derived `apiWards` below already hides a previous province's
+      // wards when no province is selected. Avoid a synchronous state write
+      // here so clearing the filter does not trigger an extra render.
       return;
     }
     let isCurrent = true;

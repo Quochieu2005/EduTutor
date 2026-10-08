@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { getLessons, proposeLessonSchedule, updateLessonStatus } from "@/lib/api";
+import { isAuthSignOutInProgress } from "@/lib/auth-session";
 import { useEduUser } from "@/lib/auth";
 import type { LessonRequest, ScheduleProposalPayload, User } from "@/lib/types";
 import { LessonCard, ScheduleCalendar } from "@/components/lessons/LessonCard";
@@ -34,7 +35,7 @@ export default function LessonsPage() {
   useEffect(() => {
     let ignore = false;
     if (!isLoaded) return;
-    if (!isSignedIn) {
+    if (!isSignedIn && !isAuthSignOutInProgress()) {
       router.replace("/login");
       return;
     }

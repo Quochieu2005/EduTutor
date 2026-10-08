@@ -145,12 +145,15 @@ def student_delete(request, slug):
         record_admin_activity(request, 'archive', student)
         return JsonResponse({
             'ok': True,
+            'deleted': False,
+            'status': 'Inactive',
+            'status_code': 'inactive',
             'message': 'Học viên có lịch sử học hoặc hóa đơn nên đã được chuyển sang Inactive thay vì xóa.',
         })
 
     record_admin_activity(request, 'delete', student)
     student.delete()
-    return JsonResponse({'ok': True, 'message': 'Đã xóa học viên.'})
+    return JsonResponse({'ok': True, 'deleted': True, 'message': 'Đã xóa học viên.'})
 
 
 def student_toggle_status(request, slug):

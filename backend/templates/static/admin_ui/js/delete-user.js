@@ -1,6 +1,18 @@
 document.addEventListener('DOMContentLoaded', () => {
   const entityLabel = document.body.dataset.entityLabel || 'User';
   const entityName = entityLabel.toLowerCase();
+  const csrfToken = () => document.cookie
+    .split('; ')
+    .find((item) => item.startsWith('csrftoken='))
+    ?.split('=')[1] || document.querySelector('[name="csrfmiddlewaretoken"]')?.value || '';
+  const showNotice = (message, isError = false) => {
+    const notice = document.createElement('div');
+    notice.className = `resource-notice${isError ? ' resource-notice--error' : ''}`;
+    notice.setAttribute('role', isError ? 'alert' : 'status');
+    notice.textContent = message;
+    document.querySelector('.resource-notices')?.appendChild(notice) || document.body.prepend(notice);
+    window.setTimeout(() => notice.remove(), 5000);
+  };
   document.addEventListener('click', (event) => {
     const button = event.target.closest('.users-row-actions .is-delete');
     if (!button) return;
@@ -14,7 +26,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = modal.querySelector('input');
     input.addEventListener('input', () => { remove.disabled = input.value !== username; });
     cancel.addEventListener('click', () => modal.remove());
-    remove.addEventListener('click', () => { row.remove(); modal.remove(); });
+    remove.addEventListener('click', async () => {
+      const deleteUrl = row.dataset.deleteUrl;
+      if (!deleteUrl) {
+        modal.remove();
+        showNotice('Mục này không hỗ trợ xóa trực tiếp.', true);
+        return;
+      }
+      remove.disabled = true;
+      try {
+        const response = await fetch(deleteUrl, {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': csrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || result?.ok !== true) {
+          throw new Error(result?.message || 'Không thể xóa dữ liệu.');
+        }
+        row.remove();
+        modal.remove();
+        showNotice(result.message || 'Đã xóa dữ liệu.');
+      } catch (error) {
+        remove.disabled = false;
+        showNotice(error instanceof Error ? error.message : 'Không thể xóa dữ liệu.', true);
+      }
+    });
     modal.addEventListener('click', (clickEvent) => { if (clickEvent.target === modal) modal.remove(); });
   });
 });

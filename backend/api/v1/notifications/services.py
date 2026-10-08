@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from accounts.documents import Parent, Student
 from core.documents import NotificationDelivery, SystemNotification
+from mongoengine.dereference import DeReference
 
 
 class NotificationInboxError(ValueError):
@@ -38,10 +39,13 @@ def delivery_payload(delivery):
 
 
 def inbox_response(*, request, deliveries, pagination_class):
-    records = list(deliveries.select_related())
-    unread_count = sum(delivery.read_at is None for delivery in records)
+    # Count unread rows in MongoDB and only hydrate the current page.  The
+    # previous implementation materialized the entire inbox before applying
+    # pagination, so the notification bell became slower on every new event.
+    unread_count = deliveries.filter(read_at=None).count()
     paginator = pagination_class()
-    page = paginator.paginate_queryset(records, request)
+    page = paginator.paginate_queryset(deliveries, request)
+    page = DeReference()(list(page or []), max_depth=1)
     response = paginator.get_paginated_response([delivery_payload(delivery) for delivery in page])
     response.data['unread_count'] = unread_count
     return response

@@ -23,8 +23,9 @@ class PublicGeographyView(APIView):
 
 def _active_tutor_ids(query):
     return list({
-        int(value.id) if hasattr(value, 'id') else int(value)
-        for value in query.scalar('tutor')
+        int(value.id)
+        for value in query.no_dereference().scalar('tutor')
+        if getattr(value, 'id', None) is not None
     })
 
 
@@ -82,9 +83,18 @@ class ProvinceWardListView(PublicGeographyView):
         if province is None:
             raise Http404
         wards = list(Ward.objects(province=province).order_by('name'))
-        active_tutor_ids = set(Tutor.objects(status=Tutor.STATUS_ACTIVE).scalar('id'))
+        area_query = TutorTeachingArea.objects(province=province, ward__ne=None)
+        area_tutor_ids = {
+            int(reference.id)
+            for reference in area_query.no_dereference().scalar('tutor')
+            if getattr(reference, 'id', None) is not None
+        }
+        active_tutor_ids = set(
+            Tutor.objects(id__in=list(area_tutor_ids), status=Tutor.STATUS_ACTIVE)
+            .scalar('id')
+        ) if area_tutor_ids else set()
         tutor_ids_by_ward = {}
-        for area in TutorTeachingArea.objects(province=province, ward__ne=None).select_related():
+        for area in area_query.no_dereference().only('tutor', 'ward'):
             tutor_id = int(area.tutor.id)
             if tutor_id in active_tutor_ids:
                 tutor_ids_by_ward.setdefault(int(area.ward.id), set()).add(tutor_id)

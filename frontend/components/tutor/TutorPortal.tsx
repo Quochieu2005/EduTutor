@@ -8,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import { clearAuthSession, getAuthSession, saveAuthSession } from "@/lib/auth-session";
 import { edututorApi, type LessonSession, type Subject, type TutorAvailability, type TutorQuestion, type TutorSubjectChangeRequest } from "@/lib/edututor-api";
-import { API_DATA_CHANGED_EVENT, apiErrorMessage, getLessons } from "@/lib/api";
+import { API_DATA_CHANGED_EVENT, apiErrorMessage, getLessons, logout as revokeApiSession } from "@/lib/api";
 import type { LessonRequest, ScheduleProposalPayload } from "@/lib/types";
 import { toast } from "@/lib/toast";
 import { ScheduleProposalForm } from "@/components/lessons/ScheduleProposalForm";
@@ -120,7 +120,7 @@ export function TutorPortal() {
     setLoading(true);
     try {
       const [nextProfile, availability, subjectPage, nextChanges, nextLessons, nextQuestions, nextSessions] = await Promise.all([
-        edututorApi.tutorProfile(), edututorApi.myTutorAvailability(), edututorApi.subjects({ page_size: 200 }),
+        edututorApi.tutorProfile(), edututorApi.myTutorAvailability(), edututorApi.subjects({ page_size: 100 }),
         edututorApi.tutorSubjectChangeRequests(), getLessons(), edututorApi.tutorQuestionInbox(), edututorApi.lessonSessions(),
       ]);
       const typed = nextProfile as TutorProfile;
@@ -331,7 +331,7 @@ export function TutorPortal() {
       <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-24 lg:h-fit">
         <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="grid h-11 w-11 place-items-center overflow-hidden rounded-xl bg-blue-600 text-base font-black text-white">{profile.avatar ? <img src={profile.avatar} alt="" className="h-full w-full object-cover" /> : profile.name.slice(0, 1)}</div><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{profile.name}</p><p className="truncate text-xs text-slate-500">{profile.email}</p></div></div>
         <nav className="flex gap-1 overflow-x-auto lg:block" aria-label="Điều hướng hồ sơ gia sư">{navigation.map((item) => <button key={item.key} type="button" onClick={() => setTab(item.key)} className={`flex shrink-0 items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition lg:mb-1 lg:w-full ${tab === item.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}><span className="flex items-center gap-3">{item.icon}{item.label}</span>{item.badge ? <span className={`rounded-full px-1.5 py-0.5 text-[11px] ${tab === item.key ? "bg-white/20" : "bg-amber-100 text-amber-800"}`}>{item.badge}</span> : null}</button>)}</nav>
-        <button type="button" onClick={() => { clearAuthSession(); router.replace("/login"); }} className="mt-3 flex w-full items-center gap-3 rounded-xl border-t border-slate-100 px-3 py-3 text-sm font-semibold text-slate-500 hover:text-rose-600"><LogoutOutlined />Đăng xuất</button>
+        <button type="button" onClick={() => { void revokeApiSession(); router.replace("/"); }} className="mt-3 flex w-full items-center gap-3 rounded-xl border-t border-slate-100 px-3 py-3 text-sm font-semibold text-slate-500 hover:text-rose-600"><LogoutOutlined />Đăng xuất</button>
       </aside>
       <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
         {tab === "overview" && <div className="space-y-6"><div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-start"><div><h2 className="text-xl font-bold">Xin chào, {profile.name}</h2><p className="mt-1 text-sm text-slate-500">Cập nhật thông tin để phụ huynh dễ tìm và Admin có đủ dữ liệu hỗ trợ bạn.</p></div><button type="button" onClick={() => setTab("profile")} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Cập nhật hồ sơ</button></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-xl border border-slate-100 bg-slate-50 p-4"><p className="text-xs text-slate-500">Môn đang dạy</p><p className="mt-1 text-2xl font-black">{profile.subjects.length}</p></div><div className="rounded-xl border border-slate-100 bg-slate-50 p-4"><p className="text-xs text-slate-500">Yêu cầu chờ xử lý</p><p className="mt-1 text-2xl font-black">{lessons.filter((item) => item.status === "pending").length}</p></div><div className="rounded-xl border border-slate-100 bg-slate-50 p-4"><p className="text-xs text-slate-500">Khung giờ có thể dạy</p><p className="mt-1 text-2xl font-black">{slots.length}</p></div><div className="rounded-xl border border-slate-100 bg-slate-50 p-4"><p className="text-xs text-slate-500">Đánh giá</p><p className="mt-1 text-2xl font-black">{profile.rating_avg.toFixed(1)} <span className="text-sm font-semibold text-slate-400">/ 5</span></p></div></div><div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900"><SafetyCertificateOutlined className="mr-2" />Môn dạy mới sẽ được gửi Admin duyệt trước khi hiển thị công khai.</div></div>}

@@ -71,7 +71,9 @@ export function ClassRequestForm() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([edututorApi.subjects({ page_size: 200 }), edututorApi.provinces()])
+    // The API caps pages at 100; use the same cache key as the public boards
+    // so navigating between /classes and /classes/create reuses the result.
+    Promise.all([edututorApi.subjects({ page_size: 100 }), edututorApi.provinces()])
       .then(([subjectPage, areas]) => {
         if (!active) return;
         setSubjects(subjectPage.results);

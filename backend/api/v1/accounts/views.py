@@ -314,6 +314,26 @@ class RefreshView(PublicAuthView):
             return Response({'detail': str(error)}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+class LogoutView(APIView):
+    """Invalidate the current API session for any supported actor type."""
+
+    authentication_classes = [MongoJWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(tags=['Tài khoản'], responses={200: MessageSerializer})
+    def post(self, request):
+        account = request.user.user
+        # Access and refresh tokens carry this version. Incrementing it makes
+        # both tokens unusable immediately, without storing raw JWTs server
+        # side. Admin sessions use the equivalent ``session_version`` field.
+        if hasattr(account, 'session_version'):
+            account.session_version = (account.session_version or 1) + 1
+        elif hasattr(account, 'token_version'):
+            account.token_version = (account.token_version or 1) + 1
+        account.save()
+        return Response({'message': 'Đăng xuất thành công.'}, headers={'Cache-Control': 'no-store'})
+
+
 class MeView(APIView):
     authentication_classes = [MongoJWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]

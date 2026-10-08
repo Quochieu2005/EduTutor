@@ -44,7 +44,10 @@ connect(
     connectTimeoutMS=5000,
     socketTimeoutMS=15000,
     maxPoolSize=int(os.getenv('MONGO_MAX_POOL_SIZE', '100')),
-    minPoolSize=int(os.getenv('MONGO_MIN_POOL_SIZE', '0')),
+    # Keep one warm Atlas socket per worker so the first request does not pay
+    # the connection handshake after an idle period. Deployments can still
+    # override this to 0 when MongoDB connection limits are very tight.
+    minPoolSize=int(os.getenv('MONGO_MIN_POOL_SIZE', '1')),
     waitQueueTimeoutMS=int(os.getenv('MONGO_WAIT_QUEUE_TIMEOUT_MS', '5000')),
 )
 

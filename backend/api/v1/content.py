@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo
 from django.core.cache import cache
 from django.http import Http404
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema, extend_schema_field
 from mongoengine.queryset.visitor import Q
 from mongoengine.dereference import DeReference
@@ -78,6 +80,7 @@ class BannerSerializer(serializers.Serializer):
     sort_order = serializers.IntegerField()
 
 
+@method_decorator(cache_page(300), name='dispatch')
 class BannerListView(PublicView):
     @extend_schema(tags=['Banner'], responses=BannerSerializer(many=True))
     def get(self, request):
@@ -98,6 +101,7 @@ def published_posts():
     ).order_by('-published_at', '-id')
 
 
+@method_decorator(cache_page(60), name='dispatch')
 class BlogListView(PublicView):
     pagination_class = ContentPagination
     @extend_schema(tags=['Blog'], parameters=[BlogQuerySerializer], responses=BlogSerializer(many=True))
@@ -120,6 +124,7 @@ class BlogListView(PublicView):
         return paginator.get_paginated_response(BlogSerializer(page, many=True).data)
 
 
+@method_decorator(cache_page(300), name='dispatch')
 class BlogDetailView(PublicView):
     @extend_schema(tags=['Blog'], responses=BlogDetailSerializer)
     def get(self, request, slug):
@@ -129,6 +134,7 @@ class BlogDetailView(PublicView):
         return Response(BlogDetailSerializer(post).data)
 
 
+@method_decorator(cache_page(600), name='dispatch')
 class CategoryListView(PublicView):
     @extend_schema(tags=['Blog'], responses=CategorySerializer(many=True))
     def get(self, request):

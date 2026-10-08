@@ -3,16 +3,28 @@
 from tutors.documents import Subject, Tutor, TutorSubject
 
 
-def active_tutor_ids():
-    return {int(tutor_id) for tutor_id in Tutor.objects(status=Tutor.STATUS_ACTIVE).scalar('id')}
+def active_tutor_ids(tutor_ids=None):
+    query = Tutor.objects(status=Tutor.STATUS_ACTIVE)
+    if tutor_ids is not None:
+        query = query.filter(id__in=list(tutor_ids))
+    return {int(tutor_id) for tutor_id in query.scalar('id')}
 
 
 def tutor_ids_by_subject(*, subject_ids, active_ids=None):
-    active_ids = active_ids if active_ids is not None else active_tutor_ids()
     result = {int(subject_id): set() for subject_id in subject_ids}
-    if not result or not active_ids:
+    if not result:
         return result
-    for link in TutorSubject.objects(subject__in=list(result)).only('subject', 'tutor'):
+    links = TutorSubject.objects(subject__in=list(result)).no_dereference().only('subject', 'tutor')
+    if active_ids is None:
+        candidate_ids = {
+            int(reference.id)
+            for reference in links.clone().scalar('tutor')
+            if getattr(reference, 'id', None) is not None
+        }
+        active_ids = active_tutor_ids(candidate_ids)
+    if not active_ids:
+        return result
+    for link in links:
         tutor_id = int(link.tutor.id) if hasattr(link.tutor, 'id') else int(link.tutor)
         if tutor_id in active_ids:
             subject_id = int(link.subject.id) if hasattr(link.subject, 'id') else int(link.subject)

@@ -57,17 +57,20 @@ def open_recruitment_jobs(posted_by_type=None):
     # A posting stops being public as soon as its owner/Admin accepts someone.
     # The exclusion also repairs legacy records whose application was accepted
     # before the posting status was consistently changed to ``closed``.
-    filled_job_ids = {
-        int(application.job_posting.id)
-        for application in JobApplication.objects(status='accepted').only('job_posting').select_related()
-        if application.job_posting is not None
-    }
-    filled_job_ids.update(
-        int(application.job_posting.id)
-        for application in TutorApplication.objects(status='approved', job_posting__ne=None)
-        .only('job_posting').select_related()
-        if application.job_posting is not None
-    )
+    # Only the referenced posting id is needed here.  ``select_related`` used
+    # to hydrate every Tutor/JobPosting document on every cache miss, which
+    # made the public recruitment list scan grow linearly with applications.
+    def referenced_job_ids(query):
+        return {
+            int(reference.id)
+            for reference in query.no_dereference().scalar('job_posting')
+            if getattr(reference, 'id', None) is not None
+        }
+
+    filled_job_ids = referenced_job_ids(JobApplication.objects(status='accepted'))
+    filled_job_ids.update(referenced_job_ids(
+        TutorApplication.objects(status='approved', job_posting__ne=None),
+    ))
     filters = {
         'status': 'open',
         'subject__in': active_subject_ids,
@@ -146,19 +149,34 @@ class PublicTutorListView(APIView):
             ).first()
             if subject is None:
                 return Response([])
-            tutor_ids = [link.tutor.id for link in TutorSubject.objects(subject=subject).select_related()]
+            tutor_ids = [
+                reference.id
+                for reference in TutorSubject.objects(subject=subject)
+                .no_dereference().scalar('tutor')
+                if getattr(reference, 'id', None) is not None
+            ]
             tutors = tutors.filter(id__in=tutor_ids)
         if values.get('province'):
             province = Province.objects(slug=values['province']).first()
             if province is None:
                 return Response([])
-            tutor_ids = [link.tutor.id for link in TutorTeachingArea.objects(province=province).select_related()]
+            tutor_ids = [
+                reference.id
+                for reference in TutorTeachingArea.objects(province=province)
+                .no_dereference().scalar('tutor')
+                if getattr(reference, 'id', None) is not None
+            ]
             tutors = tutors.filter(id__in=tutor_ids)
         if values.get('ward'):
             ward = Ward.objects(slug=values['ward']).first()
             if ward is None:
                 return Response([])
-            tutor_ids = [link.tutor.id for link in TutorTeachingArea.objects(ward=ward).select_related()]
+            tutor_ids = [
+                reference.id
+                for reference in TutorTeachingArea.objects(ward=ward)
+                .no_dereference().scalar('tutor')
+                if getattr(reference, 'id', None) is not None
+            ]
             tutors = tutors.filter(id__in=tutor_ids)
         if values.get('search'):
             tutors = tutors.filter(Q(name__icontains=values['search']) | Q(headline__icontains=values['search']) | Q(bio__icontains=values['search']))

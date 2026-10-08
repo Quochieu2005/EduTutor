@@ -109,7 +109,13 @@ function refreshPublicGet<T>(
 ): Promise<T> {
   const pending = inFlightGets.get(key);
   if (pending) return pending as Promise<T>;
-  const request = api.get<T>(path, { params }).then(({ data }) => {
+  // Public reads do not need the current account token.  Keeping the request
+  // anonymous avoids an Authorization/CORS preflight for every filter call on
+  // the public boards, especially when a tutor/admin is already signed in.
+  const request = api.get<T>(path, {
+    params,
+    _edututorSkipAuth: true,
+  } as EduTutorRequestConfig).then(({ data }) => {
     const entry = { expiresAt: Date.now() + ttlMs, value: data };
     publicGetCache.set(key, entry);
     writeSessionCache(key, entry);
@@ -203,7 +209,7 @@ export const edututorApi = {
 
   // Tuyển dụng, nhận lớp và thời gian rảnh của gia sư
   async tutorJobs(params?: { page?: number; page_size?: number; search?: string; subject?: string; province?: string; ward?: string; posted_by?: "admin" | "parent" | "student" | "requester"; teaching_mode?: "online" | "offline" | "both" }) {
-    return page<TutorJob>(await cachedGet("/v1/tutors/jobs/", params, 5_000));
+    return page<TutorJob>(await cachedGet("/v1/tutors/jobs/", params, 30_000));
   },
   async tutors(params?: { page?: number; page_size?: number; subject?: string; province?: string; ward?: string; teaching_mode?: "online" | "offline" | "both"; search?: string }) {
     return page<PublicTutor>(await cachedGet("/v1/tutors/", params, 30_000));
@@ -221,10 +227,26 @@ export const edututorApi = {
   async createTutorRequest(payload: { subject_id: number; province_id?: number | null; ward_id?: number | null; title: string; description: string; grade?: string; budget_min?: number | null; budget_max?: number | null; schedule_expect?: string; teaching_mode?: "online" | "offline" | "both" }) {
     return (await api.post<TutorJob>("/v1/tutors/requests/", payload)).data;
   },
-  async submitTutorApplication(payload: FormData) { return (await api.post("/v1/tutors/applications/", payload, { headers: { "Content-Type": "multipart/form-data" } })).data; },
+  async submitTutorApplication(payload: FormData) {
+    return (await api.post("/v1/tutors/applications/", payload, {
+      headers: { "Content-Type": "multipart/form-data" },
+      // Recruitment applications are public; do not attach an unrelated
+      // learner/tutor token and trigger a CORS preflight for this upload.
+      _edututorSkipAuth: true,
+    } as EduTutorRequestConfig)).data;
+  },
   async tutorAvailability(slug: string) { return cachedGet<TutorAvailability>(`/v1/tutors/${encodeURIComponent(slug)}/availability/`, undefined, 30_000); },
-  async tutorLogin(payload: { email: string; password: string }) { return (await api.post("/v1/tutors/auth/login/", payload)).data; },
-  async refreshTutorSession(refresh: string) { return (await api.post("/v1/tutors/auth/refresh/", { refresh })).data; },
+  async tutorLogin(payload: { email: string; password: string }) {
+    return (await api.post("/v1/tutors/auth/login/", payload, {
+      _edututorSkipAuth: true,
+    } as EduTutorRequestConfig)).data;
+  },
+  async refreshTutorSession(refresh: string) {
+    return (await api.post("/v1/tutors/auth/refresh/", { refresh }, {
+      _edututorSkipAuth: true,
+      _edututorSilentToast: true,
+    } as EduTutorRequestConfig)).data;
+  },
   async myTutorAvailability() { return dedupedApiGet<TutorAvailability>("/v1/tutors/me/availability/"); },
   async updateMyTutorAvailability(slots: TutorAvailability["slots"]) { return (await api.put<TutorAvailability>("/v1/tutors/me/availability/", { slots })).data; },
   async tutorSubjectChangeRequests() { return dedupedApiGet<Array<TutorSubjectChangeRequest>>("/v1/tutors/auth/subject-change-requests/"); },
@@ -270,31 +292,31 @@ export const edututorApi = {
   async changeTutorPassword(payload: { current_password: string; new_password: string; confirm_password: string }) { return (await api.post("/v1/tutors/auth/change-password/", payload)).data; },
 
   // Thông báo
-  async notifications() { return page<ActorNotification>((await api.get("/v1/notifications/me/")).data); },
+  async notifications() { return page<ActorNotification>(await dedupedApiGet("/v1/notifications/me/")); },
   async readNotification(id: number) { return (await api.post(`/v1/notifications/me/${id}/read/`)).data; },
   async readAllNotifications() { return (await api.post("/v1/notifications/me/read-all/")).data; },
-  async tutorNotifications() { return page<ActorNotification>((await api.get("/v1/notifications/tutor/me/")).data); },
+  async tutorNotifications() { return page<ActorNotification>(await dedupedApiGet("/v1/notifications/tutor/me/")); },
   async readTutorNotification(id: number) { return (await api.post(`/v1/notifications/tutor/me/${id}/read/`)).data; },
   async readAllTutorNotifications() { return (await api.post("/v1/notifications/tutor/me/read-all/")).data; },
 
   // Học phí, lương gia sư và hóa đơn
-  async payments() { return page((await api.get("/v1/payments/me/")).data); },
-  async payment(id: number) { return (await api.get(`/v1/payments/me/${id}/`)).data; },
+  async payments() { return page(await dedupedApiGet("/v1/payments/me/")); },
+  async payment(id: number) { return dedupedApiGet(`/v1/payments/me/${id}/`); },
   async beginPayment(id: number, payload: Record<string, unknown>) { return (await api.post(`/v1/payments/me/${id}/pay/`, payload)).data; },
-  async tutorEarnings() { return (await api.get("/v1/payments/tutor/earnings/")).data; },
-  async tutorPayouts() { return page((await api.get("/v1/payments/tutor/payouts/")).data); },
-  async invoices() { return page((await api.get("/v1/invoices/me/")).data); },
-  async invoice(invoiceNo: string) { return (await api.get(`/v1/invoices/me/${encodeURIComponent(invoiceNo)}/`)).data; },
+  async tutorEarnings() { return dedupedApiGet("/v1/payments/tutor/earnings/"); },
+  async tutorPayouts() { return page(await dedupedApiGet("/v1/payments/tutor/payouts/")); },
+  async invoices() { return page(await dedupedApiGet("/v1/invoices/me/")); },
+  async invoice(invoiceNo: string) { return dedupedApiGet(`/v1/invoices/me/${encodeURIComponent(invoiceNo)}/`); },
 
   // Đánh giá và khiếu nại
   async createReview(payload: { lesson_id: number; rating: number; comment?: string }) {
     return (await api.post<TutorReview>("/v1/feedback/reviews/", payload)).data;
   },
   async tutorReviews(slug: string, params?: { page?: number; page_size?: number }) {
-    return page<TutorReview>((await api.get(`/v1/feedback/reviews/tutors/${encodeURIComponent(slug)}/`, { params })).data);
+    return page<TutorReview>(await cachedGet(`/v1/feedback/reviews/tutors/${encodeURIComponent(slug)}/`, params, 30_000));
   },
   async tutorQuestions(slug: string, params?: { page?: number; page_size?: number }) {
-    return page<TutorQuestion>((await api.get(`/v1/feedback/questions/tutors/${encodeURIComponent(slug)}/`, { params })).data);
+    return page<TutorQuestion>(await cachedGet(`/v1/feedback/questions/tutors/${encodeURIComponent(slug)}/`, params, 30_000));
   },
   async createTutorQuestion(slug: string, payload: { content: string }) {
     return (await api.post<TutorQuestion>(`/v1/feedback/questions/tutors/${encodeURIComponent(slug)}/`, payload)).data;
@@ -305,8 +327,8 @@ export const edututorApi = {
   async answerTutorQuestion(id: number, payload: { answer: string }) {
     return (await api.patch<TutorQuestion>(`/v1/feedback/questions/tutor/me/${id}/answer/`, payload)).data;
   },
-  async complaints() { return page((await api.get("/v1/feedback/complaints/me/")).data); },
+  async complaints() { return page(await dedupedApiGet("/v1/feedback/complaints/me/")); },
   async createComplaint(payload: Record<string, unknown>) { return (await api.post("/v1/feedback/complaints/me/", payload)).data; },
-  async tutorComplaints() { return page((await api.get("/v1/feedback/complaints/tutor/me/")).data); },
+  async tutorComplaints() { return page(await dedupedApiGet("/v1/feedback/complaints/tutor/me/")); },
   async createTutorComplaint(payload: Record<string, unknown>) { return (await api.post("/v1/feedback/complaints/tutor/me/", payload)).data; },
 };

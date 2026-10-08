@@ -1,5 +1,7 @@
 from django.http import Http404
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -9,6 +11,7 @@ from api.v1.accounts.authentication import MongoJWTAuthentication
 from api.v1.payments.services import PaymentApiError, student_for_user
 from api.v1.tutors.authentication import TutorJWTAuthentication
 from core.documents import Complaint
+from core.pagination import StandardResultsSetPagination
 from lessons.documents import Lesson, Review, TutorQuestion
 from tutors.documents import Tutor
 
@@ -19,9 +22,11 @@ from .serializers import (
 from .services import complaint_payload, create_complaint, question_payload, review_payload
 
 
+@method_decorator(cache_page(30), name='dispatch')
 class TutorReviewListView(APIView):
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
+    pagination_class = StandardResultsSetPagination
 
     @extend_schema(tags=['Đánh giá & Khiếu nại'], responses={200: ReviewSerializer(many=True)})
     def get(self, request, slug):
@@ -29,7 +34,9 @@ class TutorReviewListView(APIView):
         if tutor is None:
             raise Http404
         reviews = Review.objects(tutor=tutor, status='visible').order_by('-created_at').select_related()
-        return Response([review_payload(review) for review in reviews])
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(reviews, request, view=self)
+        return paginator.get_paginated_response([review_payload(review) for review in page])
 
 
 class StudentReviewCreateView(APIView):
@@ -67,8 +74,11 @@ class StudentReviewCreateView(APIView):
         return Response(review_payload(review), status=status.HTTP_201_CREATED)
 
 
+@method_decorator(cache_page(30), name='dispatch')
 class TutorQuestionListCreateView(APIView):
     """Read public questions and let an authenticated learner ask a tutor."""
+
+    pagination_class = StandardResultsSetPagination
 
     def get_authenticators(self):
         # drf-spectacular instantiates the view while generating the schema,
@@ -91,7 +101,9 @@ class TutorQuestionListCreateView(APIView):
         questions = TutorQuestion.objects(
             tutor=tutor, status='visible',
         ).order_by('-created_at').select_related()
-        return Response([question_payload(question) for question in questions])
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(questions, request, view=self)
+        return paginator.get_paginated_response([question_payload(question) for question in page])
 
     @extend_schema(
         tags=['ÄÃ¡nh giÃ¡ & Khiáº¿u náº¡i'],
