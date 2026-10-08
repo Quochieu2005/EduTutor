@@ -1305,7 +1305,12 @@ def tutor_job_delete(request, slug):
     if job is None:
         return JsonResponse({'ok': False, 'message': 'Không tìm thấy tin tuyển dụng.'}, status=404)
 
+    # Remove both kinds of applications tied to the posting. Class-board
+    # proposals use JobApplication; admin recruitment submissions use
+    # TutorApplication. Keeping either reference after deleting the posting
+    # would leave dangling records in the admin candidate list.
     JobApplication.objects(job_posting=job).delete()
+    TutorApplication.objects(job_posting=job).delete()
     job.delete()
     record_admin_activity(request, 'delete', job)
     return JsonResponse({'ok': True, 'message': 'Xóa tin tuyển dụng thành công.'})
@@ -1884,9 +1889,16 @@ def management_page(request, module):
             })
         elif module == 'tutor-requests' and config.get('kind') in ('all-requests', 'class-postings'):
             if config.get('kind') == 'all-requests':
+                record = config['records'][index - 1]
+                record_kind = config['record_kinds'][index - 1]
+                if record_kind == 'job':
+                    delete_url = reverse('tutor-job-delete', kwargs={'slug': record.slug})
+                else:
+                    delete_url = reverse('tutor-request-delete', kwargs={'request_id': record.id})
                 row.update({
                     'can_edit': False,
-                    'can_delete': False,
+                    'delete_url': delete_url,
+                    'can_delete': True,
                 })
                 page['rows'].append(row)
                 continue
@@ -1895,7 +1907,8 @@ def management_page(request, module):
                 'id': job.slug,
                 'slug': job.slug,
                 'can_edit': False,
-                'can_delete': False,
+                'delete_url': reverse('tutor-job-delete', kwargs={'slug': job.slug}),
+                'can_delete': True,
             })
         elif module == 'tutor-requests':
             tutor_request = config['records'][index - 1]
@@ -2997,7 +3010,15 @@ def sign_in(request):
 
 def sign_out(request):
     if request.method == 'POST':
-        record_admin_activity(request, 'logout', request.admin_account)
+        # A stale admin page can submit logout after the session has expired.
+        # Always flush the browser session instead of turning that normal case
+        # into a 500 response; audit logging must never block sign-out.
+        admin = getattr(request, 'admin_account', None)
+        if admin is not None:
+            try:
+                record_admin_activity(request, 'logout', admin)
+            except Exception:
+                logger.exception('Could not record admin logout activity.')
 
         request.session.flush()
     return redirect('login')

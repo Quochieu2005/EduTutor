@@ -122,7 +122,10 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
     window.addEventListener("focus", refreshOpenClasses);
     window.addEventListener(API_DATA_CHANGED_EVENT, refreshOpenClasses);
     document.addEventListener("visibilitychange", refreshWhenVisible);
-    const timer = window.setInterval(refreshWhenVisible, 20_000);
+    // Mutations and focus/visibility events refresh immediately. Keep a
+    // light safety poll for changes made in another browser tab without
+    // reloading the class board every 20 seconds.
+    const timer = window.setInterval(refreshWhenVisible, 60_000);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", refreshOpenClasses);
@@ -133,7 +136,6 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
 
   useEffect(() => {
     if (actorType !== "tutor") {
-      setAppliedClassIds([]);
       return;
     }
     let isCurrent = true;
@@ -164,7 +166,8 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
   useEffect(() => {
     const provinceSlug = getProvinceSlug(filterCity);
     if (!provinceSlug) {
-      setApiWardsState({ provinceSlug: null, wards: [] });
+      // `apiWards` is derived from the selected slug, so it is already empty
+      // when the filter is reset. Avoid an unnecessary synchronous render.
       return;
     }
     let isCurrent = true;

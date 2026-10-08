@@ -15,6 +15,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   const count = document.querySelector('[data-selected-count]');
   const clearButton = bar?.querySelector('[data-clear-selection]');
+  const csrfToken = () => document.cookie
+    .split('; ')
+    .find((item) => item.startsWith('csrftoken='))
+    ?.split('=')[1] || document.querySelector('[name="csrfmiddlewaretoken"]')?.value || '';
+  const showNotice = (message, isError = false) => {
+    const notice = document.createElement('div');
+    notice.className = `resource-notice${isError ? ' resource-notice--error' : ''}`;
+    notice.setAttribute('role', isError ? 'alert' : 'status');
+    notice.textContent = message;
+    document.querySelector('.resource-notices')?.appendChild(notice) || document.body.prepend(notice);
+    window.setTimeout(() => notice.remove(), 5000);
+  };
   if (clearButton) {
     clearButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
     clearButton.dataset.tooltip = 'Clear selection (Escape)';
@@ -34,7 +46,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const close = () => modal.remove();
     input.addEventListener('input', () => { confirm.disabled = input.value !== 'DELETE'; });
     cancel.addEventListener('click', close);
-    confirm.addEventListener('click', () => { selected.forEach((item) => item.closest('tr')?.remove()); checks.splice(1, checks.length - 1, ...document.querySelectorAll('.users-table tbody input[type="checkbox"]')); update(); close(); });
+    confirm.addEventListener('click', async () => {
+      const rows = selected.map((item) => item.closest('tr')).filter(Boolean);
+      const missingUrl = rows.some((row) => !row.dataset.deleteUrl);
+      if (missingUrl) {
+        close();
+        showNotice('Mục đã chọn không hỗ trợ xóa trực tiếp.', true);
+        return;
+      }
+      confirm.disabled = true;
+      try {
+        for (const row of rows) {
+          const response = await fetch(row.dataset.deleteUrl, {
+            method: 'POST',
+            headers: {
+              'X-CSRFToken': csrfToken(),
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+          });
+          const result = await response.json().catch(() => null);
+          if (!response.ok || result?.ok !== true) {
+            throw new Error(result?.message || 'Không thể xóa dữ liệu.');
+          }
+        }
+        rows.forEach((row) => row.remove());
+        checks.splice(1, checks.length - 1, ...document.querySelectorAll('.users-table tbody input[type="checkbox"]'));
+        update();
+        close();
+        showNotice('Đã xóa các mục đã chọn.');
+      } catch (error) {
+        confirm.disabled = false;
+        showNotice(error instanceof Error ? error.message : 'Không thể xóa dữ liệu.', true);
+      }
+    });
     modal.addEventListener('click', (event) => { if (event.target === modal) close(); });
     input.focus();
   });

@@ -98,13 +98,16 @@ class SubjectTutorListView(PublicSubjectView):
         subject = active_subjects().filter(slug=slug).first()
         if subject is None:
             raise Http404
-        active_ids = active_tutor_ids()
-        links = list(TutorSubject.objects(subject=subject).select_related())
+        links = list(
+            TutorSubject.objects(subject=subject)
+            .no_dereference().only('tutor', 'level', 'price_per_hour')
+        )
         by_tutor = {
             int(link.tutor.id): link
             for link in links
-            if int(link.tutor.id) in active_ids
         }
+        active_ids = active_tutor_ids(by_tutor)
+        by_tutor = {tutor_id: link for tutor_id, link in by_tutor.items() if tutor_id in active_ids}
         tutors = Tutor.objects(
             id__in=list(by_tutor), status=Tutor.STATUS_ACTIVE,
         ).order_by('-rating_avg', '-rating_count', 'name') if by_tutor else []

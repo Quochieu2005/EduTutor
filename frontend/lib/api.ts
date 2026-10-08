@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig } from "axios";
 import {
   clearAuthSession,
+  beginAuthSignOut,
   getAuthSession,
   saveAuthSession,
   touchAuthSession,
@@ -49,7 +50,6 @@ export const API_URL = resolveApiUrl();
 export const api = axios.create({
   baseURL: API_URL,
   timeout: 15_000,
-  headers: { "Content-Type": "application/json" },
 });
 
 const inFlightApiGets = new Map<string, Promise<unknown>>();
@@ -115,7 +115,6 @@ const publicAuthRequest = {
 } as EduTutorRequestConfig;
 
 export { requestPasswordReset, resetPassword } from "./password-reset-api";
-export { edututorApi } from "./edututor-api";
 
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
@@ -317,6 +316,30 @@ export async function login(
   };
 }
 
+/** Revoke the API token pair when the browser signs out.
+ *
+ * The local session is cleared before the network request so a slow or cold
+ * backend can never trap the user on a loading screen. The explicit header
+ * keeps the access token available to this one best-effort revocation call.
+ */
+export function logout(): Promise<void> {
+  beginAuthSignOut();
+  const session = getAuthSession();
+  clearAuthSession();
+  if (!session?.access) return Promise.resolve();
+  const requestConfig: EduTutorRequestConfig = {
+    timeout: 3_000,
+    headers: { Authorization: `Bearer ${session.access}` },
+    _edututorSkipAuth: true,
+    _edututorSilentToast: true,
+  };
+  return api.post(
+    '/v1/accounts/logout/',
+    undefined,
+    requestConfig,
+  ).then(() => undefined).catch(() => undefined);
+}
+
 export type UnifiedAuthResponse = {
   access: string;
   refresh: string;
@@ -379,13 +402,13 @@ export async function register(
 export async function getTutors(
   params?: TutorSearchParams,
 ): Promise<TutorProfile[]> {
-  return (await api.get("/tutors/", { params })).data;
+  return dedupedApiGet<TutorProfile[]>("/tutors/", { params });
 }
 export async function getTutor(id: string): Promise<TutorProfile> {
-  return (await api.get(`/tutors/${id}/`)).data;
+  return dedupedApiGet<TutorProfile>(`/tutors/${id}/`);
 }
 export async function getMyTutorProfile(): Promise<TutorProfile | null> {
-  return (await api.get("/tutors/me/")).data;
+  return dedupedApiGet<TutorProfile | null>("/tutors/me/");
 }
 export async function updateTutorProfile(
   payload: UpdateTutorProfilePayload,
@@ -398,7 +421,7 @@ export async function registerTutor(
   return (await api.post("/tutors/register/", payload)).data;
 }
 export async function adminGetTutors(): Promise<TutorProfile[]> {
-  return (await api.get("/admin/tutors/")).data;
+  return dedupedApiGet<TutorProfile[]>("/admin/tutors/");
 }
 export async function adminApproveTutor(id: string): Promise<TutorProfile> {
   return (await api.patch(`/admin/tutors/${id}/approve/`)).data;
@@ -419,7 +442,7 @@ export async function getLessons(
   _currentUser?: User | null,
 ): Promise<LessonRequest[]> {
   void _currentUser;
-  const { data } = await api.get("/v1/lessons/");
+  const data = await dedupedApiGet<LessonRequest[] | { results?: LessonRequest[] }>("/v1/lessons/");
   return Array.isArray(data) ? data : (data.results ?? []);
 }
 export const adminGetLessons = getLessons;
@@ -457,7 +480,7 @@ export async function getPublishedTutorAvailability(slug: string): Promise<{
     period: "morning" | "afternoon" | "evening";
   }>;
 }> {
-  return (await api.get(`/v1/tutors/${slug}/availability/`)).data;
+  return dedupedApiGet(`/v1/tutors/${slug}/availability/`);
 }
 export async function applyForClass(jobSlug: string, coverLetter = "") {
   return (
@@ -481,7 +504,7 @@ export async function adminDeleteLesson(id: string): Promise<void> {
   await api.delete(`/admin/lessons/${id}/`);
 }
 export async function getTutorSchedule(): Promise<ScheduleSession[]> {
-  return (await api.get("/tutors/me/schedule/")).data;
+  return dedupedApiGet<ScheduleSession[]>("/tutors/me/schedule/");
 }
 export async function updateScheduleSessionStatus(
   id: string,
@@ -492,7 +515,7 @@ export async function updateScheduleSessionStatus(
 export async function getTutorIncomingRequests(): Promise<
   TutorIncomingRequest[]
 > {
-  return (await api.get("/tutors/me/requests/")).data;
+  return dedupedApiGet<TutorIncomingRequest[]>("/tutors/me/requests/");
 }
 export async function respondToIncomingRequest(
   id: string,
@@ -501,7 +524,7 @@ export async function respondToIncomingRequest(
   return (await api.patch(`/tutors/me/requests/${id}/`, { status })).data;
 }
 export async function getAdminChatMessages(): Promise<ChatMessage[]> {
-  return (await api.get("/tutors/me/chat-admin/")).data;
+  return dedupedApiGet<ChatMessage[]>("/tutors/me/chat-admin/");
 }
 export async function sendAdminChatMessage(text: string): Promise<ChatMessage> {
   return (await api.post("/tutors/me/chat-admin/", { text })).data;

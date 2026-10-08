@@ -135,7 +135,12 @@ def _direct_request_page_config():
 
 
 def _all_requests_page_config():
-    """A read-only, chronological overview of both request flows."""
+    """A chronological overview of both request flows.
+
+    Each row keeps the source document alongside its display values.  The
+    management page can therefore send a bulk delete to the correct endpoint
+    instead of treating the combined view as a read-only list.
+    """
     public_config = _class_posting_page_config()
     direct_config = _direct_request_page_config()
     rows = []
@@ -151,6 +156,8 @@ def _all_requests_page_config():
             budget = 'Thỏa thuận'
         rows.append({
             'created_at': job.created_at,
+            'record': job,
+            'record_kind': 'job',
             'values': (
                 'Đăng lớp công khai',
                 public_config['requester_labels'][job.slug],
@@ -166,6 +173,8 @@ def _all_requests_page_config():
     for request in direct_config['records']:
         rows.append({
             'created_at': request.created_at,
+            'record': request,
+            'record_kind': 'direct-request',
             'values': (
                 'Mời dạy trực tiếp', _reference_name(request.student),
                 _reference_name(request.subject), _reference_name(request.tutor),
@@ -190,7 +199,10 @@ def _all_requests_page_config():
             ('message', 'Nội dung'), ('created', 'Ngày gửi'), ('status', 'Trạng thái'),
         ],
         'statuses': ['Đang mở', 'Đã đóng', *REQUEST_STATUS_LABELS.values()],
-        'records': [],
+        # Keep these aligned with ``rows`` after the chronological sort.  The
+        # generic admin template uses the index to attach action URLs.
+        'records': [item['record'] for item in rows],
+        'record_kinds': [item['record_kind'] for item in rows],
         'rows': [item['values'] for item in rows],
     }
 

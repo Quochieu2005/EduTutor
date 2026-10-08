@@ -138,8 +138,14 @@ function BlogContent() {
                 <article key={post.slug} className="rounded-3xl border border-blue-100/80 bg-white overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-300 transition-all duration-300 flex flex-col justify-between group">
                   <div>
                     <div className="relative w-full h-48 bg-slate-100 overflow-hidden">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={post.thumbnail || "/assets/article-1.jpg"} alt={post.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      {post.thumbnail ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={post.thumbnail} alt={post.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 text-blue-500">
+                          <BookOutlined className="text-3xl" aria-hidden="true" />
+                        </div>
+                      )}
                     </div>
                     <div className="p-6">
                       <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3 font-medium">
@@ -180,8 +186,14 @@ function BlogContent() {
               </button>
             </div>
             <div className="relative w-full h-56 rounded-2xl overflow-hidden bg-slate-100">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={selectedPost.thumbnail || "/assets/article-1.jpg"} alt={selectedPost.title} className="h-full w-full object-cover" />
+              {selectedPost.thumbnail ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={selectedPost.thumbnail} alt={selectedPost.title} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 text-blue-500">
+                  <BookOutlined className="text-4xl" aria-hidden="true" />
+                </div>
+              )}
             </div>
             <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{selectedPost.content}</div>
           </article>

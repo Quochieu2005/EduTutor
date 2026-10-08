@@ -140,7 +140,13 @@ class BlogPost(BaseDocument):
     published_at = DateTimeField(null=True)
     views = IntField(default=0, min_value=0)
 
-    meta = {'collection': 'blog_posts', 'indexes': ['category', 'admin', 'status', '-published_at']}
+    meta = {
+        'collection': 'blog_posts',
+        'indexes': [
+            'category', 'admin', 'status', '-published_at',
+            {'fields': ['status', '-published_at']},
+        ],
+    }
 
 
 class Contact(BaseDocument):
@@ -217,6 +223,8 @@ class NotificationDelivery(BigIntDocument):
         'collection': 'notification_deliveries',
         'indexes': [
             'notification', 'recipient_type', 'recipient_id', '-delivered_at',
+            {'fields': ['recipient_type', 'recipient_id', '-delivered_at']},
+            {'fields': ['recipient_type', 'recipient_id', 'read_at']},
             {'fields': ['notification', 'recipient_type', 'recipient_id'], 'unique': True},
         ],
     }

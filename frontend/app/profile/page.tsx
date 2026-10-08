@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEduClerk, useEduUser } from "@/lib/auth";
-import { AUTH_SESSION_EVENT, clearAuthSession, getAuthSession, saveAuthSession, type ActorType } from "@/lib/auth-session";
+import { AUTH_SESSION_EVENT, clearAuthSession, getAuthSession, isAuthSignOutInProgress, saveAuthSession, type ActorType } from "@/lib/auth-session";
 import { edututorApi } from "@/lib/edututor-api";
 import type { LessonSession, PostedClassWithApplications, TutorAvailability } from "@/lib/edututor-api";
 import { toast } from "@/lib/toast";
@@ -320,7 +320,7 @@ export default function ProfilePage() {
     // useSyncExternalStore receives an empty server snapshot on the first
     // client render. Do not redirect during that short hydration window when
     // a valid local EduTutor session is already present.
-    if (authResolved && isLoaded && !isSignedIn && !getAuthSession()) {
+    if (!isAuthSignOutInProgress() && authResolved && isLoaded && !isSignedIn && !getAuthSession()) {
       router.replace("/login");
     }
   }, [authResolved, isLoaded, isSignedIn, router]);
@@ -425,7 +425,7 @@ export default function ProfilePage() {
             <nav className="mt-3 space-y-1" aria-label="Quản lý tài khoản">
               {accountNavigation.map((item) => <button key={item.key} type="button" onClick={() => setUserTab(item.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${userTab === item.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"}`}><span>{item.icon}</span>{item.label}</button>)}
             </nav>
-            <button type="button" onClick={() => void signOut().then(() => router.replace("/login"))} className="mt-4 flex w-full items-center gap-3 border-t border-slate-100 px-3 pt-4 text-sm font-semibold text-slate-600 hover:text-rose-600"><LogoutOutlined />Đăng xuất</button>
+            <button type="button" onClick={() => void signOut().then(() => router.replace("/"))} className="mt-4 flex w-full items-center gap-3 border-t border-slate-100 px-3 pt-4 text-sm font-semibold text-slate-600 hover:text-rose-600"><LogoutOutlined />Đăng xuất</button>
           </aside>}
           <div className="min-w-0 space-y-6">
 

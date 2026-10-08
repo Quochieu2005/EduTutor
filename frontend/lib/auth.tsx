@@ -2,7 +2,8 @@
 
 import { LogoutOutlined } from "@ant-design/icons";
 import { useEffect, useMemo, useState } from "react";
-import { AUTH_SESSION_EVENT, AUTH_SESSION_STORAGE_KEY, clearAuthSession, getAuthSession } from "./auth-session";
+import { AUTH_SESSION_EVENT, AUTH_SESSION_STORAGE_KEY, getAuthSession } from "./auth-session";
+import { logout as revokeApiSession } from "./api";
 
 export function useEduUser() {
   // The server and the first browser render must be identical. Reading
@@ -47,7 +48,7 @@ function openSignIn(options?: { fallbackRedirectUrl?: string; forceRedirectUrl?:
 }
 
 export function useEduClerk() {
-  return { openSignIn, signOut: async () => { clearAuthSession(); window.location.assign("/login"); } };
+  return { openSignIn, signOut: async () => { void revokeApiSession(); window.location.assign("/"); } };
 }
 
 export function EduUserButton() {

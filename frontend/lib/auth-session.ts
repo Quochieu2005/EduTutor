@@ -18,6 +18,19 @@ export const AUTH_SESSION_STORAGE_KEY = "edututor_auth_session";
 export const AUTH_SESSION_EVENT = "edututor:auth-session";
 export const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
 
+// Guards on protected pages must not redirect to /login while an explicit
+// logout navigation is already in progress. Without this flag, clearing
+// localStorage synchronously can race the redirect and win with /login.
+let authSignOutInProgress = false;
+
+export function isAuthSignOutInProgress() {
+  return authSignOutInProgress;
+}
+
+export function beginAuthSignOut() {
+  authSignOutInProgress = true;
+}
+
 function actorFromAccessToken(token: string): ActorType | null {
   try {
     const encoded = token.split(".")[1];
@@ -67,6 +80,7 @@ export function getAuthSession(): StoredAuthSession | null {
 
 export function saveAuthSession(session: StoredAuthSession) {
   if (typeof window === "undefined") return;
+  authSignOutInProgress = false;
   window.localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify({ ...session, lastActivityAt: Date.now() }));
   window.dispatchEvent(new Event(AUTH_SESSION_EVENT));
 }

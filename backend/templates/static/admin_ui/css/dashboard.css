@@ -1226,6 +1226,10 @@ html[data-theme="dark"] .admin-sidebar__link i {
   top: calc(100% + 8px);
   right: 0;
   width: min(360px, calc(100vw - 24px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: min(560px, calc(100vh - 88px));
+  max-height: min(560px, calc(100dvh - 88px));
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1255,11 +1259,18 @@ html[data-theme="dark"] .admin-sidebar__link i {
   font-size: 12px;
   font-weight: 600;
 }
-.admin-notification-menu__list { display: grid; }
+.admin-notification-menu__list {
+  display: grid;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
 .admin-notification-menu__item {
   display: grid;
   grid-template-columns: 30px 1fr;
   gap: 10px;
+  min-width: 0;
   padding: 13px 16px;
   border-bottom: 1px solid var(--border);
 }
@@ -1271,6 +1282,8 @@ html[data-theme="dark"] .admin-sidebar__link i {
 .admin-notification-menu__item.is-unread { background: color-mix(in srgb, var(--primary) 6%, transparent); }
 .admin-notification-menu__item > :last-child { display: grid; gap: 3px; min-width: 0; }
 .admin-notification-menu__item strong { font-size: 13px; }
+.admin-notification-menu__item strong,
+.admin-notification-menu__message { overflow-wrap: anywhere; }
 .admin-notification-menu__item p { margin: 0; line-height: 1.35; }
 .admin-notification-menu__message {
   display: block;

@@ -685,39 +685,76 @@ document.addEventListener("DOMContentLoaded", () => {
     cancel.addEventListener("click", () => overlay.remove());
     remove.addEventListener("click", async () => {
       const persistedTargets = targets.filter((row) => row.dataset.deleteUrl);
-      if (persistedTargets.length) {
-        remove.disabled = true;
-        const csrfToken =
-          form?.querySelector('[name="csrfmiddlewaretoken"]')?.value || "";
-        let successMessage = "";
+      if (persistedTargets.length !== targets.length) {
+        overlay.remove();
+        showResourceNotice("Mục đã chọn không hỗ trợ xóa trực tiếp.", true);
+        return;
+      }
+      remove.disabled = true;
+      const csrfToken =
+        form?.querySelector('[name="csrfmiddlewaretoken"]')?.value ||
+        decodeURIComponent(
+          document.cookie
+            .split("; ")
+            .find((item) => item.startsWith("csrftoken="))
+            ?.split("=")[1] || "",
+        );
+      const outcomes = [];
+      const applyOutcome = ({ row, result }) => {
+        if (result.deleted === false) {
+          const statusCell = row.querySelector('[data-field="status"]');
+          const status = result.status || "Inactive";
+          if (statusCell) {
+            statusCell.dataset.value = status;
+            const statusButton = statusCell.querySelector(
+              ".student-status-toggle",
+            );
+            if (statusButton) {
+              statusButton.textContent = status;
+              statusButton.className = `users-status users-status--${toneFor(status)} student-status-toggle`;
+            }
+          }
+          row.dataset.statusCode = result.status_code || "inactive";
+          row.querySelector('[data-resource-select]')?.click();
+        } else {
+          row.remove();
+        }
+      };
+      let successMessage = "";
+      try {
         for (const row of persistedTargets) {
           const response = await fetch(row.dataset.deleteUrl, {
             method: "POST",
             headers: {
               "X-CSRFToken": csrfToken,
               "X-Requested-With": "XMLHttpRequest",
+              Accept: "application/json",
             },
             credentials: "same-origin",
           });
-          const result = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            remove.disabled = false;
-            showResourceNotice(
-              result.message || "Không thể xóa dữ liệu.",
-              true,
-            );
-            return;
+          const result = await response.json().catch(() => null);
+          if (!response.ok || result?.ok !== true) {
+            throw new Error(result?.message || "Không thể xóa dữ liệu.");
           }
+          outcomes.push({ row, result });
           successMessage = result.message || successMessage;
         }
-        showResourceNotice(successMessage || "Đã xóa dữ liệu.");
-        setTimeout(() => window.location.reload(), 700);
+      } catch (error) {
+        outcomes.forEach(applyOutcome);
+        updateStatusCounts();
+        render();
+        overlay.remove();
+        showResourceNotice(
+          error instanceof Error ? error.message : "Không thể xóa dữ liệu.",
+          true,
+        );
         return;
       }
-      targets.forEach((row) => row.remove());
-      overlay.remove();
+      outcomes.forEach(applyOutcome);
       updateStatusCounts();
       render();
+      overlay.remove();
+      showResourceNotice(successMessage || "Đã xóa dữ liệu.");
     });
     overlay.addEventListener("click", (event) => {
       if (event.target === overlay) overlay.remove();
