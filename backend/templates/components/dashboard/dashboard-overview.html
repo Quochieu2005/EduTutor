@@ -3,24 +3,16 @@
         <header class="dashboard-panel__header">
             <h2>Xu hướng hoạt động</h2>
         </header>
-        <div class="dashboard-chart" aria-label="Monthly revenue chart">
-            <div class="dashboard-chart__bars" aria-hidden="true">
-                <span style="--bar-height: 36%"></span>
-                <span style="--bar-height: 68%"></span>
-                <span style="--bar-height: 67%"></span>
-                <span style="--bar-height: 90%"></span>
-                <span style="--bar-height: 60%"></span>
-                <span style="--bar-height: 43%"></span>
-                <span style="--bar-height: 48%"></span>
-                <span style="--bar-height: 79%"></span>
-                <span style="--bar-height: 45%"></span>
-                <span style="--bar-height: 25%"></span>
-                <span style="--bar-height: 46%"></span>
-                <span style="--bar-height: 17%"></span>
+        <div class="dashboard-chart" aria-label="Số hoạt động được ghi nhận theo tháng">
+            <div class="dashboard-chart__bars">
+                {% for month in dashboard.analytics.monthly %}
+                    <span class="dashboard-chart__bar{% if month.value == 0 %} dashboard-chart__bar--empty{% endif %}" style="--bar-height: {{ month.height }}%" title="{{ month.period }}: {{ month.value }} hoạt động" aria-label="{{ month.period }}: {{ month.value }} hoạt động"></span>
+                {% empty %}
+                    <p>Chưa có dữ liệu hoạt động.</p>
+                {% endfor %}
             </div>
             <div class="dashboard-chart__labels">
-                <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
-                <span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span>
+                {% for month in dashboard.analytics.monthly %}<span>{{ month.label }}</span>{% endfor %}
             </div>
         </div>
     </article>

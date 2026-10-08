@@ -32,6 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const scheduleRecurrenceEnd = form?.querySelector(
     "[data-schedule-recurrence-end]",
   );
+  const scheduleSessionDate = form?.querySelector('[name="session_date"]');
   const scheduleStatus = form?.elements.status;
   const scheduleStatusNote = form?.querySelector("[data-schedule-status-note]");
   const tutorRequestSubject = form?.elements.subject_id;
@@ -168,8 +169,17 @@ document.addEventListener("DOMContentLoaded", () => {
     scheduleRecurrenceEnd
       .closest(".schedule-recurrence-end")
       ?.classList.toggle("is-disabled", !isRecurring);
+    // Keep the browser's date picker consistent with the server validator:
+    // a recurring schedule may end on the start date or any later date, never
+    // before it. This also prevents a confusing submit-and-reload cycle.
+    if (scheduleSessionDate?.value) {
+      scheduleRecurrenceEnd.min = scheduleSessionDate.value;
+    } else {
+      scheduleRecurrenceEnd.removeAttribute("min");
+    }
     if (!isRecurring) scheduleRecurrenceEnd.value = "";
   };
+  scheduleSessionDate?.addEventListener("change", syncScheduleRecurrence);
   scheduleRecurrenceDays.forEach((input) =>
     input.addEventListener("change", () => {
       syncScheduleDayModes();

@@ -508,6 +508,16 @@ button {
   border-radius: 4px 4px 0 0;
   background: var(--primary);
 }
+.dashboard-chart__bars span.dashboard-chart__bar--empty {
+  min-height: 0;
+}
+.dashboard-chart__bars > p {
+  align-self: center;
+  width: 100%;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
+}
 .dashboard-chart__labels {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
@@ -687,6 +697,28 @@ button {
   font-size: 12px;
   text-align: center;
 }
+.dashboard-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 0 12px 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.dashboard-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dashboard-chart-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.dashboard-chart-legend__dot--secondary {
+  background: var(--muted-foreground);
+}
 .dashboard-analytics-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -741,6 +773,11 @@ button {
 }
 .dashboard-progress-list--muted em {
   background: var(--muted-foreground);
+}
+.dashboard-progress-list > p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
 }
 .admin-sidebar {
   position: fixed;

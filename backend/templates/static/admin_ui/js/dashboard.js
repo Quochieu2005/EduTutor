@@ -236,6 +236,12 @@
 		if (kind === 'payment') return '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18M8 15h4"></path>';
 		return '<path d="M20 11a8 8 0 0 1-8 8H5l-2 2V11a8 8 0 0 1 8-8h1a8 8 0 0 1 8 8Z"></path><path d="M8 11h.01M12 11h.01M16 11h.01"></path>';
 	};
+	const safeAdminUrl = (value) => {
+		const candidate = String(value || '');
+		return candidate.startsWith('/') && !candidate.startsWith('//') && !candidate.includes('\\')
+			? candidate
+			: '/admin/';
+	};
 
 	const renderLiveNotifications = (payload) => {
 		const count = notificationMenu?.querySelector('[data-notification-count]');
@@ -258,7 +264,7 @@
 				payload.items.forEach((item) => {
 					const link = document.createElement('a');
 					link.className = `admin-notification-menu__item${item.is_unread ? ' is-unread' : ''}`;
-					link.href = item.url;
+					link.href = safeAdminUrl(item.url);
 					const icon = document.createElement('span');
 					icon.className = 'admin-notification-menu__icon';
 					icon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${notificationIcon(item.icon)}</svg>`;

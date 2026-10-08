@@ -134,21 +134,41 @@ let refreshPromise: Promise<string | null> | null = null;
 let sessionExpiredToastShown = false;
 let lastApiErrorToast = { message: "", shownAt: 0 };
 
-function firstErrorText(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) return value.trim();
+function errorTexts(value: unknown, result: string[] = []): string[] {
+  if (typeof value === "string" && value.trim()) {
+    const message = value.trim();
+    if (!result.includes(message)) result.push(message);
+    return result;
+  }
   if (Array.isArray(value)) {
-    for (const item of value) {
-      const message = firstErrorText(item);
-      if (message) return message;
-    }
+    value.forEach((item) => errorTexts(item, result));
+    return result;
   }
   if (value && typeof value === "object") {
-    for (const item of Object.values(value as Record<string, unknown>)) {
-      const message = firstErrorText(item);
-      if (message) return message;
-    }
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key !== "status_code")
+      .forEach(([, item]) => errorTexts(item, result));
   }
-  return null;
+  return result;
+}
+
+function translateApiErrorText(value: string): string {
+  const exact: Record<string, string> = {
+    "This field is required.": "Trường này là bắt buộc.",
+    "This field may not be blank.": "Trường này không được để trống.",
+    "Enter a valid email address.": "Vui lòng nhập địa chỉ email hợp lệ.",
+    "Enter a valid URL.": "Vui lòng nhập đường liên kết hợp lệ.",
+    "A valid integer is required.": "Vui lòng nhập một số nguyên hợp lệ.",
+    "Not a valid choice.": "Giá trị lựa chọn không hợp lệ.",
+    "Invalid token.": "Phiên đăng nhập không hợp lệ hoặc đã hết hạn.",
+    "Authentication credentials were not provided.": "Vui lòng đăng nhập để thực hiện thao tác này.",
+    "You do not have permission to perform this action.": "Bạn không có quyền thực hiện thao tác này.",
+  };
+  if (exact[value]) return exact[value];
+  if (value.startsWith("JSON parse error")) return "Dữ liệu gửi lên không đúng định dạng JSON.";
+  if (/^Date has wrong format\./.test(value)) return "Ngày không đúng định dạng. Vui lòng dùng YYYY-MM-DD.";
+  if (/^Time has wrong format\./.test(value)) return "Giờ không đúng định dạng. Vui lòng dùng HH:MM.";
+  return value;
 }
 
 export function apiErrorMessage(error: unknown, status?: number): string {
@@ -169,8 +189,8 @@ export function apiErrorMessage(error: unknown, status?: number): string {
   if (status && status >= 500) return "Máy chủ đang bận. Vui lòng thử lại sau.";
   const responseData = (error as { response?: { data?: unknown } })?.response
     ?.data;
-  const message = firstErrorText(responseData);
-  if (message) return message;
+  const messages = errorTexts(responseData).map(translateApiErrorText);
+  if (messages.length) return messages.join(" ");
   return "Không thể kết nối tới hệ thống. Vui lòng thử lại.";
 }
 

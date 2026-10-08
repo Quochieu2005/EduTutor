@@ -11,10 +11,22 @@ def _cloudinary_folder(*parts):
     return '/'.join((settings.CLOUDINARY_ROOT_FOLDER, *parts))
 
 
+_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+
+
+def _validate_image_upload(upload, label='Ảnh'):
+    """Reject oversized or non-image uploads before sending bytes to Cloudinary."""
+    if upload is None or getattr(upload, 'content_type', '') not in _IMAGE_TYPES:
+        raise ValueError(f'{label} phải là JPG, PNG, WEBP hoặc GIF.')
+    if getattr(upload, 'size', 0) > 5 * 1024 * 1024:
+        raise ValueError(f'{label} không được vượt quá 5 MB.')
+
+
 def upload_admin_avatar(upload, slug):
     """Upload an administrator avatar and return its delivery details."""
     if not settings.CLOUDINARY_ENABLED:
         raise ValueError('Cloudinary chưa được cấu hình. Vui lòng kiểm tra file .env.')
+    _validate_image_upload(upload, 'Ảnh đại diện')
 
     import cloudinary
     import cloudinary.uploader
@@ -44,10 +56,7 @@ def upload_blog_thumbnail(upload, slug):
     """Upload a blog cover below Edututor/blog/<slug>/<year>/<month>/<day>."""
     if not settings.CLOUDINARY_ENABLED:
         raise ValueError('Cloudinary chưa được cấu hình. Vui lòng kiểm tra file .env.')
-    if upload.content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
-        raise ValueError('Ảnh bìa phải là JPG, PNG, WEBP hoặc GIF.')
-    if upload.size > 5 * 1024 * 1024:
-        raise ValueError('Ảnh bìa không được vượt quá 5 MB.')
+    _validate_image_upload(upload, 'Ảnh bìa')
 
     import cloudinary
     import cloudinary.uploader
@@ -76,10 +85,7 @@ def upload_tutor_avatar(upload, slug):
     """Upload a tutor portrait below Edututor/tutors/<slug>/<year>/<month>/<day>."""
     if not settings.CLOUDINARY_ENABLED:
         raise ValueError('Cloudinary chưa được cấu hình. Vui lòng kiểm tra file .env.')
-    if upload.content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
-        raise ValueError('Ảnh đại diện phải là JPG, PNG, WEBP hoặc GIF.')
-    if upload.size > 5 * 1024 * 1024:
-        raise ValueError('Ảnh đại diện không được vượt quá 5 MB.')
+    _validate_image_upload(upload, 'Ảnh đại diện')
 
     import cloudinary
     import cloudinary.uploader
@@ -107,10 +113,7 @@ def upload_user_avatar(upload, slug):
     """Upload a website account portrait below Edututor/users/<slug>/<date>."""
     if not settings.CLOUDINARY_ENABLED:
         raise ValueError('Cloudinary chưa được cấu hình. Vui lòng kiểm tra file .env.')
-    if upload.content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
-        raise ValueError('Ảnh đại diện phải là JPG, PNG, WEBP hoặc GIF.')
-    if upload.size > 5 * 1024 * 1024:
-        raise ValueError('Ảnh đại diện không được vượt quá 5 MB.')
+    _validate_image_upload(upload, 'Ảnh đại diện')
 
     import cloudinary
     import cloudinary.uploader
@@ -177,9 +180,9 @@ def upload_banner_image(upload, slug):
     """Upload a slideshow banner below Edututor/banners/<slug>/<date>."""
     if not settings.CLOUDINARY_ENABLED:
         raise ValueError('Cloudinary chưa được cấu hình. Vui lòng kiểm tra file .env.')
-    if upload.content_type not in {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}:
+    if upload is None or getattr(upload, 'content_type', '') not in _IMAGE_TYPES:
         raise ValueError('Ảnh banner phải là JPG, PNG, WEBP hoặc GIF.')
-    if upload.size > 8 * 1024 * 1024:
+    if getattr(upload, 'size', 0) > 8 * 1024 * 1024:
         raise ValueError('Ảnh banner không được vượt quá 8 MB.')
 
     import cloudinary

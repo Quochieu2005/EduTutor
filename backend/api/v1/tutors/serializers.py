@@ -2,6 +2,8 @@
 
 from rest_framework import serializers
 
+from api.v1.validation import SafeQuerySerializer
+
 
 def validate_bcrypt_password(value):
     if len(value.encode('utf-8')) > 72:
@@ -73,7 +75,7 @@ class PublicTutorSerializer(serializers.Serializer):
     teaching_areas = serializers.ListField(child=serializers.DictField())
 
 
-class PublicTutorQuerySerializer(serializers.Serializer):
+class PublicTutorQuerySerializer(SafeQuerySerializer):
     subject = serializers.SlugField(required=False, max_length=180)
     province = serializers.SlugField(required=False, max_length=180)
     ward = serializers.SlugField(required=False, max_length=180)
@@ -158,7 +160,7 @@ class TutorProfileSerializer(serializers.Serializer):
     teaching_areas = serializers.ListField(child=serializers.DictField())
 
 
-class RecruitmentQuerySerializer(serializers.Serializer):
+class RecruitmentQuerySerializer(SafeQuerySerializer):
     search = serializers.CharField(required=False, max_length=150)
     subject = serializers.SlugField(required=False, max_length=180)
     province = serializers.SlugField(required=False, max_length=180)

@@ -44,8 +44,14 @@ const localDate = (value: Date) => {
 export function ScheduleProposalForm({ lesson, counterpartName, proposalRole, availability = lesson.tutorAvailability ?? [], onSubmit, onCancel }: Props) {
   const apiRevision = useLiveApiRevision();
   const isCounterProposal = proposalRole !== "learner";
-  const today = localDate(new Date());
-  const latestDate = localDate(new Date(Date.now() + 31 * 24 * 60 * 60 * 1000));
+  // Keep date constraints stable for the lifetime of the form. Calling
+  // Date.now() during render makes the input move at midnight and prevents
+  // React from treating the component as a pure render function.
+  const [today] = useState(() => localDate(new Date()));
+  const latestDate = useMemo(() => {
+    const start = new Date(`${today}T12:00:00`);
+    return localDate(new Date(start.getTime() + 31 * 24 * 60 * 60 * 1000));
+  }, [today]);
   const [mode, setMode] = useState<"online" | "offline">(lesson.mode ?? "online");
   const [date, setDate] = useState(lesson.preferredDate ?? "");
   const [selectedSlots, setSelectedSlots] = useState<SelectedScheduleSlot[]>([]);

@@ -1,7 +1,9 @@
 from rest_framework import serializers
 
+from api.v1.validation import SafeQuerySerializer
 
-class SubjectQuerySerializer(serializers.Serializer):
+
+class SubjectQuerySerializer(SafeQuerySerializer):
     search = serializers.CharField(required=False, max_length=150)
     category = serializers.CharField(required=False, max_length=150)
 

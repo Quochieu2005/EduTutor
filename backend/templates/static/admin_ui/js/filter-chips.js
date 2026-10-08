@@ -12,7 +12,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const group = document.createElement('div');
     group.className = 'users-selected-filters';
-    group.innerHTML = `${selected.map((name) => `<span>${name}</span>`).join('')}<button type="button" data-reset>Reset</button><button type="button" data-reset aria-label="Clear filters"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>`;
+    selected.forEach((name) => {
+      const chip = document.createElement('span');
+      chip.textContent = name;
+      group.appendChild(chip);
+    });
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.dataset.reset = '';
+    reset.textContent = 'Reset';
+    group.appendChild(reset);
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.dataset.reset = '';
+    clear.setAttribute('aria-label', 'Xóa bộ lọc');
+    clear.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';
+    group.appendChild(clear);
     filters.appendChild(group);
     group.querySelectorAll('[data-reset]').forEach((button) => {
       button.addEventListener('click', () => {

@@ -25,7 +25,7 @@ from accounts.cloudinary_media import (
     upload_tutor_avatar,
 )
 from accounts.session import admin_session_is_valid, clear_admin_session
-from core.documents import Banner, BlogCategory, BlogPost, Payment
+from core.documents import AuditLog, Banner, BlogCategory, BlogPost, Contact, Payment
 from core.admin_audit import activity_logs, record_admin_activity
 from core.admin_query_stats import reference_counts
 from core.admin_classes import classes_page_config
@@ -2604,9 +2604,222 @@ def administrator_avatar(request, slug):
     return response
 
 
+def _dashboard_local_midnight(value):
+    """Return a Vietnam-local midnight as an aware UTC datetime."""
+    local_value = value if hasattr(value, 'hour') else datetime.combine(value, datetime.min.time())
+    local_value = local_value.replace(
+        hour=0, minute=0, second=0, microsecond=0, tzinfo=VIETNAM_TIME_ZONE,
+    )
+    return local_value.astimezone(timezone.utc)
+
+
+def _dashboard_month_shift(year, month, offset):
+    """Return a (year, month) pair shifted by ``offset`` calendar months."""
+    index = year * 12 + (month - 1) + offset
+    shifted_year, shifted_month = divmod(index, 12)
+    return shifted_year, shifted_month + 1
+
+
+def _dashboard_analytics(today, now):
+    """Build dashboard charts from persisted audit and business records.
+
+    The project does not persist browser referrers, device fingerprints, bounce
+    rate, or session duration.  Showing invented values for those fields would
+    be misleading, so the dashboard exposes operational activity that is
+    actually stored: audit events, new requests/contacts/applications and
+    payments created during the last seven days.
+    """
+    week_dates = [today - timedelta(days=offset) for offset in range(6, -1, -1)]
+    week_start = _dashboard_local_midnight(week_dates[0])
+    week_end = _dashboard_local_midnight(today + timedelta(days=1))
+
+    month_year, month_number = _dashboard_month_shift(today.year, today.month, -11)
+    month_start = _dashboard_local_midnight(datetime(month_year, month_number, 1).date())
+    audit_rows = list(
+        AuditLog.objects(
+            created_at__gte=month_start,
+            created_at__lte=now,
+        ).only('created_at', 'actor_type', 'actor_id', 'action')
+    )
+
+    # These collections all have an indexed created_at field.  Fetching only
+    # that field keeps the chart query bounded and avoids loading large request
+    # descriptions, references, or uploaded metadata into the dashboard.
+    recent_models = (
+        LearningRequest,
+        Contact,
+        TutorApplication,
+        JobPosting,
+    )
+    recent_created_at = []
+    for model in recent_models:
+        recent_created_at.extend(
+            record.created_at
+            for record in model.objects(
+                created_at__gte=week_start,
+                created_at__lt=week_end,
+            ).only('created_at')
+            if record.created_at is not None
+        )
+    recent_payment_times = [
+        payment.created_at
+        for payment in Payment.objects(
+            created_at__gte=week_start,
+            created_at__lt=week_end,
+        ).only('created_at')
+        if payment.created_at is not None
+    ]
+
+    def local_date(value):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(VIETNAM_TIME_ZONE).date()
+
+    weekly_audit = {day: 0 for day in week_dates}
+    weekly_events = {day: 0 for day in week_dates}
+    monthly_audit = {}
+    actor_counts = {}
+    action_counts = {}
+    weekly_audit_rows = []
+    for row in audit_rows:
+        event_day = local_date(row.created_at)
+        if event_day is None:
+            continue
+        month_key = (event_day.year, event_day.month)
+        monthly_audit[month_key] = monthly_audit.get(month_key, 0) + 1
+        if event_day in weekly_audit:
+            weekly_audit[event_day] += 1
+            weekly_audit_rows.append(row)
+            actor_key = row.actor_type or 'system'
+            actor_counts[actor_key] = actor_counts.get(actor_key, 0) + 1
+            action_key = row.action or 'other'
+            action_counts[action_key] = action_counts.get(action_key, 0) + 1
+
+    for value in recent_created_at:
+        event_day = local_date(value)
+        if event_day in weekly_events:
+            weekly_events[event_day] += 1
+
+    monthly_values = []
+    for offset in range(-11, 1):
+        year, month = _dashboard_month_shift(today.year, today.month, offset)
+        value = monthly_audit.get((year, month), 0)
+        monthly_values.append({
+            'label': f'T{month}',
+            'period': f'{month:02d}/{year}',
+            'value': value,
+        })
+    max_monthly = max((item['value'] for item in monthly_values), default=0)
+    for item in monthly_values:
+        item['height'] = max(1, round(item['value'] * 100 / max_monthly)) if max_monthly else 0
+
+    weekly_values = [weekly_audit[day] for day in week_dates]
+    weekly_event_values = [weekly_events[day] for day in week_dates]
+    chart_max = max(max(weekly_values, default=0), max(weekly_event_values, default=0), 1)
+    x_positions = [65, 251, 438, 624, 810, 997, 1183]
+
+    def chart_points(values):
+        points = []
+        for x, day, value in zip(x_positions, week_dates, values):
+            y = round(265 - (value / chart_max) * 260, 2)
+            points.append({
+                'x': x, 'y': y, 'value': value,
+                'label': f'{day.strftime("%d/%m")} · {day.strftime("%A")}',
+            })
+        return points
+
+    primary_points = chart_points(weekly_values)
+    secondary_points = chart_points(weekly_event_values)
+
+    def path_for(points):
+        return ' '.join(
+            f'{"M" if index == 0 else "L"}{point["x"]} {point["y"]}'
+            for index, point in enumerate(points)
+        )
+
+    def area_for(points):
+        return f'{path_for(points)} L1183 265 L65 265 Z'
+
+    y_labels = [
+        chart_max,
+        round(chart_max * 0.75),
+        round(chart_max * 0.5),
+        round(chart_max * 0.25),
+        0,
+    ]
+    weekday_labels = [f'T{day.isoweekday()} {day.strftime("%d/%m")}' for day in week_dates]
+    actor_labels = {
+        'admin': 'Quản trị viên', 'student': 'Học viên', 'parent': 'Phụ huynh',
+        'tutor': 'Gia sư', 'system': 'Hệ thống',
+    }
+    action_labels = {
+        'create': 'Tạo mới', 'update': 'Cập nhật', 'delete': 'Xóa',
+        'toggle_status': 'Đổi trạng thái', 'reply': 'Gửi phản hồi',
+        'login': 'Đăng nhập', 'logout': 'Đăng xuất',
+        'reconcile_payment': 'Đối soát thanh toán',
+    }
+
+    def progress_rows(counts, labels, limit):
+        ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]
+        maximum = max((value for _, value in ordered), default=0)
+        return [
+            {
+                'label': labels.get(key, key.replace('_', ' ').title()),
+                'value': value,
+                'progress': max(1, round(value * 100 / maximum)) if maximum else 0,
+            }
+            for key, value in ordered
+        ]
+
+    weekly_activity_total = sum(weekly_values)
+    new_record_total = sum(weekly_event_values)
+    unique_actors = len({
+        (row.actor_type, row.actor_id)
+        for row in weekly_audit_rows
+        if row.actor_id is not None
+    })
+    if not unique_actors and weekly_activity_total:
+        unique_actors = len({row.actor_type for row in weekly_audit_rows})
+
+    return {
+        'monthly': monthly_values,
+        'weekly_labels': weekday_labels,
+        'weekly_y_labels': y_labels,
+        'primary_path': path_for(primary_points),
+        'secondary_path': path_for(secondary_points),
+        'primary_area_path': area_for(primary_points),
+        'secondary_area_path': area_for(secondary_points),
+        'primary_points': primary_points,
+        'secondary_points': secondary_points,
+        'stats': [
+            {
+                'label': 'Hoạt động hệ thống', 'value': weekly_activity_total,
+                'detail': 'Nhật ký được ghi nhận trong 7 ngày qua', 'icon': 'activity',
+            },
+            {
+                'label': 'Tác nhân hoạt động', 'value': unique_actors,
+                'detail': 'Tài khoản/hệ thống có thao tác được ghi nhận', 'icon': 'visitors',
+            },
+            {
+                'label': 'Bản ghi mới', 'value': new_record_total,
+                'detail': 'Yêu cầu, liên hệ, hồ sơ và tin mới', 'icon': 'requests',
+            },
+            {
+                'label': 'Giao dịch mới', 'value': len(recent_payment_times),
+                'detail': 'Thanh toán tạo trong 7 ngày qua', 'icon': 'payments',
+            },
+        ],
+        'actors': progress_rows(actor_counts, actor_labels, 4),
+        'actions': progress_rows(action_counts, action_labels, 4),
+    }
+
+
 def _dashboard_data(today, week_end, *, finance_period='month', now=None):
     """Build a short-lived shared dashboard snapshot for Atlas-backed admin."""
     now = now or datetime.now(timezone.utc)
+    analytics = _dashboard_analytics(today, now)
     paid_payments = list(Payment.objects(status='paid').select_related())
     revenue = sum(payment.total_amount or 0 for payment in paid_payments)
     upcoming_lessons = list(
@@ -2709,6 +2922,7 @@ def _dashboard_data(today, week_end, *, finance_period='month', now=None):
             'payout_paid': _format_currency(payout_paid),
             'reports': finance_reports,
         },
+        'analytics': analytics,
     }
 
 
@@ -2719,13 +2933,17 @@ def dashboard(request):
         finance_period = 'month'
     now = datetime.now(timezone.utc)
     today = now.astimezone(VIETNAM_TIME_ZONE).date()
-    cache_key = f'admin-dashboard:v4:{today.isoformat()}:{finance_period}'
+    # Version the snapshot when its shape changes so a stale Redis/memory
+    # value from the previous static dashboard can never hide the analytics.
+    cache_key = f'admin-dashboard:v5:{today.isoformat()}:{finance_period}'
     dashboard_data = cache.get(cache_key)
     if dashboard_data is None:
         dashboard_data = _dashboard_data(
             today, today + timedelta(days=7), finance_period=finance_period, now=now,
         )
-        cache.set(cache_key, dashboard_data, 300)
+        # Keep the snapshot short-lived so recent admin actions appear without
+        # making every dashboard request repeat the chart queries.
+        cache.set(cache_key, dashboard_data, 60)
     return render(request, 'admin/dashboard.html', {
         'welcome_email': welcome_email,
         'dashboard': dashboard_data,

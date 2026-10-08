@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+from django.utils import timezone
 from rest_framework import serializers
 
 
@@ -44,6 +45,8 @@ class LearningRequestCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         if not attrs.get('subjectId') and not attrs.get('subject'):
             raise serializers.ValidationError({'subject': 'Vui lòng chọn môn học.'})
+        if attrs['preferredDate'] < timezone.localdate():
+            raise serializers.ValidationError({'preferredDate': 'Ngày bắt đầu học không được ở trong quá khứ.'})
         if attrs['preferredTime'] >= attrs['endTime']:
             raise serializers.ValidationError({'endTime': 'Giờ kết thúc phải sau giờ bắt đầu.'})
         if attrs['mode'] == 'online' and not attrs.get('meetingUrl'):
@@ -91,6 +94,8 @@ class ScheduleProposalSerializer(serializers.Serializer):
     recurrenceEndDate = serializers.DateField(required=False)
 
     def validate(self, attrs):
+        if attrs['preferredDate'] < timezone.localdate():
+            raise serializers.ValidationError({'preferredDate': 'Ngày bắt đầu học không được ở trong quá khứ.'})
         if attrs['preferredTime'] >= attrs['endTime']:
             raise serializers.ValidationError({'endTime': 'Giờ kết thúc phải sau giờ bắt đầu.'})
         if attrs['mode'] == 'online' and not attrs.get('meetingUrl'):
