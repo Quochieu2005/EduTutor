@@ -309,7 +309,12 @@ class JobPosting(TimestampedDocument):
         default='both',
     )
     status = StringField(required=True, choices=('open', 'closed'), default='open')
-    meta = {'collection': 'job_postings', 'indexes': ['status', 'posted_by_type', 'subject', 'province', 'district', 'ward', '-created_at']}
+    meta = {'collection': 'job_postings', 'indexes': [
+        'status', 'posted_by_type', 'subject', 'province', 'district', 'ward', '-created_at',
+        # The learner portal filters their own postings then displays newest
+        # first. Keep that request on one index instead of a collection scan.
+        {'fields': ['posted_by_type', 'posted_by_id', '-created_at'], 'name': 'owner_class_postings_v1'},
+    ]}
 
     def clean(self):
         if (
@@ -332,5 +337,7 @@ class JobApplication(TimestampedDocument):
             'status',
             # Used by public job counters and the filled-posting exclusion.
             {'fields': ['status', 'job_posting']},
+            # Used when a learner opens applications for one posted class.
+            {'fields': ['job_posting', '-created_at'], 'name': 'class_applications_feed_v1'},
         ],
     }

@@ -131,12 +131,10 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
     window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener(API_DATA_CHANGED_EVENT, refreshOpenClasses);
     document.addEventListener("visibilitychange", refreshWhenVisible);
-    // Mutations and focus/visibility events refresh immediately. Keep a
-    // light safety poll for changes made in another browser tab without
-    // reloading the class board every 20 seconds.
-    const timer = window.setInterval(refreshWhenVisible, 60_000);
+    // Mutations and returning to the tab refresh the board. Avoid a permanent
+    // timer: it created an API request every minute even while the visitor
+    // was reading an unrelated page.
     return () => {
-      window.clearInterval(timer);
       window.removeEventListener("focus", refreshOpenClasses);
       window.removeEventListener(API_DATA_CHANGED_EVENT, refreshOpenClasses);
       document.removeEventListener("visibilitychange", refreshWhenVisible);

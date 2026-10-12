@@ -66,6 +66,7 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [tutorRequests, setTutorRequests] = useState<LessonRequest[]>([]);
@@ -80,6 +81,8 @@ export default function ProfilePage() {
   const [schedulingRequest, setSchedulingRequest] = useState<LessonRequest | null>(null);
   const [postedClasses, setPostedClasses] = useState<PostedClassWithApplications[]>([]);
   const [postedClassesLoading, setPostedClassesLoading] = useState(false);
+  const [postedClassesLoaded, setPostedClassesLoaded] = useState(false);
+  const [learnerDataLoaded, setLearnerDataLoaded] = useState(false);
   const [decidingApplicationId, setDecidingApplicationId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -95,7 +98,7 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
-    if (!authResolved || !isSignedIn || !["user", "student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return;
+    if (!authResolved || !isSignedIn || userTab !== "profile" || profileLoaded || !["user", "student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return;
     let cancelled = false;
     edututorApi.accountProfile().then((profile) => {
       if (cancelled) return;
@@ -105,26 +108,23 @@ export default function ProfilePage() {
         username: String(profile.account?.username ?? ""),
         phone: String(detail.phone ?? profile.account?.phone ?? ""),
       });
+      setProfileLoaded(true);
     }).catch(() => toast.error("Không tải được hồ sơ tài khoản."));
     return () => { cancelled = true; };
-  }, [actorType, authResolved, isSignedIn]);
+  }, [actorType, authResolved, isSignedIn, profileLoaded, userTab]);
 
   const refreshPostedClasses = useCallback(async () => {
     if (!authResolved || !isSignedIn || !["student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return;
     setPostedClassesLoading(true);
     try {
       setPostedClasses(await edututorApi.myPostedClassApplications());
+      setPostedClassesLoaded(true);
     } catch {
       setPostedClasses([]);
     } finally {
       setPostedClassesLoading(false);
     }
   }, [actorType, authResolved, isSignedIn]);
-
-  useEffect(() => {
-    const initialLoad = window.setTimeout(() => void refreshPostedClasses(), 0);
-    return () => window.clearTimeout(initialLoad);
-  }, [refreshPostedClasses]);
 
   const refreshLearnerData = useCallback(async (showLoading = false) => {
     if (!authResolved || !isSignedIn || !["student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return [];
@@ -133,6 +133,7 @@ export default function ProfilePage() {
       const [records, sessions] = await Promise.all([getLessons(), edututorApi.lessonSessions()]);
       setLearnerRequests(records);
       setLearnerSessions(sessions);
+      setLearnerDataLoaded(true);
       return records;
     } catch {
       if (showLoading) { setLearnerRequests([]); setLearnerSessions([]); }
@@ -143,30 +144,39 @@ export default function ProfilePage() {
   }, [actorType, authResolved, isSignedIn]);
 
   useEffect(() => {
+    if (userTab !== "applications" || postedClassesLoaded) return;
+    const initialLoad = window.setTimeout(() => void refreshPostedClasses(), 0);
+    return () => window.clearTimeout(initialLoad);
+  }, [postedClassesLoaded, refreshPostedClasses, userTab]);
+
+  useEffect(() => {
+    if (!["lessons", "schedule", "timetable"].includes(userTab) || learnerDataLoaded) return;
     const initialLoad = window.setTimeout(() => void refreshLearnerData(true), 0);
+    return () => window.clearTimeout(initialLoad);
+  }, [learnerDataLoaded, refreshLearnerData, userTab]);
+
+  useEffect(() => {
     const lastPassiveRefreshAt = { value: 0 };
     const refreshWhenVisible = () => {
       if (document.visibilityState !== "visible") return;
       const now = Date.now();
       if (now - lastPassiveRefreshAt.value < 10_000) return;
       lastPassiveRefreshAt.value = now;
-      void refreshLearnerData(false);
-      void refreshPostedClasses();
+      if (userTab === "applications") void refreshPostedClasses();
+      if (["lessons", "schedule", "timetable"].includes(userTab)) void refreshLearnerData(false);
     };
-    // Focus/visibility events refresh immediately. Keep the background poll
-    // deliberately light so many signed-in users do not overload the API.
-    const timer = window.setInterval(refreshWhenVisible, 20_000);
+    // Refresh only the data currently on screen after the user returns to the
+    // tab or completes a write. Repeated background polling overloaded the
+    // hosted API even while the portal was idle.
     window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
-      window.clearTimeout(initialLoad);
-      window.clearInterval(timer);
       window.removeEventListener("focus", refreshWhenVisible);
       window.removeEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [refreshLearnerData, refreshPostedClasses]);
+  }, [refreshLearnerData, refreshPostedClasses, userTab]);
 
   useEffect(() => {
     if (!authResolved || !isSignedIn || actorType !== "tutor" || getAuthSession()?.actorType !== "tutor") return;
