@@ -62,6 +62,433 @@ document.addEventListener("DOMContentLoaded", () => {
   let sortDirection = 1;
   let sortField = "";
 
+  const toDateTimeLocalValue = (value) => {
+    const pad = (part) => String(part).padStart(2, "0");
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  };
+
+  const bindRecruitmentDecisionValidation = (candidate) => {
+    const decision = candidate.querySelector('input[name="decision"]')?.value;
+    const note = candidate.querySelector('[name="note"]');
+    note?.addEventListener("invalid", () => {
+      if (decision === "rejected" && !note.value.trim()) {
+        note.setCustomValidity("Vui lòng nhập lý do không đạt trước khi gửi email.");
+      }
+    });
+    note?.addEventListener("input", () => note.setCustomValidity(""));
+    candidate.addEventListener("submit", (event) => {
+      if (note) {
+        note.setCustomValidity("");
+      }
+      if (note && note.value.trim().length > 2000) {
+        event.preventDefault();
+        note.setCustomValidity("Ghi chú không được vượt quá 2.000 ký tự.");
+        note.reportValidity();
+        return;
+      }
+      if (decision === "rejected" && note && !note.value.trim()) {
+        event.preventDefault();
+        note.setCustomValidity("Vui lòng nhập lý do không đạt trước khi gửi email.");
+        note.reportValidity();
+        return;
+      }
+      const submit = candidate.querySelector('button[type="submit"]');
+      if (!submit) return;
+      submit.disabled = true;
+      submit.textContent = "Đang gửi...";
+    });
+  };
+
+  document
+    .querySelectorAll(
+      '.recruitment-actions input[name="note"], .recruitment-actions textarea[name="note"]',
+    )
+    .forEach((field) => {
+      field.setAttribute("autocomplete", "off");
+      field.setAttribute("spellcheck", "true");
+    });
+
+  document.querySelectorAll(".recruitment-actions").forEach((details) => {
+    const summary = details.querySelector(":scope > summary");
+    if (!summary || !details.parentElement) return;
+
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "recruitment-action-trigger";
+    trigger.innerHTML = summary.innerHTML;
+    trigger.setAttribute("aria-expanded", "false");
+    details.classList.add("recruitment-actions--external-trigger");
+    summary.hidden = true;
+    details.parentElement.insertBefore(trigger, details);
+    const isScheduleActions = Boolean(
+      details.closest(
+        ".resource-list--tutor-interviews, .resource-list--tutor-trials",
+      ),
+    );
+    if (isScheduleActions) {
+      const closeButton = document.createElement("button");
+      closeButton.type = "button";
+      closeButton.className = "recruitment-actions-close";
+      closeButton.setAttribute("aria-label", "Đóng thao tác");
+      closeButton.textContent = "×";
+      closeButton.addEventListener("click", () => {
+        details.open = false;
+      });
+      details.insertBefore(closeButton, details.firstChild);
+    }
+    const closeWhenOutside = (event) => {
+      if (!details.open || details.contains(event.target) || trigger.contains(event.target)) {
+        return;
+      }
+      details.open = false;
+    };
+    document.addEventListener("pointerdown", closeWhenOutside);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && details.open) {
+        details.open = false;
+        trigger.focus();
+      }
+    });
+    const renderScheduleContext = () => {
+      if (!isScheduleActions || details.querySelector(".recruitment-schedule-context")) {
+        return;
+      }
+      const row = details.closest("tr[data-form-values]");
+      if (!row) return;
+      let values;
+      try {
+        values = JSON.parse(row.dataset.formValues || "{}").recruitment_recipient;
+      } catch {
+        return;
+      }
+      if (!values) return;
+      const context = document.createElement("section");
+      context.className = "recruitment-schedule-context";
+      const title = document.createElement("strong");
+      title.textContent = details.closest(".resource-list--tutor-trials")
+        ? "Ứng viên dạy thử"
+        : "Ứng viên phỏng vấn";
+      const identity = document.createElement("p");
+      identity.className = "recruitment-schedule-context__identity";
+      identity.textContent = `${values.name || "-"} · ${values.email || "-"}`;
+      const job = document.createElement("p");
+      job.className = "recruitment-schedule-context__job";
+      job.textContent = `${values.job || "Đăng ký chung"} · ${values.subject || "Chưa rõ môn"}${values.grade && values.grade !== "-" ? ` · ${values.grade}` : ""}`;
+      const meta = document.createElement("p");
+      meta.className = "recruitment-schedule-context__meta";
+      meta.textContent = `SĐT: ${values.phone || "-"} · Khu vực: ${values.area || "-"}`;
+      context.append(title, identity, job, meta);
+      details.insertBefore(context, details.querySelector(":scope > form"));
+    };
+    const positionPanel = () => {
+      if (!details.open) return;
+      const triggerRect = trigger.getBoundingClientRect();
+      const isCentered = details.classList.contains(
+        "recruitment-actions--centered",
+      );
+      const panelWidth = isCentered
+        ? Math.min(isScheduleActions ? 560 : 420, window.innerWidth - 32)
+        : Math.min(160, Math.max(150, window.innerWidth - 32));
+      if (isCentered) {
+        details.style.position = "fixed";
+        details.style.left = "50%";
+        details.style.right = "auto";
+        details.style.top = "50%";
+        details.style.width = `${panelWidth}px`;
+        details.style.transform = "translate(-50%, -50%)";
+        return;
+      }
+      const centeredLeft = triggerRect.left + (triggerRect.width - panelWidth) / 2;
+      const left = Math.max(
+        12,
+        Math.min(centeredLeft, window.innerWidth - panelWidth - 12),
+      );
+      details.style.position = "fixed";
+      details.style.left = `${left}px`;
+      details.style.right = "auto";
+      details.style.top = `${triggerRect.bottom + 4}px`;
+      details.style.width = `${panelWidth}px`;
+      details.style.transform = "none";
+    };
+    trigger.addEventListener("click", () => {
+      details.open = !details.open;
+    });
+    details.addEventListener("toggle", () => {
+      trigger.setAttribute("aria-expanded", details.open ? "true" : "false");
+      if (details.open) {
+        if (isScheduleActions) {
+          details.classList.add("recruitment-actions--centered");
+        }
+        renderScheduleContext();
+        positionPanel();
+      } else {
+        if (
+          details.classList.contains("recruitment-actions--choice-first") ||
+          details.classList.contains("recruitment-actions--scheduled-flow")
+        ) {
+          details.removeAttribute("data-active-form");
+          details.classList.remove("is-configuring", "recruitment-actions--centered");
+          details
+            .querySelectorAll('[data-recruitment-form]')
+            .forEach((entry) => entry.classList.remove("is-active"));
+          details
+            .querySelectorAll(".recruitment-decision-form")
+            .forEach((entry) => entry.classList.remove("is-active"));
+        }
+        details.style.removeProperty("position");
+        details.style.removeProperty("left");
+        details.style.removeProperty("right");
+        details.style.removeProperty("top");
+        details.style.removeProperty("width");
+        details.style.removeProperty("transform");
+      }
+    });
+    window.addEventListener("resize", positionPanel);
+    window.addEventListener("scroll", positionPanel, true);
+
+    const forms = [...details.querySelectorAll(":scope > form")];
+    const decisionForms = forms.filter((candidate) =>
+      candidate.querySelector('input[name="decision"]'),
+    );
+    if (isScheduleActions && decisionForms.length === 2 && forms.length === 3) {
+      details.classList.add("recruitment-actions--scheduled-flow");
+      const isTrialActions = Boolean(
+        details.closest(".resource-list--tutor-trials"),
+      );
+      const scheduleForm = forms.find((candidate) =>
+        candidate.querySelector('[name="scheduled_at"]'),
+      );
+      const scheduleInput = scheduleForm?.querySelector('[name="scheduled_at"]');
+      const modeInput = scheduleForm?.querySelector('[name="mode"]');
+      const locationInput = scheduleForm?.querySelector('[name="location"]');
+      const noteInput = scheduleForm?.querySelector('[name="note"]');
+      if (scheduleForm && scheduleInput) {
+        const minimum = new Date(Date.now() + 60 * 1000);
+        scheduleInput.min = toDateTimeLocalValue(minimum);
+        scheduleInput.addEventListener("invalid", () => {
+          if (!scheduleInput.value) {
+            scheduleInput.setCustomValidity("Vui lòng chọn ngày giờ hợp lệ.");
+          } else if (scheduleInput.validity.rangeUnderflow) {
+            scheduleInput.setCustomValidity("Thời gian phải lớn hơn thời điểm hiện tại.");
+          }
+        });
+        [scheduleInput, locationInput, noteInput].forEach((field) => {
+          field?.addEventListener("input", () => field.setCustomValidity(""));
+        });
+        scheduleForm.addEventListener("submit", (event) => {
+          [scheduleInput, modeInput, locationInput, noteInput].forEach((field) => {
+            field?.setCustomValidity("");
+          });
+          const selectedAt = scheduleInput.value ? new Date(scheduleInput.value) : null;
+          if (!scheduleInput.value || !selectedAt || Number.isNaN(selectedAt.getTime())) {
+            event.preventDefault();
+            scheduleInput.setCustomValidity("Vui lòng chọn ngày giờ hợp lệ.");
+            scheduleInput.reportValidity();
+            return;
+          }
+          if (selectedAt.getTime() <= Date.now()) {
+            event.preventDefault();
+            scheduleInput.setCustomValidity("Thời gian phải lớn hơn thời điểm hiện tại.");
+            scheduleInput.reportValidity();
+            return;
+          }
+          if (!modeInput?.value) {
+            event.preventDefault();
+            modeInput?.setCustomValidity("Vui lòng chọn hình thức.");
+            modeInput?.reportValidity();
+            return;
+          }
+          if (!locationInput?.value.trim()) {
+            event.preventDefault();
+            locationInput?.setCustomValidity("Vui lòng nhập đường dẫn trực tuyến hoặc địa điểm.");
+            locationInput?.reportValidity();
+            return;
+          }
+          if ((noteInput?.value || "").trim().length > 2000) {
+            event.preventDefault();
+            noteInput?.setCustomValidity("Ghi chú không được vượt quá 2.000 ký tự.");
+            noteInput?.reportValidity();
+            return;
+          }
+          const submit = scheduleForm.querySelector('button[type="submit"]');
+          if (submit) {
+            submit.disabled = true;
+            submit.textContent = "Đang gửi...";
+          }
+        });
+      }
+      const workflowStage = isTrialActions ? "trial" : "interview";
+      decisionForms.forEach((candidate) => {
+        if (!candidate.querySelector('input[name="stage"]')) {
+          const stageInput = document.createElement("input");
+          stageInput.type = "hidden";
+          stageInput.name = "stage";
+          stageInput.value = workflowStage;
+          candidate.appendChild(stageInput);
+        }
+        bindRecruitmentDecisionValidation(candidate);
+      });
+      const choices = document.createElement("div");
+      choices.className = "recruitment-action-choices";
+      const choiceDefinitions = [
+        [
+          "approved",
+          isTrialActions ? "Đạt dạy thử → Tiếp nhận" : "Đạt phỏng vấn → Dạy thử",
+          "",
+        ],
+        [
+          "rejected",
+          isTrialActions ? "Không đạt dạy thử" : "Không đạt phỏng vấn",
+          "recruitment-action-choice--danger",
+        ],
+      ];
+      choiceDefinitions.forEach(([value, label, variant]) => {
+        const choice = document.createElement("button");
+        choice.type = "button";
+        choice.className = `recruitment-action-choice ${variant}`.trim();
+        choice.textContent = label;
+        choice.addEventListener("click", () => {
+          details.dataset.activeForm = value;
+          details.classList.add("is-configuring");
+          decisionForms.forEach((candidate) => {
+            candidate.classList.toggle(
+              "is-active",
+              candidate.querySelector('input[name="decision"]')?.value === value,
+            );
+          });
+          const activeForm = decisionForms.find(
+            (candidate) => candidate.querySelector('input[name="decision"]')?.value === value,
+          );
+          if (activeForm && !activeForm.querySelector(".recruitment-action-back")) {
+            const backButton = document.createElement("button");
+            backButton.type = "button";
+            backButton.className = "recruitment-action-back";
+            backButton.textContent = "← Chọn lại";
+            backButton.addEventListener("click", () => {
+              details.removeAttribute("data-active-form");
+              details.classList.remove("is-configuring");
+              decisionForms.forEach((entry) => entry.classList.remove("is-active"));
+              positionPanel();
+            });
+            activeForm.insertBefore(backButton, activeForm.firstChild);
+          }
+          positionPanel();
+        });
+        choices.appendChild(choice);
+      });
+      forms[0].after(choices);
+      return;
+    }
+    // The approval menu has exactly two decisions. Keep the schedule/result
+    // menu on the interview page unchanged; it needs all four operations.
+    if (decisionForms.length !== 2 || forms.length !== 2) return;
+
+    details.classList.add("recruitment-actions--choice-first");
+    decisionForms.forEach((candidate) => {
+      const decision = candidate.querySelector('input[name="decision"]')?.value;
+      candidate.dataset.recruitmentForm = decision || "";
+      if (decision === "reviewing") {
+        const submit = candidate.querySelector('button[type="submit"]');
+        if (submit) submit.textContent = "Duyệt hồ sơ & gửi email";
+      }
+      const backButton = document.createElement("button");
+      backButton.type = "button";
+      backButton.className = "recruitment-action-back";
+      backButton.textContent = "← Chọn lại";
+      backButton.addEventListener("click", () => {
+        details.removeAttribute("data-active-form");
+        details.classList.remove("is-configuring", "recruitment-actions--centered");
+        decisionForms.forEach((entry) => entry.classList.remove("is-active"));
+        positionPanel();
+      });
+      candidate.insertBefore(backButton, candidate.firstChild);
+      bindRecruitmentDecisionValidation(candidate);
+    });
+
+    const choices = document.createElement("div");
+    choices.className = "recruitment-action-choices";
+    const choiceDefinitions = [
+      ["reviewing", "Duyệt hồ sơ", "recruitment-action-choice--primary"],
+      ["rejected", "Từ chối hồ sơ", "recruitment-action-choice--danger"],
+    ];
+    choiceDefinitions.forEach(([value, label, variant]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `recruitment-action-choice ${variant}`;
+      button.textContent = label;
+      button.addEventListener("click", () => {
+        details.dataset.activeForm = value;
+        details.classList.add("is-configuring");
+        details.classList.add("recruitment-actions--centered");
+        decisionForms.forEach((candidate) => {
+          candidate.classList.toggle(
+            "is-active",
+            candidate.dataset.recruitmentForm === value,
+          );
+        });
+        const activeForm = details.querySelector(
+          `[data-recruitment-form="${value}"]`,
+        );
+        const row = details.closest("tr[data-form-values]");
+        if (activeForm && row && !activeForm.querySelector(".recruitment-recipient-summary")) {
+          try {
+            const values = JSON.parse(row.dataset.formValues || "{}").recruitment_recipient;
+            if (values) {
+              const summary = document.createElement("section");
+              summary.className = "recruitment-recipient-summary";
+              const title = document.createElement("strong");
+              title.textContent = "Email sẽ gửi tới ứng viên";
+              summary.appendChild(title);
+              const fields = [
+                ["Họ tên", values.name],
+                ["Email", values.email],
+                ["Môn dạy", values.subject],
+                ["Lớp", values.grade],
+                ["Số điện thoại", values.phone],
+                ["Khu vực", values.area],
+                ["Hình thức", values.mode],
+              ];
+              const list = document.createElement("dl");
+              fields.forEach(([label, text]) => {
+                const item = document.createElement("div");
+                const key = document.createElement("dt");
+                key.textContent = label;
+                const content = document.createElement("dd");
+                content.textContent = text || "-";
+                item.append(key, content);
+                list.appendChild(item);
+              });
+              summary.appendChild(list);
+              activeForm.querySelector(".recruitment-action-back")?.after(summary);
+            }
+          } catch (_) {
+            // Keep the decision form usable if an old row has no detail payload.
+          }
+        }
+        const noteInput = activeForm?.querySelector('input[name="note"]');
+        if (noteInput) {
+          const noteArea = document.createElement("textarea");
+          ["name", "maxlength", "placeholder", "required", "autocomplete", "spellcheck"].forEach(
+            (attribute) => {
+              if (noteInput.hasAttribute(attribute)) {
+                noteArea.setAttribute(attribute, noteInput.getAttribute(attribute) || "");
+              }
+            },
+          );
+          noteArea.rows = 4;
+          noteArea.value = noteInput.value;
+          noteInput.replaceWith(noteArea);
+        }
+        details
+          .querySelector(`[data-recruitment-form="${value}"] [name="note"]`)
+          ?.focus();
+        positionPanel();
+      });
+      choices.appendChild(button);
+    });
+    details.insertBefore(choices, forms[0]);
+  });
+
   if (!table || !body) return;
 
   form
@@ -873,7 +1300,26 @@ document.addEventListener("DOMContentLoaded", () => {
   if (clearButton)
     clearButton.innerHTML =
       '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';
-  const bulkDelete = document.querySelector("[data-resource-delete-selected]");
+  let bulkDelete = document.querySelector("[data-resource-delete-selected]");
+  if (
+    !bulkDelete &&
+    bulkBar &&
+    [
+      "tutor-candidates",
+      "tutor-approvals",
+      "tutor-interviews",
+      "tutor-trials",
+      "tutor-onboarding",
+    ].includes(resourceKey)
+  ) {
+    const separator = document.createElement("i");
+    bulkDelete = document.createElement("button");
+    bulkDelete.type = "button";
+    bulkDelete.className = "users-bulk-actions__delete";
+    bulkDelete.dataset.resourceDeleteSelected = "";
+    bulkDelete.setAttribute("aria-label", "Xóa mục đã chọn");
+    bulkBar.append(separator, bulkDelete);
+  }
   if (bulkDelete)
     bulkDelete.innerHTML =
       '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 11v6M14 11v6M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';

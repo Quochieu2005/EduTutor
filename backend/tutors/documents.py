@@ -222,6 +222,17 @@ class TutorAvailability(BigIntDocument):
 
 
 class TutorApplication(TimestampedDocument):
+    WORKFLOW_APPLICATION = 'application'
+    WORKFLOW_REVIEW = 'review'
+    WORKFLOW_INTERVIEW = 'interview'
+    WORKFLOW_TRIAL = 'trial'
+    WORKFLOW_ONBOARDING = 'onboarding'
+    WORKFLOW_COMPLETED = 'completed'
+    WORKFLOW_CHOICES = (
+        WORKFLOW_APPLICATION, WORKFLOW_REVIEW, WORKFLOW_INTERVIEW,
+        WORKFLOW_TRIAL, WORKFLOW_ONBOARDING, WORKFLOW_COMPLETED,
+    )
+
     name = StringField(required=True, max_length=150)
     email = EmailField(required=True, max_length=254)
     phone = StringField(required=True, max_length=20)
@@ -233,12 +244,37 @@ class TutorApplication(TimestampedDocument):
     education_proof_file = StringField(max_length=1000, null=True)
     cover_letter = StringField(null=True)
     status = StringField(required=True, choices=('pending', 'reviewing', 'approved', 'rejected'), default='pending')
+    # Recruitment has several operational steps while the public status keeps
+    # the original API contract.  These fields are additive and therefore safe
+    # for existing MongoDB documents that predate the workflow.
+    workflow_stage = StringField(choices=WORKFLOW_CHOICES, default=WORKFLOW_APPLICATION)
     rejected_reason = StringField(null=True)
+    decision_note = StringField(null=True, max_length=2000)
     reviewed_by = ReferenceField('Admin', null=True, db_field='reviewed_by')
     reviewed_at = DateTimeField(null=True)
+    interview_at = DateTimeField(null=True)
+    interview_mode = StringField(choices=('online', 'offline'), null=True)
+    interview_location = StringField(null=True, max_length=500)
+    interview_note = StringField(null=True, max_length=2000)
+    trial_at = DateTimeField(null=True)
+    # Trial scheduling has its own delivery details so the interview invite
+    # remains visible after an applicant advances to the next stage.
+    trial_mode = StringField(choices=('online', 'offline'), null=True)
+    trial_location = StringField(null=True, max_length=500)
+    trial_note = StringField(null=True, max_length=2000)
+    onboarding_status = StringField(
+        choices=('pending', 'processing', 'completed'),
+        default='pending',
+    )
+    onboarded_tutor = ReferenceField('Tutor', null=True, db_field='onboarded_tutor_id')
+    feedback_sent_at = DateTimeField(null=True)
+    last_feedback_type = StringField(null=True, max_length=50)
     meta = {
         'collection': 'tutor_applications',
-        'indexes': ['status', 'email', 'job_posting', 'reviewed_by', '-created_at'],
+        'indexes': [
+            'status', 'workflow_stage', 'email', 'job_posting', 'reviewed_by',
+            'onboarding_status', '-created_at',
+        ],
     }
 
 
