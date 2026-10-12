@@ -117,7 +117,12 @@ def open_recruitment_jobs(posted_by_type=None):
     return jobs.order_by('-created_at', '-id')
 
 
-def _public_tutor_payload(tutor, subject_links=None, area_links=None):
+def _reference_id(reference):
+    """Return a MongoEngine reference id without hydrating its document."""
+    return getattr(reference, 'id', None)
+
+
+def _public_tutor_payload(tutor, subject_links=None, area_links=None, *, subjects=None, teaching_areas=None):
     # List views pass preloaded links to avoid two MongoDB queries per tutor.
     # Detail views keep the same behavior by loading only this tutor's links.
     if subject_links is None:
@@ -148,8 +153,11 @@ def _public_tutor_payload(tutor, subject_links=None, area_links=None):
         'rating_avg': float(tutor.rating_avg or 0),
         'rating_count': tutor.rating_count or 0,
         'teaching_mode': tutor.teaching_mode,
-        'subjects': [{'slug': link.subject.slug, 'name': link.subject.name, 'level': link.level} for link in subject_links],
-        'teaching_areas': [
+        'subjects': subjects if subjects is not None else [
+            {'slug': link.subject.slug, 'name': link.subject.name, 'level': link.level}
+            for link in subject_links
+        ],
+        'teaching_areas': teaching_areas if teaching_areas is not None else [
             {
                 'province_slug': link.province.slug,
                 'province_name': link.province.name,
@@ -188,6 +196,21 @@ class PublicTutorListView(APIView):
                 if getattr(reference, 'id', None) is not None
             ]
             tutors = tutors.filter(id__in=tutor_ids)
+        if values.get('grade'):
+            grade_patterns = {
+                'primary': r'tiểu học|tieu hoc|lớp [1-5]|lop [1-5]|cấp 1|cap 1',
+                'secondary': r'thcs|lớp [6-9]|lop [6-9]|cấp 2|cap 2',
+                'high-school': r'thpt|lớp 1[0-2]|lop 1[0-2]|cấp 3|cap 3',
+                'exam-prep': r'đại học|dai hoc|luyện thi|luyen thi|exam',
+            }
+            tutor_ids = [
+                reference.id
+                for reference in TutorSubject.objects(
+                    level__iregex=grade_patterns[values['grade']],
+                ).no_dereference().scalar('tutor')
+                if getattr(reference, 'id', None) is not None
+            ]
+            tutors = tutors.filter(id__in=tutor_ids)
         if values.get('province'):
             province = Province.objects(slug=values['province']).first()
             if province is None:
@@ -222,15 +245,53 @@ class PublicTutorListView(APIView):
         subjects_by_tutor = {tutor_id: [] for tutor_id in tutor_ids}
         areas_by_tutor = {tutor_id: [] for tutor_id in tutor_ids}
         if tutor_ids:
-            for link in TutorSubject.objects(tutor__in=tutor_ids).select_related():
-                subjects_by_tutor.setdefault(link.tutor.id, []).append(link)
-            for link in TutorTeachingArea.objects(tutor__in=tutor_ids).select_related():
-                areas_by_tutor.setdefault(link.tutor.id, []).append(link)
+            # ``select_related()`` used to hydrate every Tutor reference on
+            # both link collections even though the response already has the
+            # tutor documents. Fetch each related Subject/Province/Ward once
+            # instead, which removes the N+1 dereference cost for page_size=100.
+            subject_links = list(TutorSubject.objects(tutor__in=tutor_ids).no_dereference())
+            subject_ids = {reference_id for link in subject_links if (reference_id := _reference_id(link.subject)) is not None}
+            subject_by_id = {
+                subject.id: subject
+                for subject in Subject.objects(id__in=list(subject_ids)).only('slug', 'name')
+            }
+            for link in subject_links:
+                tutor_id = _reference_id(link.tutor)
+                subject = subject_by_id.get(_reference_id(link.subject))
+                if tutor_id is not None and subject is not None:
+                    subjects_by_tutor.setdefault(tutor_id, []).append({
+                        'slug': subject.slug,
+                        'name': subject.name,
+                        'level': link.level,
+                    })
+
+            area_links = list(TutorTeachingArea.objects(tutor__in=tutor_ids).no_dereference())
+            province_ids = {reference_id for link in area_links if (reference_id := _reference_id(link.province)) is not None}
+            ward_ids = {reference_id for link in area_links if (reference_id := _reference_id(link.ward)) is not None}
+            province_by_id = {
+                province.id: province
+                for province in Province.objects(id__in=list(province_ids)).only('slug', 'name')
+            }
+            ward_by_id = {
+                ward.id: ward
+                for ward in Ward.objects(id__in=list(ward_ids)).only('slug', 'name')
+            }
+            for link in area_links:
+                tutor_id = _reference_id(link.tutor)
+                province = province_by_id.get(_reference_id(link.province))
+                ward = ward_by_id.get(_reference_id(link.ward))
+                if tutor_id is not None and province is not None:
+                    areas_by_tutor.setdefault(tutor_id, []).append({
+                        'province_slug': province.slug,
+                        'province_name': province.name,
+                        'ward_slug': ward.slug if ward else None,
+                        'ward_name': ward.name if ward else None,
+                    })
         payload = [
             _public_tutor_payload(
                 tutor,
-                subjects_by_tutor.get(tutor.id, []),
-                areas_by_tutor.get(tutor.id, []),
+                subjects=subjects_by_tutor.get(tutor.id, []),
+                teaching_areas=areas_by_tutor.get(tutor.id, []),
             )
             for tutor in page
         ]

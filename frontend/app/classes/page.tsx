@@ -45,6 +45,9 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
   const paramCity = searchParams.get("city") || "all";
   const paramWard = searchParams.get("ward") || "all";
   const paramKeyword = searchParams.get("keyword") || "";
+  const pageSize = 8;
+  const requestedPageValue = Number(searchParams.get("page") || "1");
+  const requestedPage = Math.max(1, Number.isFinite(requestedPageValue) ? Math.trunc(requestedPageValue) : 1);
 
   // Local filter states
   const [filterSubject, setFilterSubject] = useState(getSubjectSlug(paramSubject) ?? "all");
@@ -101,6 +104,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
   const [applySuccess, setApplySuccess] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [classes, setClasses] = useState<ClassListing[]>([]);
+  const [classTotalCount, setClassTotalCount] = useState(0);
   const [apiSubjects, setApiSubjects] = useState<Subject[]>([]);
   const [apiProvinces, setApiProvinces] = useState<Province[]>([]);
   const [apiWardsState, setApiWardsState] = useState<{ provinceSlug: string | null; wards: Ward[] }>({
@@ -196,7 +200,8 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
       setClassesLoadError(null);
       try {
         const page = await edututorApi.tutorJobs({
-          page_size: 100,
+          page: requestedPage,
+          page_size: pageSize,
           posted_by: recruitmentMode ? "admin" : "requester",
           subject: getSubjectSlug(paramSubject),
           province: getProvinceSlug(paramCity),
@@ -204,7 +209,10 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
           search: paramKeyword.trim() || undefined,
           teaching_mode: paramMode === "online" || paramMode === "offline" || paramMode === "both" ? paramMode : undefined,
         });
-        if (isCurrent) setClasses(page.results.map(toClassPresentation));
+        if (isCurrent) {
+          setClasses(page.results.map(toClassPresentation));
+          setClassTotalCount(page.count);
+        }
       } catch {
         if (isCurrent) {
           if (!hasLoadedClasses.current) setClasses([]);
@@ -219,7 +227,7 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
     }
     void loadClasses();
     return () => { isCurrent = false; };
-  }, [classesRefreshKey, paramCity, paramKeyword, paramMode, paramSubject, paramWard, recruitmentMode]);
+  }, [classesRefreshKey, paramCity, paramKeyword, paramMode, paramSubject, paramWard, recruitmentMode, requestedPage]);
 
   const subjectOptions = apiSubjects;
   const provinceOptions = apiProvinces.map((province) => ({ value: province.name, label: province.name }));
@@ -258,11 +266,9 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
     });
   }, [classes, paramSubject, paramMode, paramCity, paramKeyword]);
 
-  const pageSize = 8;
-  const totalPages = Math.max(1, Math.ceil(filteredClasses.length / pageSize));
-  const requestedPage = Number(searchParams.get("page") || "1");
-  const currentPage = Math.min(totalPages, Math.max(1, Number.isFinite(requestedPage) ? Math.trunc(requestedPage) : 1));
-  const paginatedClasses = filteredClasses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.max(1, Math.ceil(classTotalCount / pageSize));
+  const currentPage = Math.min(totalPages, requestedPage);
+  const paginatedClasses = filteredClasses;
   const changePage = (page: number) => {
     const params = new URLSearchParams(searchParams.toString());
     if (page <= 1) params.delete("page"); else params.set("page", String(page));

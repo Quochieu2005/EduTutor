@@ -53,6 +53,9 @@ function TutorsListContent() {
   const paramCity = searchParams.get("city") || "all";
   const paramWard = searchParams.get("ward") || "all";
   const paramTutorId = searchParams.get("tutorId");
+  const pageSize = 8;
+  const requestedPageValue = Number(searchParams.get("page") || "1");
+  const requestedPage = Math.max(1, Number.isFinite(requestedPageValue) ? Math.trunc(requestedPageValue) : 1);
 
   // Giá trị dropdown luôn là slug do API Subjects trả về. Không ánh xạ qua
   // danh sách môn viết sẵn trong frontend, để môn Admin thêm sau này vẫn lọc được.
@@ -89,6 +92,7 @@ function TutorsListContent() {
   }
 
   const [tutors, setTutors] = useState<Tutor[]>([]);
+  const [tutorTotalCount, setTutorTotalCount] = useState(0);
   const [apiSubjects, setApiSubjects] = useState<Array<{ slug: string; name: string }>>([]);
   const [apiProvinces, setApiProvinces] = useState<Province[]>([]);
   const [apiWardsState, setApiWardsState] = useState<{ provinceSlug: string | null; wards: Ward[] }>({
@@ -143,15 +147,22 @@ function TutorsListContent() {
       setTutorsLoadError(null);
       try {
         const page = await edututorApi.tutors({
-          page_size: 100,
+          page: requestedPage,
+          page_size: pageSize,
           subject: paramSubject === "all" ? undefined : paramSubject,
+          grade: paramGrade === "primary" || paramGrade === "secondary" || paramGrade === "high-school" || paramGrade === "exam-prep"
+            ? paramGrade
+            : undefined,
           province: getProvinceSlug(paramCity),
           ward: paramWard !== "all" ? paramWard : undefined,
           teaching_mode: paramMode === "online" || paramMode === "offline" || paramMode === "both"
             ? paramMode
             : undefined,
         });
-        if (isCurrent) setTutors(page.results.map(toTutorPresentation));
+        if (isCurrent) {
+          setTutors(page.results.map(toTutorPresentation));
+          setTutorTotalCount(page.count);
+        }
       } catch {
         if (isCurrent) {
           setTutors([]);
@@ -166,7 +177,7 @@ function TutorsListContent() {
     return () => {
       isCurrent = false;
     };
-  }, [apiRevision, paramCity, paramMode, paramSubject, paramWard]);
+  }, [apiRevision, paramCity, paramGrade, paramMode, paramSubject, paramWard, requestedPage]);
 
   const subjectOptions = apiSubjects;
   const provinceOptions = apiProvinces.map((province) => ({ value: province.name, label: province.name }));
@@ -232,11 +243,9 @@ function TutorsListContent() {
     });
   }, [tutors, paramGrade, paramMode, paramCity]);
 
-  const pageSize = 8;
-  const totalPages = Math.max(1, Math.ceil(filteredTutors.length / pageSize));
-  const requestedPage = Number(searchParams.get("page") || "1");
-  const currentPage = Math.min(totalPages, Math.max(1, Number.isFinite(requestedPage) ? Math.trunc(requestedPage) : 1));
-  const paginatedTutors = filteredTutors.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.max(1, Math.ceil(tutorTotalCount / pageSize));
+  const currentPage = Math.min(totalPages, requestedPage);
+  const paginatedTutors = filteredTutors;
   const changePage = (page: number) => {
     const params = new URLSearchParams(searchParams.toString());
     if (page <= 1) params.delete("page"); else params.set("page", String(page));

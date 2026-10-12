@@ -130,6 +130,14 @@ class Tutor(TimestampedDocument):
             'partialFilterExpression': {'oauth_uid': {'$type': 'string'}},
         },
         'status', 'teaching_mode', 'is_verified', '-rating_avg',
+        # The public directory always filters active tutors then sorts by
+        # verification, rating and name. A compound index prevents MongoDB
+        # from scanning and sorting the whole tutor collection on a cold
+        # request before the short public-response cache is populated.
+        {
+            'fields': ['status', '-is_verified', '-rating_avg', 'name'],
+            'name': 'public_tutor_directory_v1',
+        },
     ]}
 
     def set_password(self, raw_password):

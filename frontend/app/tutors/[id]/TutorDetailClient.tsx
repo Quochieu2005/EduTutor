@@ -108,6 +108,8 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackLoadedTutorId, setFeedbackLoadedTutorId] = useState<string | null>(null);
   const [feedbackErrorTutorId, setFeedbackErrorTutorId] = useState<string | null>(null);
+  const [feedbackSection, setFeedbackSection] = useState<HTMLElement | null>(null);
+  const [shouldLoadFeedback, setShouldLoadFeedback] = useState(false);
   const [apiAvailability, setApiAvailability] = useState<Record<number, ("morning" | "afternoon" | "evening")[]>>({});
 
   useEffect(() => {
@@ -146,6 +148,27 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
   }, [isSignedIn, user]);
 
   useEffect(() => {
+    if (!feedbackSection) return;
+    if (typeof IntersectionObserver === "undefined") {
+      const fallback = window.setTimeout(() => setShouldLoadFeedback(true), 0);
+      return () => window.clearTimeout(fallback);
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        setShouldLoadFeedback(true);
+        observer.disconnect();
+      },
+      // Start loading shortly before the section enters the viewport so the
+      // content is ready by the time a visitor reaches it.
+      { rootMargin: "320px 0px" },
+    );
+    observer.observe(feedbackSection);
+    return () => observer.disconnect();
+  }, [feedbackSection]);
+
+  useEffect(() => {
+    if (!shouldLoadFeedback) return;
     let isCurrent = true;
     Promise.all([
       edututorApi.tutorReviews(tutor.id, { page_size: 100 }),
@@ -164,7 +187,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
         }
       });
     return () => { isCurrent = false; };
-  }, [apiRevision, tutor.id]);
+  }, [apiRevision, shouldLoadFeedback, tutor.id]);
 
   useEffect(() => {
     let current = true;
@@ -692,7 +715,7 @@ export function TutorDetailClient({ tutor, initialOpenClasses }: TutorDetailClie
         )}
 
         {/* 3. ĐÁNH GIÁ VÀ HỎI ĐÁP THEO TỪNG GIA SƯ */}
-        <section aria-labelledby="reviews-heading" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
+        <section ref={setFeedbackSection} aria-labelledby="reviews-heading" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-5">
             <div>
               <h2 id="reviews-heading" className="text-lg font-bold text-slate-900">Đánh giá từ phụ huynh &amp; học sinh</h2>

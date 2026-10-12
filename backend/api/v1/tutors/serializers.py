@@ -77,6 +77,9 @@ class PublicTutorSerializer(serializers.Serializer):
 
 class PublicTutorQuerySerializer(SafeQuerySerializer):
     subject = serializers.SlugField(required=False, max_length=180)
+    grade = serializers.ChoiceField(
+        choices=('primary', 'secondary', 'high-school', 'exam-prep'), required=False,
+    )
     province = serializers.SlugField(required=False, max_length=180)
     ward = serializers.SlugField(required=False, max_length=180)
     teaching_mode = serializers.ChoiceField(choices=('online', 'offline', 'both'), required=False)

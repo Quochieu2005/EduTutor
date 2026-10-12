@@ -215,7 +215,7 @@ export const edututorApi = {
   async tutorJobs(params?: { page?: number; page_size?: number; search?: string; subject?: string; province?: string; ward?: string; posted_by?: "admin" | "parent" | "student" | "requester"; teaching_mode?: "online" | "offline" | "both" }) {
     return page<TutorJob>(await cachedGet("/v1/tutors/jobs/", params, 30_000));
   },
-  async tutors(params?: { page?: number; page_size?: number; subject?: string; province?: string; ward?: string; teaching_mode?: "online" | "offline" | "both"; search?: string }) {
+  async tutors(params?: { page?: number; page_size?: number; subject?: string; grade?: "primary" | "secondary" | "high-school" | "exam-prep"; province?: string; ward?: string; teaching_mode?: "online" | "offline" | "both"; search?: string }) {
     return page<PublicTutor>(await cachedGet("/v1/tutors/", params, 30_000));
   },
   async tutor(slug: string) { return cachedGet<PublicTutor>(`/v1/tutors/${encodeURIComponent(slug)}/`, undefined, 30_000); },
