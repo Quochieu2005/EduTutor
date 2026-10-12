@@ -1,8 +1,16 @@
 import json
 import logging
+import html as html_module
+from io import BytesIO
+import mimetypes
 import re
 import secrets
+import zipfile
 from datetime import datetime, timedelta, timezone
+from pathlib import PurePosixPath
+from urllib.parse import urlparse
+from urllib.request import Request as UrlRequest
+from urllib.request import urlopen
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -12,6 +20,7 @@ from django.core.mail import EmailMessage, get_connection, send_mail
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.dateparse import parse_datetime
 from django.utils.crypto import salted_hmac
 from django.utils.text import slugify
 from mongoengine import NotUniqueError, ValidationError
@@ -527,6 +536,203 @@ def _recruitment_status(value):
     return str(value or 'pending').replace('_', ' ').title()
 
 
+def _tutor_application_stage(application):
+    """Return a workflow stage, including a safe fallback for old records."""
+    stage = getattr(application, 'workflow_stage', None)
+    if stage in TutorApplication.WORKFLOW_CHOICES:
+        # Before workflow_stage was added, reviewing applications represented
+        # the interview queue.  Keep those existing records visible there.
+        if stage in (
+            TutorApplication.WORKFLOW_APPLICATION,
+            TutorApplication.WORKFLOW_REVIEW,
+        ) and application.status == 'reviewing':
+            return TutorApplication.WORKFLOW_INTERVIEW
+        return stage
+    if application.status == 'pending':
+        return TutorApplication.WORKFLOW_APPLICATION
+    if application.status == 'reviewing':
+        return TutorApplication.WORKFLOW_INTERVIEW
+    if application.status == 'approved':
+        return TutorApplication.WORKFLOW_ONBOARDING
+    return TutorApplication.WORKFLOW_COMPLETED
+
+
+def _tutor_application_stage_label(stage):
+    return {
+        TutorApplication.WORKFLOW_APPLICATION: 'Mới nộp',
+        TutorApplication.WORKFLOW_REVIEW: 'Đang duyệt hồ sơ',
+        TutorApplication.WORKFLOW_INTERVIEW: 'Phỏng vấn',
+        TutorApplication.WORKFLOW_TRIAL: 'Dạy thử',
+        TutorApplication.WORKFLOW_ONBOARDING: 'Chờ tiếp nhận',
+        TutorApplication.WORKFLOW_COMPLETED: 'Đã hoàn tất',
+    }.get(stage, 'Đang xử lý')
+
+
+def _tutor_application_schedule(application):
+    stage = _tutor_application_stage(application)
+    if stage == TutorApplication.WORKFLOW_REVIEW:
+        return 'Chưa xếp lịch'
+    value = application.interview_at if stage == TutorApplication.WORKFLOW_INTERVIEW else application.trial_at
+    if not value:
+        return 'Chưa xếp lịch'
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(VIETNAM_TIME_ZONE).strftime('%H:%M · %d/%m/%Y')
+
+
+def _tutor_application_event_mode(application, stage=None):
+    """Return the mode for the current recruitment event without mixing rounds."""
+    current_stage = stage or _tutor_application_stage(application)
+    if current_stage == TutorApplication.WORKFLOW_TRIAL:
+        # Fall back to the old shared fields for legacy trial records.
+        return getattr(application, 'trial_mode', None) or getattr(application, 'interview_mode', None)
+    return getattr(application, 'interview_mode', None)
+
+
+def _tutor_application_event_location(application, stage=None):
+    """Return the location/link belonging to the current recruitment event."""
+    current_stage = stage or _tutor_application_stage(application)
+    if current_stage == TutorApplication.WORKFLOW_TRIAL:
+        return getattr(application, 'trial_location', None) or getattr(application, 'interview_location', None)
+    return getattr(application, 'interview_location', None)
+
+
+def _tutor_application_job(application):
+    try:
+        return application.job_posting.title if application.job_posting else 'Đăng ký chung'
+    except Exception:
+        return 'Đăng ký chung'
+
+
+def _tutor_application_recipient(application):
+    """Return the applicant/job details shown before an email decision."""
+    details = {
+        'name': application.name or '-',
+        'email': application.email or '-',
+        'phone': application.phone or '-',
+        'job': _tutor_application_job(application),
+        'subject': '-',
+        'grade': '-',
+        'area': '-',
+        'mode': 'Theo thỏa thuận',
+    }
+    try:
+        job = application.job_posting
+        if not job:
+            return details
+        details['subject'] = _recruitment_reference_name(job.subject)
+        details['grade'] = getattr(job, 'grade', None) or '-'
+        province = _recruitment_reference_name(getattr(job, 'province', None))
+        ward = _recruitment_reference_name(getattr(job, 'ward', None))
+        details['area'] = ' · '.join(value for value in (ward, province) if value and value != '-') or '-'
+        details['mode'] = _tutor_mode(getattr(job, 'teaching_mode', 'both'))
+    except Exception:
+        # A legacy application may reference a deleted recruitment notice.
+        pass
+    return details
+
+
+def _parse_tutor_application_datetime(raw):
+    raw_value = (raw or '').strip()
+    value = parse_datetime(raw_value)
+    if value is None:
+        raise ValueError('Vui lòng chọn ngày giờ hợp lệ.')
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=VIETNAM_TIME_ZONE)
+    value = value.astimezone(timezone.utc)
+    if value <= datetime.now(timezone.utc):
+        raise ValueError('Thời gian phỏng vấn/dạy thử phải lớn hơn thời điểm hiện tại.')
+    return value
+
+
+def _validate_tutor_application_schedule_is_future(value, label):
+    if value is None:
+        raise ValueError(f'Vui lòng xếp lịch {label} trước khi đánh dấu đạt.')
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    if value.astimezone(timezone.utc) <= datetime.now(timezone.utc):
+        raise ValueError(f'Lịch {label} đã qua, vui lòng xếp lại thời gian mới.')
+
+
+def _tutor_application_feedback(application, feedback_type, *, note='', schedule=None):
+    """Send one Vietnamese recruitment update and record delivery metadata."""
+    schedule_text = ''
+    if schedule:
+        schedule_value = schedule
+        if schedule_value.tzinfo is None:
+            schedule_value = schedule_value.replace(tzinfo=timezone.utc)
+        schedule_text = schedule_value.astimezone(VIETNAM_TIME_ZONE).strftime('%H:%M ngày %d/%m/%Y')
+    job_title = _tutor_application_job(application)
+    subject_map = {
+        'review': 'Hồ sơ ứng tuyển gia sư EduTutor đã được tiếp nhận',
+        'interview': 'Lịch phỏng vấn gia sư EduTutor',
+        'interview_passed': 'Mời vào vòng dạy thử gia sư EduTutor',
+        'trial': 'Lịch dạy thử gia sư EduTutor',
+        'approved': 'Chúc mừng bạn đã đạt tuyển dụng gia sư EduTutor',
+        'rejected': 'Kết quả hồ sơ ứng tuyển gia sư EduTutor',
+        'onboarding': 'Thông báo tiếp nhận gia sư EduTutor',
+    }
+    body_map = {
+        'review': (
+            f'Xin chào {application.name},\n\n'
+            f'Edututor đã nhận hồ sơ ứng tuyển của bạn cho tin “{job_title}”.\n'
+            'Hồ sơ đã qua bước tiếp nhận ban đầu và đang được quản trị viên kiểm tra. '
+            'Chúng tôi sẽ gửi thông tin lịch tiếp theo qua email này.\n\n'
+        ),
+        'interview': (
+            f'Xin chào {application.name},\n\n'
+            f'Hồ sơ cho tin “{job_title}” đã được xếp lịch phỏng vấn lúc {schedule_text}.\n'
+        ),
+        'interview_passed': (
+            f'Xin chào {application.name},\n\n'
+            f'Chúc mừng bạn đã đạt vòng phỏng vấn cho tin “{job_title}”.\n'
+            'EduTutor sẽ tiếp tục sắp xếp buổi dạy thử và gửi lịch cụ thể qua email này.\n'
+        ),
+        'trial': (
+            f'Xin chào {application.name},\n\n'
+            f'Bạn đã được xếp lịch dạy thử cho tin “{job_title}” lúc {schedule_text}.\n'
+        ),
+        'approved': (
+            f'Xin chào {application.name},\n\n'
+            f'Chúc mừng bạn đã đạt vòng tuyển dụng cho tin “{job_title}”. '
+            'Hồ sơ của bạn đã chuyển sang bước tiếp nhận gia sư.\n'
+        ),
+        'rejected': (
+            f'Xin chào {application.name},\n\n'
+            f'Cảm ơn bạn đã ứng tuyển cho tin “{job_title}”. Sau khi xem xét, hồ sơ hiện chưa phù hợp '
+            'với yêu cầu tuyển dụng.\n'
+        ),
+        'onboarding': (
+            f'Xin chào {application.name},\n\n'
+            f'Hồ sơ ứng tuyển cho tin “{job_title}” đã được tiếp nhận vào quy trình tạo tài khoản gia sư.\n'
+        ),
+    }
+    body = body_map.get(feedback_type, body_map['review'])
+    if feedback_type in ('interview', 'trial'):
+        event_stage = TutorApplication.WORKFLOW_TRIAL if feedback_type == 'trial' else TutorApplication.WORKFLOW_INTERVIEW
+        mode = _tutor_application_mode_label(_tutor_application_event_mode(application, event_stage))
+        body += f'Hình thức: {mode}.\n'
+        location = _tutor_application_event_location(application, event_stage)
+        if location:
+            body += f'Địa điểm/đường dẫn: {location}\n'
+    if note:
+        body += f'\nGhi chú từ EduTutor:\n{note.strip()}\n'
+    body += '\nTrân trọng,\nEduTutor'
+    EmailMessage(
+        subject=subject_map.get(feedback_type, subject_map['review']),
+        body=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[application.email],
+    ).send(fail_silently=False)
+    application.feedback_sent_at = datetime.now(timezone.utc)
+    application.last_feedback_type = feedback_type
+    application.save()
+
+
+def _tutor_application_mode_label(value):
+    return {'online': 'Trực tuyến', 'offline': 'Trực tiếp'}.get(value, 'Theo thỏa thuận')
+
+
 def _tutor_mode(value):
     return {
         'online': 'Trực tuyến',
@@ -597,12 +803,7 @@ def _tutors_page_config():
 
 
 def _recruitment_page_config(module):
-    """Build recruitment tables from the defined MongoDB collections.
-
-    Interview appointments, trial-lesson scores, contracts and onboarding
-    progress do not exist in the approved schema, so no placeholder data is
-    created for them.
-    """
+    """Build the five-page recruitment workflow from real MongoDB records."""
     if module == 'tutor-jobs':
         # This board is reserved for recruitment notices created by Admin.
         # Parent/student class postings are reviewed under tutor-requests.
@@ -632,70 +833,116 @@ def _recruitment_page_config(module):
     if module == 'tutor-candidates':
         return {
             'title': 'Ứng viên gia sư', 'group': 'Tuyển dụng', 'singular': 'ứng viên',
-            'description': 'Theo dõi hồ sơ ứng tuyển và tiến độ tuyển dụng của các ứng viên gia sư.',
+            'description': 'Nơi tập trung mọi CV và hồ sơ mà ứng viên gửi từ trang Tuyển dụng.',
             'columns': [
                 ('candidate', 'Ứng viên'), ('email', 'Email'), ('phone', 'Số điện thoại'), ('job', 'Tin tuyển dụng'),
-                ('applied', 'Ngày ứng tuyển'), ('status', 'Trạng thái'),
+                ('documents', 'Tài liệu'), ('applied', 'Ngày ứng tuyển'), ('stage', 'Bước xử lý'), ('status', 'Trạng thái'),
             ],
             'statuses': ['Pending', 'Reviewing', 'Approved', 'Rejected'],
             'rows': [(
                 item.name, item.email, item.phone,
-                item.job_posting.title if item.job_posting else 'Đăng ký chung',
+                _tutor_application_job(item),
+                ' / '.join(label for label, url in (
+                    ('CV', item.cv_file), ('CCCD', item.id_card_file), ('Bằng cấp', item.education_proof_file),
+                ) if url) or 'Chưa đính kèm',
                 _recruitment_date(item.created_at),
+                _tutor_application_stage_label(_tutor_application_stage(item)),
                 _recruitment_status(item.status),
             ) for item in applications],
+            'records': applications,
         }
 
     if module == 'tutor-approvals':
+        approval_applications = [
+            item for item in applications
+            if _tutor_application_stage(item) in (
+                TutorApplication.WORKFLOW_APPLICATION,
+                TutorApplication.WORKFLOW_REVIEW,
+            )
+        ]
         return {
             'title': 'Duyệt hồ sơ gia sư', 'group': 'Tuyển dụng', 'singular': 'hồ sơ gia sư',
-            'description': 'Kiểm tra hồ sơ, giấy tờ và đưa ra quyết định phê duyệt ứng viên.',
+            'description': 'Kiểm tra CV, giấy tờ và chuyển ứng viên sang phỏng vấn, hoặc gửi email từ chối.',
             'columns': [
-                ('applicant', 'Ứng viên'), ('job', 'Tin tuyển dụng'), ('documents', 'Tài liệu'), ('submitted', 'Ngày gửi'),
-                ('reviewed', 'Duyệt lúc'), ('status', 'Trạng thái'),
+                ('applicant', 'Ứng viên'), ('email', 'Email'), ('job', 'Tin tuyển dụng'),
+                ('documents', 'Tài liệu'), ('submitted', 'Ngày gửi'), ('reviewed', 'Duyệt lúc'), ('status', 'Trạng thái'),
             ],
             'statuses': ['Pending', 'Reviewing', 'Approved', 'Rejected'],
             'rows': [(
                 item.name,
-                item.job_posting.title if item.job_posting else 'Đăng ký chung',
+                item.email,
+                _tutor_application_job(item),
                 ' / '.join(label for label, url in (
                     ('CV', item.cv_file), ('CCCD', item.id_card_file), ('Bằng cấp', item.education_proof_file),
                 ) if url) or 'Chưa đính kèm',
                 _recruitment_date(item.created_at), _recruitment_date(item.reviewed_at),
                 _recruitment_status(item.status),
-            ) for item in applications],
+            ) for item in approval_applications],
+            'records': approval_applications,
         }
 
-    if module == 'tutor-interviews':
-        reviewing = [item for item in applications if item.status == 'reviewing']
+    if module in ('tutor-interviews', 'tutor-trials'):
+        is_trial_page = module == 'tutor-trials'
+        allowed_stages = (
+            (TutorApplication.WORKFLOW_TRIAL,)
+            if is_trial_page else
+            (TutorApplication.WORKFLOW_REVIEW, TutorApplication.WORKFLOW_INTERVIEW)
+        )
+        scheduled = [
+            item for item in applications
+            if item.status == 'reviewing' and _tutor_application_stage(item) in allowed_stages
+        ]
         return {
-            'title': 'Phỏng vấn & Dạy thử', 'group': 'Tuyển dụng', 'singular': 'hồ sơ phỏng vấn',
-            'description': 'Theo dõi các ứng viên đang được sắp xếp phỏng vấn hoặc dạy thử.',
+            'title': 'Dạy thử' if is_trial_page else 'Phỏng vấn',
+            'group': 'Tuyển dụng',
+            'singular': 'hồ sơ dạy thử' if is_trial_page else 'hồ sơ phỏng vấn',
+            'description': (
+                'Chỉ hiển thị ứng viên đã đạt phỏng vấn để xếp lịch dạy thử và chốt kết quả.'
+                if is_trial_page else
+                'Xếp lịch phỏng vấn và gửi email cho ứng viên. Khi đạt, hồ sơ sẽ chuyển sang Dạy thử.'
+            ),
             'columns': [
                 ('candidate', 'Ứng viên'), ('email', 'Email'), ('phone', 'Số điện thoại'),
-                ('reviewed', 'Bắt đầu xét duyệt'), ('reviewer', 'Người phụ trách'), ('status', 'Trạng thái'),
+                ('stage', 'Bước'), ('schedule', 'Lịch hẹn'), ('mode', 'Hình thức'),
+                ('location', 'Địa điểm/đường dẫn'), ('reviewer', 'Người phụ trách'), ('status', 'Trạng thái'),
             ],
             'statuses': ['Reviewing'],
             'rows': [(
-                item.name, item.email, item.phone, _recruitment_date(item.reviewed_at),
+                item.name, item.email, item.phone,
+                _tutor_application_stage_label(_tutor_application_stage(item)),
+                _tutor_application_schedule(item),
+                _tutor_application_mode_label(_tutor_application_event_mode(item)),
+                _tutor_application_event_location(item) or '-',
                 _recruitment_reference_name(item.reviewed_by), _recruitment_status(item.status),
-            ) for item in reviewing],
+            ) for item in scheduled],
+            'records': scheduled,
         }
 
     if module == 'tutor-onboarding':
-        tutors = list(Tutor.objects(status=Tutor.STATUS_ACTIVE).order_by('-created_at'))
+        onboarding = [
+            item for item in applications
+            if _tutor_application_stage(item) in (
+                TutorApplication.WORKFLOW_ONBOARDING,
+                TutorApplication.WORKFLOW_COMPLETED,
+            ) or item.status == 'approved'
+        ]
         return {
             'title': 'Tiếp nhận gia sư', 'group': 'Tuyển dụng', 'singular': 'gia sư tiếp nhận',
-            'description': 'Hoàn tất thông tin tài khoản và xác minh gia sư sau khi được phê duyệt.',
+            'description': 'Theo dõi ứng viên đã đậu và xác nhận bước tiếp nhận vào hệ thống gia sư.',
             'columns': [
-                ('tutor', 'Gia sư'), ('email', 'Email'), ('phone', 'Số điện thoại'),
-                ('mode', 'Hình thức dạy'), ('verified', 'Xác minh'), ('status', 'Trạng thái'),
+                ('candidate', 'Ứng viên'), ('email', 'Email'), ('phone', 'Số điện thoại'),
+                ('job', 'Tin tuyển dụng'), ('approved', 'Ngày đạt'), ('onboarding', 'Tiếp nhận'), ('status', 'Trạng thái'),
             ],
             'statuses': ['Approved'],
             'rows': [(
-                tutor.name, tutor.email, tutor.phone or '-', _tutor_mode(tutor.teaching_mode),
-                'Đã xác minh' if tutor.is_verified else 'Chưa xác minh', _recruitment_status(tutor.status),
-            ) for tutor in tutors],
+                item.name, item.email, item.phone or '-', _tutor_application_job(item),
+                _recruitment_date(item.reviewed_at),
+                {'pending': 'Chờ tiếp nhận', 'processing': 'Đang xử lý', 'completed': 'Đã tiếp nhận'}.get(
+                    getattr(item, 'onboarding_status', None) or 'pending', 'Chờ tiếp nhận',
+                ),
+                _recruitment_status(item.status),
+            ) for item in onboarding],
+            'records': onboarding,
         }
 
     return None
@@ -1693,6 +1940,437 @@ def tutor_toggle_status(request, slug):
     })
 
 
+def _tutor_application_redirect(request, module, message=None, *, error=False, warning=False):
+    if message:
+        if error:
+            messages.error(request, message)
+        elif warning:
+            messages.warning(request, message)
+        else:
+            messages.success(request, message)
+    return redirect('management-page', module=module)
+
+
+def _get_tutor_application(application_id):
+    application = TutorApplication.objects(id=application_id).first()
+    if application is None:
+        raise ValueError('Không tìm thấy hồ sơ ứng viên.')
+    return application
+
+
+def _send_application_feedback_safely(request, application, feedback_type, *, note='', schedule=None):
+    """Email failure must not undo a status decision already saved in MongoDB."""
+    try:
+        _tutor_application_feedback(application, feedback_type, note=note, schedule=schedule)
+    except Exception:
+        logger.exception(
+            'Could not send tutor application feedback: application_id=%s type=%s',
+            application.id, feedback_type,
+        )
+        messages.warning(
+            request,
+            'Đã lưu trạng thái hồ sơ nhưng chưa gửi được email. Vui lòng kiểm tra SMTP rồi gửi lại thông báo.',
+        )
+        return False
+    return True
+
+
+def _docx_preview_html(content):
+    """Render a DOCX CV as safe, read-only HTML for browser preview."""
+    from docx import Document
+
+    document = Document(BytesIO(content))
+    blocks = []
+    for paragraph in document.paragraphs:
+        text = (paragraph.text or '').strip()
+        if not text:
+            continue
+        escaped = html_module.escape(text)
+        style_name = (getattr(paragraph.style, 'name', '') or '').lower()
+        tag = 'h2' if 'heading' in style_name else 'p'
+        blocks.append(f'<{tag}>{escaped}</{tag}>')
+    for table in document.tables:
+        rows = []
+        for table_row in table.rows:
+            cells = ''.join(f'<td>{html_module.escape(cell.text or "")}</td>' for cell in table_row.cells)
+            rows.append(f'<tr>{cells}</tr>')
+        if rows:
+            blocks.append('<table>' + ''.join(rows) + '</table>')
+    if not blocks:
+        blocks.append('<p>CV không có nội dung văn bản để xem trước.</p>')
+    return (
+        '<!doctype html><html lang="vi"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<title>Xem CV EduTutor</title><style>'
+        'body{max-width:860px;margin:32px auto;padding:0 24px;color:#17233b;'
+        'font:16px/1.65 Arial,sans-serif}h1{font-size:24px;margin-bottom:24px}'
+        'h2{font-size:20px;margin:20px 0 8px}p{margin:8px 0}table{width:100%;'
+        'margin:16px 0;border-collapse:collapse}td{padding:8px;border:1px solid #dbe4f0;'
+        'vertical-align:top}</style></head><body><h1>Xem CV ứng viên</h1>'
+        + ''.join(blocks) + '</body></html>'
+    )
+
+
+def tutor_application_document(request, application_id, document_type):
+    """Proxy an uploaded Cloudinary document with an inline disposition.
+
+    Cloudinary raw assets often return ``attachment`` even for a PDF. Serving
+    the already-uploaded file through this authenticated endpoint lets the
+    browser open PDFs/images in a tab while keeping the CV URL private to
+    Admins. DOCX files are converted to a safe read-only HTML preview because
+    browsers do not render DOCX natively.
+    """
+    fields = {
+        'cv': ('cv_file', 'CV'),
+        'id-card': ('id_card_file', 'CCCD'),
+        'education': ('education_proof_file', 'Bằng cấp'),
+    }
+    field_info = fields.get(document_type)
+    if field_info is None:
+        return HttpResponse('Loại tài liệu không hợp lệ.', status=404)
+    application = TutorApplication.objects(id=application_id).first()
+    if application is None:
+        return HttpResponse('Không tìm thấy hồ sơ ứng viên.', status=404)
+    url = getattr(application, field_info[0], None)
+    if not url:
+        return HttpResponse('Tài liệu chưa được đính kèm.', status=404)
+    parsed = urlparse(url)
+    cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME', '')
+    allowed_hosts = {'res.cloudinary.com'}
+    if cloud_name:
+        allowed_hosts.add(f'{cloud_name}.res.cloudinary.com')
+    if parsed.scheme != 'https' or parsed.hostname not in allowed_hosts:
+        return HttpResponse('Tài liệu không nằm trong kho lưu trữ hợp lệ.', status=400)
+    try:
+        request_headers = {'User-Agent': 'EduTutor-admin-document-preview/1.0'}
+        with urlopen(UrlRequest(url, headers=request_headers), timeout=10) as remote:
+            content = remote.read(6 * 1024 * 1024 + 1)
+            content_type = remote.headers.get_content_type()
+        if len(content) > 6 * 1024 * 1024:
+            return HttpResponse('Tài liệu vượt quá giới hạn xem trước.', status=413)
+    except Exception:
+        logger.exception('Could not preview tutor application document: application_id=%s', application_id)
+        return HttpResponse('Không thể mở tài liệu lúc này.', status=502)
+    suffix = PurePosixPath(parsed.path).suffix.lower()
+    guessed_type = mimetypes.guess_type(parsed.path)[0]
+    is_docx = suffix == '.docx' or content_type in (
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
+    if not is_docx and content.startswith(b'PK'):
+        try:
+            with zipfile.ZipFile(BytesIO(content)) as archive:
+                is_docx = (
+                    '[Content_Types].xml' in archive.namelist()
+                    and 'word/document.xml' in archive.namelist()
+                )
+        except zipfile.BadZipFile:
+            is_docx = False
+    if is_docx:
+        try:
+            response = HttpResponse(_docx_preview_html(content), content_type='text/html; charset=utf-8')
+        except Exception:
+            logger.exception('Could not render DOCX tutor application document: application_id=%s', application_id)
+            return HttpResponse('CV DOCX không thể hiển thị xem trước.', status=422)
+        response['Content-Disposition'] = 'inline; filename="CV.html"'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+    if content_type in ('application/octet-stream', 'binary/octet-stream'):
+        # Cloudinary may omit the original extension for raw assets. Infer the
+        # browser-renderable media type from its magic bytes before falling
+        # back to the URL extension.
+        if content.startswith(b'%PDF-'):
+            content_type = 'application/pdf'
+        elif content.startswith(b'\x89PNG\r\n\x1a\n'):
+            content_type = 'image/png'
+        elif content.startswith(b'\xff\xd8\xff'):
+            content_type = 'image/jpeg'
+        elif content.startswith(b'RIFF') and content[8:12] == b'WEBP':
+            content_type = 'image/webp'
+        else:
+            content_type = guessed_type or 'application/octet-stream'
+    response = HttpResponse(content, content_type=content_type)
+    response['Content-Disposition'] = f'inline; filename="{field_info[1]}{suffix or ".bin"}"'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
+def tutor_application_review(request, application_id):
+    """Move a new application into review or reject it with a Vietnamese email."""
+    if request.method != 'POST':
+        return _tutor_application_redirect(request, 'tutor-approvals')
+    try:
+        application = _get_tutor_application(application_id)
+        decision = request.POST.get('decision', '').strip().lower()
+        note = request.POST.get('note', '').strip()
+        if decision not in ('reviewing', 'rejected'):
+            raise ValueError('Quyết định duyệt hồ sơ không hợp lệ.')
+        if len(note) > 2000:
+            raise ValueError('Ghi chú không được vượt quá 2.000 ký tự.')
+        if application.status != 'pending':
+            raise ValueError('Hồ sơ này đã được xử lý, không thể gửi lại quyết định.')
+        if decision == 'rejected' and not note:
+            raise ValueError('Vui lòng nhập lý do từ chối hồ sơ trước khi gửi email.')
+        if decision == 'reviewing':
+            application.status = 'reviewing'
+            application.workflow_stage = TutorApplication.WORKFLOW_INTERVIEW
+            application.rejected_reason = None
+            application.decision_note = note or None
+            feedback_type = 'review'
+            success_message = 'Đã chuyển hồ sơ sang bước phỏng vấn và gửi email thông báo cho ứng viên.'
+        else:
+            application.status = 'rejected'
+            application.workflow_stage = TutorApplication.WORKFLOW_COMPLETED
+            application.rejected_reason = note or 'Hồ sơ chưa phù hợp với yêu cầu tuyển dụng.'
+            application.decision_note = note or None
+            feedback_type = 'rejected'
+            success_message = 'Đã từ chối hồ sơ và gửi email phản hồi cho ứng viên.'
+        application.reviewed_by = request.admin_account
+        application.reviewed_at = datetime.now(timezone.utc)
+        application.save()
+        record_admin_activity(request, 'update', application)
+    except (ValueError, ValidationError) as exc:
+        return _tutor_application_redirect(request, 'tutor-approvals', str(exc), error=True)
+
+    _send_application_feedback_safely(request, application, feedback_type, note=note)
+    return _tutor_application_redirect(request, 'tutor-interviews', success_message)
+
+
+def tutor_application_delete(request, application_id):
+    """Delete one tutor application from the recruitment queues."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
+    application = TutorApplication.objects(id=application_id).first()
+    if application is None:
+        return JsonResponse({'ok': False, 'message': 'Không tìm thấy hồ sơ ứng viên.'}, status=404)
+    applicant_name = application.name or 'hồ sơ ứng viên'
+    record_admin_activity(request, 'delete', application)
+    application.delete()
+    return JsonResponse({'ok': True, 'message': f'Đã xóa {applicant_name} khỏi danh sách tuyển dụng.'})
+
+
+def tutor_application_schedule(request, application_id):
+    """Schedule the current recruitment event and notify the applicant by email."""
+    if request.method != 'POST':
+        return _tutor_application_redirect(request, 'tutor-interviews')
+    redirect_module = 'tutor-interviews'
+    try:
+        application = _get_tutor_application(application_id)
+        stage = request.POST.get('stage', '').strip().lower()
+        if stage not in (TutorApplication.WORKFLOW_INTERVIEW, TutorApplication.WORKFLOW_TRIAL):
+            raise ValueError('Bước tuyển dụng không hợp lệ.')
+        if application.status in ('approved', 'rejected'):
+            raise ValueError('Hồ sơ này đã có kết quả, không thể xếp lại lịch.')
+        current_stage = _tutor_application_stage(application)
+        if stage == TutorApplication.WORKFLOW_INTERVIEW:
+            if current_stage not in (TutorApplication.WORKFLOW_REVIEW, TutorApplication.WORKFLOW_INTERVIEW):
+                raise ValueError('Hồ sơ này đã qua bước phỏng vấn, không thể xếp lại lịch phỏng vấn.')
+        else:
+            redirect_module = 'tutor-trials'
+            if current_stage != TutorApplication.WORKFLOW_TRIAL:
+                raise ValueError('Chỉ ứng viên đã đạt phỏng vấn mới được xếp lịch dạy thử.')
+        scheduled_at = _parse_tutor_application_datetime(request.POST.get('scheduled_at'))
+        mode = request.POST.get('mode', '').strip().lower()
+        if mode not in ('online', 'offline'):
+            raise ValueError('Hình thức phỏng vấn/dạy thử không hợp lệ.')
+        location = request.POST.get('location', '').strip()
+        if not location:
+            raise ValueError('Vui lòng nhập đường dẫn trực tuyến hoặc địa điểm tổ chức.')
+        if len(location) > 500:
+            raise ValueError('Đường dẫn hoặc địa điểm không được vượt quá 500 ký tự.')
+        note = request.POST.get('note', '').strip()
+        if len(note) > 2000:
+            raise ValueError('Ghi chú không được vượt quá 2.000 ký tự.')
+        application.status = 'reviewing'
+        application.workflow_stage = stage
+        application.reviewed_by = request.admin_account
+        application.reviewed_at = application.reviewed_at or datetime.now(timezone.utc)
+        if stage == TutorApplication.WORKFLOW_INTERVIEW:
+            application.interview_at = scheduled_at
+            application.interview_mode = mode
+            application.interview_location = location or None
+            application.interview_note = note or None
+            feedback_type = 'interview'
+        else:
+            application.trial_at = scheduled_at
+            application.trial_mode = mode
+            application.trial_location = location or None
+            application.trial_note = note or None
+            feedback_type = 'trial'
+        application.save()
+        record_admin_activity(request, 'update', application)
+    except (ValueError, ValidationError) as exc:
+        return _tutor_application_redirect(request, redirect_module, str(exc), error=True)
+
+    _send_application_feedback_safely(request, application, feedback_type, note=note, schedule=scheduled_at)
+    label = 'phỏng vấn' if feedback_type == 'interview' else 'dạy thử'
+    return _tutor_application_redirect(request, redirect_module, f'Đã xếp lịch {label} và gửi email cho ứng viên.')
+
+
+def tutor_application_decision(request, application_id):
+    """Record an interview result or the final trial result."""
+    if request.method != 'POST':
+        return _tutor_application_redirect(request, 'tutor-interviews')
+    redirect_module = 'tutor-interviews'
+    try:
+        application = _get_tutor_application(application_id)
+        decision = request.POST.get('decision', '').strip().lower()
+        note = request.POST.get('note', '').strip()
+        if decision not in ('approved', 'rejected'):
+            raise ValueError('Kết quả tuyển dụng không hợp lệ.')
+        if len(note) > 2000:
+            raise ValueError('Ghi chú không được vượt quá 2.000 ký tự.')
+        current_stage = _tutor_application_stage(application)
+        submitted_stage = request.POST.get('stage', '').strip().lower()
+        if submitted_stage and submitted_stage != current_stage:
+            raise ValueError('Hồ sơ đã chuyển sang bước khác, vui lòng tải lại trang trước khi xử lý.')
+        if current_stage not in (TutorApplication.WORKFLOW_INTERVIEW, TutorApplication.WORKFLOW_TRIAL):
+            raise ValueError('Hồ sơ này không còn ở bước phỏng vấn hoặc dạy thử.')
+        redirect_module = (
+            'tutor-trials'
+            if current_stage == TutorApplication.WORKFLOW_TRIAL
+            else 'tutor-interviews'
+        )
+        if application.status != 'reviewing':
+            raise ValueError('Hồ sơ này đã có kết quả, không thể xử lý lại.')
+        if decision == 'rejected' and not note:
+            raise ValueError('Vui lòng nhập lý do không đạt trước khi gửi email.')
+        if decision == 'approved':
+            scheduled_value = (
+                application.interview_at
+                if current_stage == TutorApplication.WORKFLOW_INTERVIEW
+                else application.trial_at
+            )
+            schedule_label = (
+                'phỏng vấn'
+                if current_stage == TutorApplication.WORKFLOW_INTERVIEW
+                else 'dạy thử'
+            )
+            _validate_tutor_application_schedule_is_future(scheduled_value, schedule_label)
+        application.decision_note = note or None
+        application.reviewed_by = request.admin_account
+        application.reviewed_at = datetime.now(timezone.utc)
+        if current_stage == TutorApplication.WORKFLOW_INTERVIEW and decision == 'approved':
+            application.status = 'reviewing'
+            application.workflow_stage = TutorApplication.WORKFLOW_TRIAL
+            application.rejected_reason = None
+            feedback_type = 'interview_passed'
+            redirect_module = 'tutor-trials'
+            success_message = 'Đã đánh dấu đạt phỏng vấn và chuyển hồ sơ sang Dạy thử. Email đã được gửi cho ứng viên.'
+        elif decision == 'approved':
+            application.status = 'approved'
+            application.workflow_stage = TutorApplication.WORKFLOW_ONBOARDING
+            application.onboarding_status = 'pending'
+            feedback_type = 'approved'
+            redirect_module = 'tutor-onboarding'
+            success_message = 'Đã đánh dấu ứng viên đạt dạy thử và chuyển sang Tiếp nhận gia sư. Email đã được gửi.'
+        else:
+            application.status = 'rejected'
+            application.workflow_stage = TutorApplication.WORKFLOW_COMPLETED
+            application.rejected_reason = note or (
+                'Kết quả phỏng vấn chưa đạt.'
+                if current_stage == TutorApplication.WORKFLOW_INTERVIEW
+                else 'Kết quả dạy thử chưa đạt.'
+            )
+            feedback_type = 'rejected'
+            success_message = 'Đã đánh dấu ứng viên không đạt và gửi email phản hồi.'
+        application.save()
+        record_admin_activity(request, 'update', application)
+    except (ValueError, ValidationError) as exc:
+        return _tutor_application_redirect(request, redirect_module, str(exc), error=True)
+
+    _send_application_feedback_safely(request, application, feedback_type, note=note)
+    return _tutor_application_redirect(request, redirect_module, success_message)
+
+
+def _create_tutor_from_application(application):
+    """Create the minimal login account; profile/subject details remain editable."""
+    existing = Tutor.objects(email=application.email).first()
+    if existing is not None:
+        return existing, None
+    assert_email_available(application.email)
+    temporary_password = _random_tutor_password()
+    tutor = Tutor(
+        slug=_catalogue_slug(Tutor, application.name, 'tutor'),
+        name=application.name,
+        email=application.email,
+        phone=application.phone or None,
+        teaching_mode='both',
+        status=Tutor.STATUS_ACTIVE,
+        is_verified=False,
+    )
+    tutor.set_password(temporary_password)
+    tutor.must_change_password = True
+    tutor.save()
+    return tutor, temporary_password
+
+
+def _send_tutor_credentials_email(tutor, temporary_password):
+    EmailMessage(
+        subject='Thông tin tài khoản gia sư EduTutor',
+        body=(
+            f'Xin chào {tutor.name},\n\n'
+            'Hồ sơ tuyển dụng của bạn đã đạt và tài khoản gia sư EduTutor đã được tạo.\n'
+            f'Email đăng nhập: {tutor.email}\n'
+            f'Mật khẩu tạm thời: {temporary_password}\n\n'
+            'Vui lòng đăng nhập và đổi mật khẩu ngay lần đầu sử dụng. '
+            'Sau đó bổ sung môn dạy, khu vực và thông tin chuyên môn trong hồ sơ.\n\n'
+            'Trân trọng,\nEduTutor'
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[tutor.email],
+    ).send(fail_silently=False)
+
+
+def tutor_application_onboarding(request, application_id):
+    """Create/link the tutor login and update the final hand-off status."""
+    if request.method != 'POST':
+        return _tutor_application_redirect(request, 'tutor-onboarding')
+    try:
+        application = _get_tutor_application(application_id)
+        status = request.POST.get('onboarding_status', '').strip().lower()
+        action = request.POST.get('action', 'status').strip().lower()
+        if status not in ('processing', 'completed'):
+            raise ValueError('Trạng thái tiếp nhận không hợp lệ.')
+        if application.status != 'approved':
+            raise ValueError('Chỉ ứng viên đã đạt mới được đưa vào tiếp nhận.')
+        if action == 'create_account' or (
+            status == 'processing' and not getattr(application, 'onboarded_tutor', None)
+        ):
+            tutor, temporary_password = _create_tutor_from_application(application)
+            application.onboarded_tutor = tutor
+            application.onboarding_status = 'processing'
+            application.workflow_stage = TutorApplication.WORKFLOW_ONBOARDING
+            application.save()
+            record_admin_activity(request, 'create' if temporary_password else 'update', tutor)
+            if temporary_password:
+                try:
+                    _send_tutor_credentials_email(tutor, temporary_password)
+                except Exception:
+                    logger.exception('Could not send onboarding credentials: tutor_id=%s', tutor.id)
+                    messages.warning(
+                        request,
+                        'Đã tạo tài khoản gia sư nhưng chưa gửi được email mật khẩu. Hãy kiểm tra SMTP rồi gửi lại thông tin đăng nhập.',
+                    )
+            else:
+                _send_application_feedback_safely(request, application, 'onboarding')
+            return _tutor_application_redirect(request, 'tutor-onboarding', 'Đã tạo tài khoản và chuyển hồ sơ sang bước tiếp nhận.')
+        if status == 'completed' and not getattr(application, 'onboarded_tutor', None):
+            raise ValueError('Vui lòng tạo tài khoản gia sư trước khi đánh dấu hoàn tất.')
+        application.onboarding_status = status
+        application.workflow_stage = (
+            TutorApplication.WORKFLOW_COMPLETED
+            if status == 'completed' else TutorApplication.WORKFLOW_ONBOARDING
+        )
+        application.save()
+        record_admin_activity(request, 'update', application)
+    except (ValueError, ValidationError) as exc:
+        return _tutor_application_redirect(request, 'tutor-onboarding', str(exc), error=True)
+
+    if status == 'processing':
+        _send_application_feedback_safely(request, application, 'onboarding')
+    return _tutor_application_redirect(request, 'tutor-onboarding', 'Đã cập nhật trạng thái tiếp nhận gia sư.')
+
+
 def management_page(request, module):
     if module == 'contacts':
         from core.admin_contacts import contacts
@@ -1736,12 +2414,15 @@ def management_page(request, module):
         'action_label': f"Thêm {config['singular']}",
         'can_manage': True,
         'can_create': True,
+        'show_actions': False,
     }
     if module.startswith('tutor-') and module != 'tutor-requests':
         # These pages are database-backed listings.  Do not expose the old
         # front-end-only add/delete controls until their write workflow exists.
         page['can_manage'] = False
         page['can_create'] = False
+    if module in ('tutor-candidates', 'tutor-approvals', 'tutor-interviews', 'tutor-trials', 'tutor-onboarding'):
+        page['show_actions'] = True
     if module == 'classes':
         # Classes are derived from lesson schedules.  Add/edit/delete is done
         # on the schedule page so there is only one source of truth.
@@ -1886,6 +2567,57 @@ def management_page(request, module):
                     'description': job.description,
                     'status': job.status,
                 }),
+            })
+        elif module in ('tutor-candidates', 'tutor-approvals', 'tutor-interviews', 'tutor-trials', 'tutor-onboarding'):
+            application = config['records'][index - 1]
+            stage = _tutor_application_stage(application)
+            application_id = int(application.id)
+            recipient_details = _tutor_application_recipient(application)
+            row.update({
+                'id': str(application_id),
+                'slug': str(application_id),
+                'can_edit': False,
+                'can_delete': False,
+                'show_recruitment_actions': True,
+                'stage_code': stage,
+                'stage_label': _tutor_application_stage_label(stage),
+                'review_url': reverse('tutor-application-review', kwargs={'application_id': application_id}),
+                'schedule_url': reverse('tutor-application-schedule', kwargs={'application_id': application_id}),
+                'decision_url': reverse('tutor-application-decision', kwargs={'application_id': application_id}),
+                'delete_url': reverse('tutor-application-delete', kwargs={'application_id': application_id}),
+                'onboarding_url': reverse('tutor-application-onboarding', kwargs={'application_id': application_id}),
+                'approval_url': f"{reverse('management-page', kwargs={'module': 'tutor-approvals'})}?application={application_id}",
+                'cv_url': application.cv_file or '',
+                'id_card_url': application.id_card_file or '',
+                'education_url': application.education_proof_file or '',
+                'cv_preview_url': reverse('tutor-application-document', kwargs={'application_id': application_id, 'document_type': 'cv'}),
+                'id_card_preview_url': reverse('tutor-application-document', kwargs={'application_id': application_id, 'document_type': 'id-card'}),
+                'education_preview_url': reverse('tutor-application-document', kwargs={'application_id': application_id, 'document_type': 'education'}),
+                'form_values': json.dumps(
+                    {'recruitment_recipient': recipient_details},
+                    ensure_ascii=False,
+                ),
+                'interview_at_value': (
+                    application.interview_at.astimezone(VIETNAM_TIME_ZONE).strftime('%Y-%m-%dT%H:%M')
+                    if application.interview_at else ''
+                ),
+                'interview_mode': getattr(application, 'interview_mode', None) or '',
+                'interview_location': getattr(application, 'interview_location', None) or '',
+                'trial_at_value': (
+                    application.trial_at.astimezone(VIETNAM_TIME_ZONE).strftime('%Y-%m-%dT%H:%M')
+                    if application.trial_at else ''
+                ),
+                'trial_mode': (
+                    getattr(application, 'trial_mode', None)
+                    or getattr(application, 'interview_mode', None)
+                    or ''
+                ),
+                'trial_location': (
+                    getattr(application, 'trial_location', None)
+                    or getattr(application, 'interview_location', None)
+                    or ''
+                ),
+                'onboarding_status': getattr(application, 'onboarding_status', None) or 'pending',
             })
         elif module == 'tutor-requests' and config.get('kind') in ('all-requests', 'class-postings'):
             if config.get('kind') == 'all-requests':

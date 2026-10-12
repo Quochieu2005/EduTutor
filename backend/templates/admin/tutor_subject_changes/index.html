@@ -2,37 +2,205 @@
 
 {% block extra_styles %}
 <style>
-  .subject-review__filters { display:flex; gap:10px; margin:22px 0; flex-wrap:wrap; }
-  .subject-review__filters a { border:1px solid #dbe5f0; border-radius:10px; color:#41536d; padding:9px 13px; text-decoration:none; font-weight:600; }
-  .subject-review__filters a.is-active { background:#155eef; color:#fff; border-color:#155eef; }
-  .subject-review__table { width:100%; border:1px solid #dbe5f0; border-radius:14px; border-collapse:separate; border-spacing:0; overflow:hidden; background:#fff; }
-  .subject-review__table th, .subject-review__table td { padding:14px 16px; border-bottom:1px solid #edf2f7; text-align:left; vertical-align:top; }
-  .subject-review__table th { background:#f7faff; color:#41536d; font-size:13px; }
-  .subject-review__table tr:last-child td { border-bottom:0; }
-  .subject-review__tag { display:inline-flex; padding:5px 9px; border-radius:999px; background:#e8f1ff; color:#155eef; font-weight:700; font-size:12px; }
-  .subject-review__note { color:#667085; font-size:13px; max-width:270px; white-space:pre-wrap; }
-  .subject-review__form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .subject-review__form input { min-width:180px; padding:9px 10px; border:1px solid #dbe5f0; border-radius:8px; }
-  .subject-review__form button { border:0; border-radius:8px; cursor:pointer; padding:9px 12px; font-weight:700; }
-  .subject-review__approve { background:#155eef; color:#fff; }
-  .subject-review__reject { background:#fff0f0; color:#b42318; }
-  .subject-review__empty { padding:42px; color:#667085; text-align:center; border:1px dashed #cbd5e1; border-radius:14px; background:#fff; }
-  @media (max-width: 900px) { .subject-review__table { display:block; overflow-x:auto; } }
+  .subject-review {
+    --subject-review-primary: var(--primary, #155eef);
+    --subject-review-border: var(--border, #dbe5f0);
+    --subject-review-muted: var(--muted, #f6f8fb);
+    --subject-review-text: var(--foreground, #15233d);
+    --subject-review-subtle: var(--muted-foreground, #667085);
+  }
+
+  .subject-review__filters {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 22px 0 18px;
+    padding: 4px;
+    border: 1px solid var(--subject-review-border);
+    border-radius: 10px;
+    background: var(--subject-review-muted);
+  }
+
+  .subject-review__filters a {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    color: var(--subject-review-subtle);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  }
+
+  .subject-review__filters a:hover {
+    border-color: var(--subject-review-border);
+    background: var(--background, #fff);
+    color: var(--subject-review-text);
+  }
+
+  .subject-review__filters a.is-active {
+    border-color: var(--subject-review-primary);
+    background: var(--subject-review-primary);
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+  }
+
+  .subject-review__surface {
+    overflow: hidden;
+    border: 1px solid var(--subject-review-border);
+    border-radius: 10px;
+    background: var(--background, #fff);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+  }
+
+  .subject-review__table-wrap { overflow-x: auto; }
+
+  .subject-review__table {
+    width: 100%;
+    min-width: 980px;
+    border-collapse: collapse;
+    color: var(--subject-review-text);
+    font-size: 14px;
+  }
+
+  .subject-review__table th,
+  .subject-review__table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--subject-review-border);
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .subject-review__table th {
+    background: var(--subject-review-muted);
+    color: var(--subject-review-subtle);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .subject-review__table tbody tr:hover td { background: var(--accent, #f6f8fb); }
+  .subject-review__table tbody tr:last-child td { border-bottom: 0; }
+  .subject-review__table td small { color: var(--subject-review-subtle); font-size: 12px; }
+  .subject-review__table td:last-child { min-width: 330px; }
+
+  .subject-review__tag {
+    display: inline-flex;
+    min-height: 24px;
+    align-items: center;
+    padding: 0 9px;
+    border: 1px solid #c7d7f7;
+    border-radius: 999px;
+    background: #edf4ff;
+    color: var(--subject-review-primary);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .subject-review__note {
+    max-width: 270px;
+    overflow: hidden;
+    color: var(--subject-review-subtle);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .subject-review__form {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .subject-review__form input {
+    box-sizing: border-box;
+    min-width: 220px;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--subject-review-border);
+    border-radius: 7px;
+    background: var(--background, #fff);
+    color: var(--subject-review-text);
+    font: inherit;
+    font-size: 12px;
+  }
+
+  .subject-review__form input:focus {
+    border-color: var(--subject-review-primary);
+    outline: 2px solid color-mix(in srgb, var(--subject-review-primary) 20%, transparent);
+    outline-offset: 1px;
+  }
+
+  .subject-review__form button {
+    min-height: 34px;
+    padding: 0 13px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .subject-review__approve { background: var(--subject-review-primary); color: #fff; }
+  .subject-review__approve:hover { background: color-mix(in srgb, var(--subject-review-primary) 88%, #000); }
+  .subject-review__reject { border-color: #f4c7c3 !important; background: #fff7f6; color: #b42318; }
+  .subject-review__reject:hover { background: #feeceb; }
+
+  .subject-review__empty {
+    display: grid;
+    min-height: 220px;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    padding: 32px 24px;
+    color: var(--subject-review-subtle);
+    text-align: center;
+  }
+
+  .subject-review__empty-icon {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid var(--subject-review-border);
+    border-radius: 10px;
+    background: var(--subject-review-muted);
+    color: var(--subject-review-primary);
+  }
+
+  .subject-review__empty-icon svg { width: 20px; height: 20px; }
+  .subject-review__empty strong { color: var(--subject-review-text); font-size: 15px; }
+  .subject-review__empty p { margin: 0; font-size: 13px; }
+
+  @media (max-width: 900px) {
+    .subject-review__filters { width: 100%; overflow-x: auto; }
+    .subject-review__filters a { flex: 0 0 auto; }
+    .subject-review__table { min-width: 920px; }
+  }
 </style>
 {% endblock %}
 
 {% block resource_content %}
-  <header class="users-heading">
-    <div><h1>{{ page.title }}</h1><p>{{ page.description }}</p></div>
-  </header>
-  {% if messages %}{% for message in messages %}<p class="form-message form-message--{{ message.tags }}">{{ message }}</p>{% endfor %}{% endif %}
-  <nav class="subject-review__filters" aria-label="Lọc trạng thái">
-    {% for code, label in status_labels.items %}
-      <a href="{% url 'admin-tutor-subject-changes' %}?status={{ code }}" class="{% if active_status == code %}is-active{% endif %}">{{ label }}</a>
-    {% endfor %}
-  </nav>
-  {% if rows %}
-    <table class="subject-review__table">
+  <div class="subject-review">
+    <header class="users-heading">
+      <div><h1>{{ page.title }}</h1><p>{{ page.description }}</p></div>
+    </header>
+    {% if messages %}{% for message in messages %}<p class="form-message form-message--{{ message.tags }}">{{ message }}</p>{% endfor %}{% endif %}
+    <nav class="subject-review__filters" aria-label="Lọc trạng thái">
+      {% for code, label in status_labels.items %}
+        <a href="{% url 'admin-tutor-subject-changes' %}?status={{ code }}" class="{% if active_status == code %}is-active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+    {% if rows %}
+      <div class="subject-review__surface">
+        <div class="subject-review__table-wrap">
+          <table class="subject-review__table">
       <thead><tr><th>Gia sư</th><th>Yêu cầu</th><th>Môn / cấp độ</th><th>Học phí dự kiến</th><th>Ghi chú</th><th>Thời gian</th>{% if active_status == 'pending' %}<th>Xử lý</th>{% else %}<th>Kết quả</th>{% endif %}</tr></thead>
       <tbody>
       {% for row in rows %}
@@ -57,8 +225,21 @@
         </tr>
       {% endfor %}
       </tbody>
-    </table>
-  {% else %}<div class="subject-review__empty">Không có yêu cầu môn dạy ở trạng thái này.</div>{% endif %}
+          </table>
+        </div>
+      </div>
+    {% else %}
+      <div class="subject-review__surface">
+        <div class="subject-review__empty">
+          <span class="subject-review__empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5A2.5 2.5 0 0 0 17.5 16H6.5A2.5 2.5 0 0 0 4 18.5z"/><path d="M4 18.5V20h13.5A2.5 2.5 0 0 0 20 17.5V3"/></svg>
+          </span>
+          <strong>Chưa có yêu cầu môn dạy</strong>
+          <p>Các yêu cầu môn dạy mới sẽ hiển thị tại đây khi có dữ liệu.</p>
+        </div>
+      </div>
+    {% endif %}
+  </div>
 {% endblock %}
 
 {% block resource_modal %}{% endblock %}
