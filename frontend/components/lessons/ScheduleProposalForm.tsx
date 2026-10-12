@@ -73,7 +73,13 @@ export function ScheduleProposalForm({ lesson, counterpartName, proposalRole, av
 
   useEffect(() => {
     const province = provinces.find((item) => String(item.id) === provinceId);
-    if (!province) { setWards([]); setWardId(""); return; }
+    if (!province) {
+      const reset = window.setTimeout(() => {
+        setWards((current) => current.length ? [] : current);
+        setWardId((current) => current ? "" : current);
+      }, 0);
+      return () => window.clearTimeout(reset);
+    }
     let active = true;
     edututorApi.wards(province.slug).then((items) => active && setWards(items)).catch(() => active && setWards([]));
     return () => { active = false; };
@@ -82,13 +88,16 @@ export function ScheduleProposalForm({ lesson, counterpartName, proposalRole, av
   useEffect(() => {
     const area = lesson.tutorAreas?.[0];
     if (mode !== "offline" || !area || provinceId) return;
-    setProvinceId(String(area.provinceId));
+    const initialize = window.setTimeout(() => setProvinceId(String(area.provinceId)), 0);
+    return () => window.clearTimeout(initialize);
   }, [lesson.tutorAreas, mode, provinceId]);
 
   useEffect(() => {
     const area = lesson.tutorAreas?.[0];
     if (mode !== "offline" || !area?.wardId || wardId) return;
-    if (wards.some((ward) => Number(ward.id) === area.wardId)) setWardId(String(area.wardId));
+    if (!wards.some((ward) => Number(ward.id) === area.wardId)) return;
+    const initialize = window.setTimeout(() => setWardId(String(area.wardId)), 0);
+    return () => window.clearTimeout(initialize);
   }, [lesson.tutorAreas, mode, wardId, wards]);
 
   const location = useMemo(() => {

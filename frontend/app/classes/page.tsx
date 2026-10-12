@@ -115,11 +115,16 @@ export function ClassesListContent({ recruitmentMode = false }: { recruitmentMod
   const hasLoadedClasses = useRef(false);
 
   useEffect(() => {
+    const lastPassiveRefreshAt = { value: 0 };
     const refreshOpenClasses = () => setClassesRefreshKey((value) => value + 1);
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") refreshOpenClasses();
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastPassiveRefreshAt.value < 10_000) return;
+      lastPassiveRefreshAt.value = now;
+      refreshOpenClasses();
     };
-    window.addEventListener("focus", refreshOpenClasses);
+    window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener(API_DATA_CHANGED_EVENT, refreshOpenClasses);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     // Mutations and focus/visibility events refresh immediately. Keep a

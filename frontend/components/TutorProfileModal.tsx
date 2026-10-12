@@ -88,29 +88,32 @@ export function TutorProfileModal({
   useEffect(() => {
     if (!isOpen || !tutor) return;
     let current = true;
-    setAvailabilityLoading(true);
-    setAvailabilityError(null);
-    edututorApi.tutorAvailability(tutor.id)
-      .then((result) => {
-        if (!current) return;
-        const next: Record<number, DayPeriod[]> = {};
-        result.slots.forEach((slot) => {
-          // API dùng 0=Thứ 2 ... 6=Chủ nhật; bảng giao diện dùng 2 ... 8.
-          const displayDay = slot.weekday + 2;
-          next[displayDay] = [...(next[displayDay] ?? []), slot.period];
+    const requestStart = window.setTimeout(() => {
+      if (!current) return;
+      setAvailabilityLoading(true);
+      setAvailabilityError(null);
+      edututorApi.tutorAvailability(tutor.id)
+        .then((result) => {
+          if (!current) return;
+          const next: Record<number, DayPeriod[]> = {};
+          result.slots.forEach((slot) => {
+            // API dùng 0=Thứ 2 ... 6=Chủ nhật; bảng giao diện dùng 2 ... 8.
+            const displayDay = slot.weekday + 2;
+            next[displayDay] = [...(next[displayDay] ?? []), slot.period];
+          });
+          setAvailability(next);
+        })
+        .catch(() => {
+          if (current) {
+            setAvailability({});
+            setAvailabilityError("Không tải được lịch từ hồ sơ gia sư.");
+          }
+        })
+        .finally(() => {
+          if (current) setAvailabilityLoading(false);
         });
-        setAvailability(next);
-      })
-      .catch(() => {
-        if (current) {
-          setAvailability({});
-          setAvailabilityError("Không tải được lịch từ hồ sơ gia sư.");
-        }
-      })
-      .finally(() => {
-        if (current) setAvailabilityLoading(false);
-      });
-    return () => { current = false; };
+    }, 0);
+    return () => { current = false; window.clearTimeout(requestStart); };
   }, [apiRevision, isOpen, tutor]);
 
   useEffect(() => {

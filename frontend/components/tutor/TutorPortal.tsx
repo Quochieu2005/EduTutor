@@ -2,12 +2,13 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   BookOutlined, CalendarOutlined, ClockCircleOutlined, KeyOutlined,
   LogoutOutlined, ProfileOutlined, SafetyCertificateOutlined, TableOutlined,
 } from "@ant-design/icons";
 import { clearAuthSession, getAuthSession, saveAuthSession } from "@/lib/auth-session";
-import { edututorApi, type LessonSession, type Subject, type TutorAvailability, type TutorQuestion, type TutorSubjectChangeRequest } from "@/lib/edututor-api";
+import { edututorApi, type LessonSession, type Subject, type TutorAvailability, type TutorSubjectChangeRequest } from "@/lib/edututor-api";
 import { API_DATA_CHANGED_EVENT, apiErrorMessage, getLessons, logout as revokeApiSession } from "@/lib/api";
 import type { LessonRequest, ScheduleProposalPayload } from "@/lib/types";
 import { toast } from "@/lib/toast";
@@ -109,8 +110,6 @@ export function TutorPortal() {
   const [lessons, setLessons] = useState<LessonRequest[]>([]);
   const [sessions, setSessions] = useState<LessonSession[]>([]);
   const [schedulingLesson, setSchedulingLesson] = useState<LessonRequest | null>(null);
-  const [questions, setQuestions] = useState<TutorQuestion[]>([]);
-  const [answerDrafts, setAnswerDrafts] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [subjectRequest, setSubjectRequest] = useState({ subject_id: "", level: "", price_per_hour: "", note: "" });
@@ -119,9 +118,9 @@ export function TutorPortal() {
   const load = async () => {
     setLoading(true);
     try {
-      const [nextProfile, availability, subjectPage, nextChanges, nextLessons, nextQuestions, nextSessions] = await Promise.all([
+      const [nextProfile, availability, subjectPage, nextChanges, nextLessons, nextSessions] = await Promise.all([
         edututorApi.tutorProfile(), edututorApi.myTutorAvailability(), edututorApi.subjects({ page_size: 100 }),
-        edututorApi.tutorSubjectChangeRequests(), getLessons(), edututorApi.tutorQuestionInbox(), edututorApi.lessonSessions(),
+        edututorApi.tutorSubjectChangeRequests(), getLessons(), edututorApi.lessonSessions(),
       ]);
       const typed = nextProfile as TutorProfile;
       setProfile(typed);
@@ -131,7 +130,6 @@ export function TutorPortal() {
       setChanges(nextChanges);
       setLessons(nextLessons);
       setSessions(nextSessions);
-      setQuestions(nextQuestions);
       const session = getAuthSession();
       if (session) saveAuthSession({ ...session, actorType: "tutor", account: { ...session.account, ...typed } });
     } catch {
@@ -143,25 +141,28 @@ export function TutorPortal() {
 
   const refreshLessonData = async () => {
     try {
-      const [nextLessons, nextSessions, nextChanges, nextQuestions] = await Promise.all([
+      const [nextLessons, nextSessions, nextChanges] = await Promise.all([
         getLessons(),
         edututorApi.lessonSessions(),
         edututorApi.tutorSubjectChangeRequests(),
-        edututorApi.tutorQuestionInbox(),
       ]);
       setLessons(nextLessons);
       setSessions(nextSessions);
       setChanges(nextChanges);
-      setQuestions(nextQuestions);
     } catch {
       // Keep the last successful snapshot during a transient network error.
     }
   };
 
   useEffect(() => {
-    void load();
+    const initialLoad = window.setTimeout(() => void load(), 0);
+    const lastPassiveRefreshAt = { value: 0 };
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") void refreshLessonData();
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastPassiveRefreshAt.value < 10_000) return;
+      lastPassiveRefreshAt.value = now;
+      void refreshLessonData();
     };
     // Focus/visibility events refresh immediately. The slower safety poll keeps
     // data current without making every open tutor tab hit the API 7-8 times a minute.
@@ -170,6 +171,7 @@ export function TutorPortal() {
     window.addEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
+      window.clearTimeout(initialLoad);
       window.clearInterval(timer);
       window.removeEventListener("focus", refreshWhenVisible);
       window.removeEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
@@ -262,15 +264,6 @@ export function TutorPortal() {
     } finally { setSaving(false); }
   };
 
-  const openScheduleManagement = () => {
-    const target = lessons.find((item) => item.status === "declined");
-    if (!target) {
-      toast.info("Chỉ sau khi từ chối đề xuất hiện tại, bạn mới có thể gửi lịch rảnh khác cho học viên.");
-      return;
-    }
-    setSchedulingLesson(target);
-  };
-
   const proposeTutorSchedule = async (payload: ScheduleProposalPayload) => {
     if (!schedulingLesson) return;
     try {
@@ -297,20 +290,6 @@ export function TutorPortal() {
     finally { setSaving(false); }
   };
 
-  const answerQuestion = async (question: TutorQuestion) => {
-    const answer = (answerDrafts[question.id] ?? question.answer ?? "").trim();
-    if (answer.length < 3) { toast.error("Câu trả lời cần ít nhất 3 ký tự."); return; }
-    setSaving(true);
-    try {
-      const updated = await edututorApi.answerTutorQuestion(question.id, { answer });
-      setQuestions((current) => current.map((item) => item.id === updated.id ? updated : item));
-      setAnswerDrafts((current) => ({ ...current, [question.id]: "" }));
-      toast.success("Đã trả lời bình luận. Nội dung đã hiển thị trên hồ sơ gia sư.");
-    } catch {
-      toast.error("Không thể gửi câu trả lời.");
-    } finally { setSaving(false); }
-  };
-
   const navigation: Array<{ key: PortalTab; label: string; icon: React.ReactNode; badge?: number }> = [
     { key: "overview", label: "Tổng quan", icon: <ProfileOutlined /> },
     { key: "profile", label: "Cập nhật hồ sơ", icon: <ProfileOutlined /> },
@@ -329,7 +308,7 @@ export function TutorPortal() {
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm font-semibold text-blue-600">Không gian gia sư</p><h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">Quản lý việc dạy</h1><p className="mt-1 text-sm text-slate-500">Hồ sơ, lịch rảnh và yêu cầu học đều đồng bộ với EduTutor.</p></div><span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">{profile.status === "active" ? "Tài khoản đang hoạt động" : profile.status}</span></div>
     <div className="grid gap-6 lg:grid-cols-[245px_minmax(0,1fr)]">
       <aside className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:sticky lg:top-24 lg:h-fit">
-        <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="grid h-11 w-11 place-items-center overflow-hidden rounded-xl bg-blue-600 text-base font-black text-white">{profile.avatar ? <img src={profile.avatar} alt="" className="h-full w-full object-cover" /> : profile.name.slice(0, 1)}</div><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{profile.name}</p><p className="truncate text-xs text-slate-500">{profile.email}</p></div></div>
+        <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="grid h-11 w-11 place-items-center overflow-hidden rounded-xl bg-blue-600 text-base font-black text-white">{profile.avatar ? <Image src={profile.avatar} alt="" width={44} height={44} loading="lazy" className="h-full w-full object-cover" /> : profile.name.slice(0, 1)}</div><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{profile.name}</p><p className="truncate text-xs text-slate-500">{profile.email}</p></div></div>
         <nav className="flex gap-1 overflow-x-auto lg:block" aria-label="Điều hướng hồ sơ gia sư">{navigation.map((item) => <button key={item.key} type="button" onClick={() => setTab(item.key)} className={`flex shrink-0 items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition lg:mb-1 lg:w-full ${tab === item.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}><span className="flex items-center gap-3">{item.icon}{item.label}</span>{item.badge ? <span className={`rounded-full px-1.5 py-0.5 text-[11px] ${tab === item.key ? "bg-white/20" : "bg-amber-100 text-amber-800"}`}>{item.badge}</span> : null}</button>)}</nav>
         <button type="button" onClick={() => { void revokeApiSession(); router.replace("/"); }} className="mt-3 flex w-full items-center gap-3 rounded-xl border-t border-slate-100 px-3 py-3 text-sm font-semibold text-slate-500 hover:text-rose-600"><LogoutOutlined />Đăng xuất</button>
       </aside>
