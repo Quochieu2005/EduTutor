@@ -58,7 +58,15 @@ class LearningRequest(TimestampedDocument):
         choices=('pending', 'accepted', 'declined', 'cancelled', 'completed', 'no_show'),
         default='pending',
     )
-    meta = {'collection': 'learning_requests', 'indexes': ['student', 'tutor', 'subject', 'status', '-created_at']}
+    meta = {
+        'collection': 'learning_requests',
+        'indexes': [
+            'student', 'tutor', 'subject', 'status', '-created_at',
+            {'fields': ['student', '-created_at'], 'name': 'student_learning_requests_v1'},
+            {'fields': ['tutor', '-created_at'], 'name': 'tutor_learning_requests_v1'},
+            {'fields': ['job_posting', '-created_at'], 'name': 'class_board_learning_requests_v1'},
+        ],
+    }
 
 
 class Lesson(TimestampedDocument):
@@ -89,6 +97,8 @@ class Lesson(TimestampedDocument):
         'indexes': [
             'request', 'tutor', 'student', 'subject', 'series_id', 'province', 'ward',
             'session_date', 'status', 'payment_status',
+            {'fields': ['student', 'session_date', 'start_time'], 'name': 'student_lesson_schedule_v1'},
+            {'fields': ['tutor', 'session_date', 'start_time'], 'name': 'tutor_lesson_schedule_v1'},
         ],
     }
 

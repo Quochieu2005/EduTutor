@@ -363,7 +363,9 @@ def _account_profile_payload(user):
     email = user.email.strip().lower()
     student = Student.objects(email=email).first()
     parent = Parent.objects(email=email).first()
-    role = _account_type_for(user)
+    # The profile response already loaded both documents. Reusing them avoids
+    # two more Mongo queries for every authenticated profile request.
+    role = 'student' if student is not None and student.status == 'active' else ('parent' if parent is not None else 'user')
     return {
         'account': user_payload(user),
         'role': role,

@@ -9,7 +9,7 @@ import {
 } from "@ant-design/icons";
 import { clearAuthSession, getAuthSession, saveAuthSession } from "@/lib/auth-session";
 import { edututorApi, type LessonSession, type Subject, type TutorAvailability, type TutorSubjectChangeRequest } from "@/lib/edututor-api";
-import { API_DATA_CHANGED_EVENT, apiErrorMessage, getLessons, logout as revokeApiSession } from "@/lib/api";
+import { apiErrorMessage, getLessons, logout as revokeApiSession } from "@/lib/api";
 import type { LessonRequest, ScheduleProposalPayload } from "@/lib/types";
 import { toast } from "@/lib/toast";
 import { ScheduleProposalForm } from "@/components/lessons/ScheduleProposalForm";
@@ -105,10 +105,13 @@ export function TutorPortal() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [slots, setSlots] = useState<TutorAvailability["slots"]>([]);
+  const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
   const [changes, setChanges] = useState<TutorSubjectChangeRequest[]>([]);
   const [catalogue, setCatalogue] = useState<Subject[]>([]);
+  const [subjectsLoaded, setSubjectsLoaded] = useState(false);
   const [lessons, setLessons] = useState<LessonRequest[]>([]);
   const [sessions, setSessions] = useState<LessonSession[]>([]);
+  const [lessonDataLoaded, setLessonDataLoaded] = useState(false);
   const [schedulingLesson, setSchedulingLesson] = useState<LessonRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -118,18 +121,10 @@ export function TutorPortal() {
   const load = async () => {
     setLoading(true);
     try {
-      const [nextProfile, availability, subjectPage, nextChanges, nextLessons, nextSessions] = await Promise.all([
-        edututorApi.tutorProfile(), edututorApi.myTutorAvailability(), edututorApi.subjects({ page_size: 100 }),
-        edututorApi.tutorSubjectChangeRequests(), getLessons(), edututorApi.lessonSessions(),
-      ]);
+      const nextProfile = await edututorApi.tutorProfile();
       const typed = nextProfile as TutorProfile;
       setProfile(typed);
       setForm(toForm(typed));
-      setSlots(availability.slots);
-      setCatalogue(subjectPage.results);
-      setChanges(nextChanges);
-      setLessons(nextLessons);
-      setSessions(nextSessions);
       const session = getAuthSession();
       if (session) saveAuthSession({ ...session, actorType: "tutor", account: { ...session.account, ...typed } });
     } catch {
@@ -141,14 +136,13 @@ export function TutorPortal() {
 
   const refreshLessonData = async () => {
     try {
-      const [nextLessons, nextSessions, nextChanges] = await Promise.all([
+      const [nextLessons, nextSessions] = await Promise.all([
         getLessons(),
         edututorApi.lessonSessions(),
-        edututorApi.tutorSubjectChangeRequests(),
       ]);
       setLessons(nextLessons);
       setSessions(nextSessions);
-      setChanges(nextChanges);
+      setLessonDataLoaded(true);
     } catch {
       // Keep the last successful snapshot during a transient network error.
     }
@@ -156,28 +150,39 @@ export function TutorPortal() {
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void load(), 0);
-    const lastPassiveRefreshAt = { value: 0 };
-    const refreshWhenVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      const now = Date.now();
-      if (now - lastPassiveRefreshAt.value < 10_000) return;
-      lastPassiveRefreshAt.value = now;
-      void refreshLessonData();
-    };
-    // Focus/visibility events refresh immediately. The slower safety poll keeps
-    // data current without making every open tutor tab hit the API 7-8 times a minute.
-    const timer = window.setInterval(refreshWhenVisible, 20_000);
-    window.addEventListener("focus", refreshWhenVisible);
-    window.addEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => {
-      window.clearTimeout(initialLoad);
-      window.clearInterval(timer);
-      window.removeEventListener("focus", refreshWhenVisible);
-      window.removeEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
+    return () => window.clearTimeout(initialLoad);
   }, []);
+
+  useEffect(() => {
+    if (!profile || availabilityLoaded || !["availability"].includes(tab)) return;
+    let cancelled = false;
+    edututorApi.myTutorAvailability().then((availability) => {
+      if (cancelled) return;
+      setSlots(availability.slots);
+      setAvailabilityLoaded(true);
+    }).catch(() => toast.error("Không tải được lịch có thể dạy."));
+    return () => { cancelled = true; };
+  }, [availabilityLoaded, profile, tab]);
+
+  useEffect(() => {
+    if (!profile || subjectsLoaded || tab !== "subjects") return;
+    let cancelled = false;
+    Promise.all([edututorApi.subjects({ page_size: 100 }), edututorApi.tutorSubjectChangeRequests()])
+      .then(([subjectPage, nextChanges]) => {
+        if (cancelled) return;
+        setCatalogue(subjectPage.results);
+        setChanges(nextChanges);
+        setSubjectsLoaded(true);
+      })
+      .catch(() => toast.error("Không tải được dữ liệu môn dạy."));
+    return () => { cancelled = true; };
+  }, [profile, subjectsLoaded, tab]);
+
+  useEffect(() => {
+    if (!profile || lessonDataLoaded || !["lessons", "schedule", "timetable"].includes(tab)) return;
+    const initialLoad = window.setTimeout(() => void refreshLessonData(), 0);
+    return () => window.clearTimeout(initialLoad);
+  }, [lessonDataLoaded, profile, tab]);
 
   const pendingCount = changes.filter((item) => item.status === "pending").length;
   const toggleSlot = (weekday: number, period: TutorAvailability["slots"][number]["period"]) => {
