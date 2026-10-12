@@ -109,7 +109,15 @@ class Review(BigIntDocument):
     admin_reply = StringField(null=True, max_length=3000)
     moderated_at = DateTimeField(null=True)
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
-    meta = {'collection': 'reviews', 'indexes': ['tutor', 'student', 'status', '-rating', '-created_at']}
+    meta = {
+        'collection': 'reviews',
+        'indexes': [
+            'tutor', 'student', 'status', '-rating', '-created_at',
+            # Public tutor pages filter these records by tutor/status and
+            # immediately sort newest-first.
+            {'fields': ['tutor', 'status', '-created_at'], 'name': 'public_tutor_reviews_v1'},
+        ],
+    }
 
 
 class TutorQuestion(BigIntDocument):
@@ -122,7 +130,14 @@ class TutorQuestion(BigIntDocument):
     status = StringField(required=True, choices=('pending', 'visible', 'hidden'), default='visible')
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     answered_at = DateTimeField(null=True)
-    meta = {'collection': 'tutor_questions', 'indexes': ['tutor', 'student', 'status', '-created_at']}
+    meta = {
+        'collection': 'tutor_questions',
+        'indexes': [
+            'tutor', 'student', 'status', '-created_at',
+            # Matches the public question feed query and newest-first sort.
+            {'fields': ['tutor', 'status', '-created_at'], 'name': 'public_tutor_questions_v1'},
+        ],
+    }
 
 
 class Message(BigIntDocument):
