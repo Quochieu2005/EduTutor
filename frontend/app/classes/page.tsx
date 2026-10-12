@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEduUser, useEduClerk } from "@/lib/auth";
 

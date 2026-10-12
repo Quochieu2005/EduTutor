@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import {
   LEFT_PROVINCES,
   LEFT_FIND_CATEGORIES,

@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import {

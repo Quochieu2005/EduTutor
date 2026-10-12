@@ -1,7 +1,7 @@
 "use client";
 
 import { EyeInvisibleOutlined, EyeOutlined } from "@ant-design/icons";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { register } from "@/lib/api";
