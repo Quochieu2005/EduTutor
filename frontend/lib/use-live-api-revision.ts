@@ -6,10 +6,18 @@ import { invalidatePublicApiCache } from "./edututor-api";
 
 let revision = 0;
 let timer: number | null = null;
+let lastPassiveRefreshAt = 0;
 const listeners = new Set<() => void>();
 
-function publishRevision(invalidateCache = false) {
+function publishRevision(invalidateCache = false, force = false) {
   if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+  // A tab can emit focus, visibilitychange and a mutation event back-to-back
+  // (especially after closing a modal). Coalesce passive refreshes so every
+  // mounted public section does not start another request burst. Mutation
+  // events stay forced and therefore still update views immediately.
+  const now = Date.now();
+  if (!force && now - lastPassiveRefreshAt < 10_000) return;
+  lastPassiveRefreshAt = now;
   if (invalidateCache) invalidatePublicApiCache();
   revision += 1;
   listeners.forEach((listener) => listener());
@@ -26,7 +34,7 @@ function onFocus() {
 function onApiDataChanged() {
   // The response interceptor already invalidates the public cache after a
   // successful mutation. Re-render mounted views without clearing it twice.
-  publishRevision(false);
+  publishRevision(false, true);
 }
 
 function start() {

@@ -2,7 +2,7 @@
 
 import { FacebookFilled } from "@ant-design/icons";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { loginWithSocial } from "@/lib/api";
 import { saveAuthSession } from "@/lib/auth-session";
 
@@ -30,7 +30,7 @@ export function SocialLoginButtons({ returnTo }: { returnTo: string }) {
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID?.trim() ?? "";
   const facebookAppId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID?.trim() ?? "";
 
-  async function complete(provider: "google" | "facebook", token: string) {
+  const complete = useCallback(async (provider: "google" | "facebook", token: string) => {
     try {
       setError("");
       const result = await loginWithSocial(provider, token);
@@ -40,7 +40,7 @@ export function SocialLoginButtons({ returnTo }: { returnTo: string }) {
     } catch (reason) {
       setError(message(reason));
     }
-  }
+  }, [returnTo, router]);
 
   useEffect(() => {
     if (!googleClientId) return;
@@ -58,7 +58,7 @@ export function SocialLoginButtons({ returnTo }: { returnTo: string }) {
     script.dataset.edututorGoogle = "true";
     script.onload = render;
     document.head.appendChild(script);
-  }, [googleClientId]);
+  }, [complete, googleClientId]);
 
   useEffect(() => {
     if (!facebookAppId) return;

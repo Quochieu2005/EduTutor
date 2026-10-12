@@ -157,6 +157,10 @@ function getKey(path: string, params?: Record<string, unknown>) {
   const normalized = params
     ? Object.entries(params)
         .filter(([, value]) => value !== undefined && value !== null && value !== "")
+        // DRF treats an omitted page and `page=1` identically. Canonicalizing
+        // that harmless difference lets the home page share one in-flight
+        // request when two sections ask for the first page at once.
+        .filter(([key, value]) => !(key === "page" && String(value) === "1"))
         .sort(([left], [right]) => left.localeCompare(right))
     : [];
   return `${path}?${JSON.stringify(normalized)}`;

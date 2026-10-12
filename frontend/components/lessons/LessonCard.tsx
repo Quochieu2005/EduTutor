@@ -42,7 +42,6 @@ export function LessonCard({
   onReject,
   onComplete,
   onCancel,
-  onCounterProposal,
   onSchedule,
 }: LessonCardProps) {
   const isTutor = userRole === "tutor";

@@ -110,7 +110,6 @@ export function ClassDetailClient({ initialClass }: ClassDetailClientProps) {
 
   useEffect(() => {
     if (actorType !== "tutor") {
-      setIsApplied(false);
       return;
     }
     let isCurrent = true;

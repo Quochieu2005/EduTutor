@@ -16,7 +16,7 @@ import { Footer } from "@/components/Footer";
 import { TutorPortal } from "@/components/tutor/TutorPortal";
 import { ActualScheduleCalendar, LessonCard, WeeklyTimetable } from "@/components/lessons/LessonCard";
 import { ScheduleProposalForm } from "@/components/lessons/ScheduleProposalForm";
-import { AppstoreOutlined, BookOutlined, CalendarOutlined, LockOutlined, LogoutOutlined, SettingOutlined, TableOutlined, UserOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, BookOutlined, CalendarOutlined, LockOutlined, LogoutOutlined, TableOutlined, UserOutlined } from "@ant-design/icons";
 import {
   PORTAL_STORE_EVENT,
   buildDemoTeachingSchedule,
@@ -121,7 +121,10 @@ export default function ProfilePage() {
     }
   }, [actorType, authResolved, isSignedIn]);
 
-  useEffect(() => { void refreshPostedClasses(); }, [refreshPostedClasses]);
+  useEffect(() => {
+    const initialLoad = window.setTimeout(() => void refreshPostedClasses(), 0);
+    return () => window.clearTimeout(initialLoad);
+  }, [refreshPostedClasses]);
 
   const refreshLearnerData = useCallback(async (showLoading = false) => {
     if (!authResolved || !isSignedIn || !["student", "parent"].includes(actorType) || getAuthSession()?.actorType !== actorType) return [];
@@ -140,12 +143,15 @@ export default function ProfilePage() {
   }, [actorType, authResolved, isSignedIn]);
 
   useEffect(() => {
-    void refreshLearnerData(true);
+    const initialLoad = window.setTimeout(() => void refreshLearnerData(true), 0);
+    const lastPassiveRefreshAt = { value: 0 };
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") {
-        void refreshLearnerData(false);
-        void refreshPostedClasses();
-      }
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastPassiveRefreshAt.value < 10_000) return;
+      lastPassiveRefreshAt.value = now;
+      void refreshLearnerData(false);
+      void refreshPostedClasses();
     };
     // Focus/visibility events refresh immediately. Keep the background poll
     // deliberately light so many signed-in users do not overload the API.
@@ -154,6 +160,7 @@ export default function ProfilePage() {
     window.addEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
+      window.clearTimeout(initialLoad);
       window.clearInterval(timer);
       window.removeEventListener("focus", refreshWhenVisible);
       window.removeEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
@@ -164,25 +171,28 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!authResolved || !isSignedIn || actorType !== "tutor" || getAuthSession()?.actorType !== "tutor") return;
     let cancelled = false;
-    setTutorRequestsLoading(true);
-    setAvailabilityLoading(true);
-    Promise.all([getLessons(), edututorApi.myTutorAvailability()]).then(([records, availability]) => {
-      if (!cancelled) {
-        setTutorRequests(records);
-        setAvailabilitySlots(availability.slots);
-      }
-    }).catch(() => {
-      if (!cancelled) {
-        setTutorRequests([]);
-        toast.error("Không tải được yêu cầu hoặc lịch có thể dạy của gia sư.");
-      }
-    }).finally(() => {
-      if (!cancelled) {
-        setTutorRequestsLoading(false);
-        setAvailabilityLoading(false);
-      }
-    });
-    return () => { cancelled = true; };
+    const initialLoad = window.setTimeout(() => {
+      if (cancelled) return;
+      setTutorRequestsLoading(true);
+      setAvailabilityLoading(true);
+      Promise.all([getLessons(), edututorApi.myTutorAvailability()]).then(([records, availability]) => {
+        if (!cancelled) {
+          setTutorRequests(records);
+          setAvailabilitySlots(availability.slots);
+        }
+      }).catch(() => {
+        if (!cancelled) {
+          setTutorRequests([]);
+          toast.error("Không tải được yêu cầu hoặc lịch có thể dạy của gia sư.");
+        }
+      }).finally(() => {
+        if (!cancelled) {
+          setTutorRequestsLoading(false);
+          setAvailabilityLoading(false);
+        }
+      });
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(initialLoad); };
   }, [actorType, authResolved, isSignedIn]);
 
   function toggleAvailability(weekday: number, period: "morning" | "afternoon" | "evening") {
@@ -425,7 +435,7 @@ export default function ProfilePage() {
             <nav className="mt-3 space-y-1" aria-label="Quản lý tài khoản">
               {accountNavigation.map((item) => <button key={item.key} type="button" onClick={() => setUserTab(item.key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors ${userTab === item.key ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-blue-50 hover:text-blue-700"}`}><span>{item.icon}</span>{item.label}</button>)}
             </nav>
-            <button type="button" onClick={() => void signOut().then(() => router.replace("/"))} className="mt-4 flex w-full items-center gap-3 border-t border-slate-100 px-3 pt-4 text-sm font-semibold text-slate-600 hover:text-rose-600"><LogoutOutlined />Đăng xuất</button>
+            <button type="button" onClick={() => void signOut()} className="mt-4 flex w-full items-center gap-3 border-t border-slate-100 px-3 pt-4 text-sm font-semibold text-slate-600 hover:text-rose-600"><LogoutOutlined />Đăng xuất</button>
           </aside>}
           <div className="min-w-0 space-y-6">
 

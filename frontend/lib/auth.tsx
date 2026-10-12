@@ -1,7 +1,8 @@
 "use client";
 
 import { LogoutOutlined } from "@ant-design/icons";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AUTH_SESSION_EVENT, AUTH_SESSION_STORAGE_KEY, getAuthSession } from "./auth-session";
 import { logout as revokeApiSession } from "./api";
 
@@ -41,14 +42,20 @@ export function useEduUser() {
   return { isLoaded: raw !== null, isSignedIn: Boolean(user), user };
 }
 
-function openSignIn(options?: { fallbackRedirectUrl?: string; forceRedirectUrl?: string }) {
-  if (typeof window === "undefined") return;
-  const target = options?.forceRedirectUrl || options?.fallbackRedirectUrl;
-  window.location.assign(target ? `/login?returnTo=${encodeURIComponent(target)}` : "/login");
-}
-
 export function useEduClerk() {
-  return { openSignIn, signOut: async () => { void revokeApiSession(); window.location.assign("/"); } };
+  const router = useRouter();
+  const openSignIn = useCallback((options?: { fallbackRedirectUrl?: string; forceRedirectUrl?: string }) => {
+    const target = options?.forceRedirectUrl || options?.fallbackRedirectUrl;
+    router.push(target ? `/login?returnTo=${encodeURIComponent(target)}` : "/login");
+  }, [router]);
+  const signOut = useCallback(async () => {
+    // The local session is cleared before the best-effort API revoke, so a
+    // cold backend never blocks navigation. Client navigation keeps the app
+    // shell mounted and avoids a full document reload after every logout.
+    void revokeApiSession();
+    router.replace("/");
+  }, [router]);
+  return { openSignIn, signOut };
 }
 
 export function EduUserButton() {

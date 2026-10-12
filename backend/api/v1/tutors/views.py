@@ -51,15 +51,32 @@ from .services import (
 )
 
 
-def open_recruitment_jobs(posted_by_type=None):
-    """Return only jobs that are eligible to appear on the public website."""
-    active_subject_ids = list(Subject.objects(Q(status=1) | Q(status__exists=False)).scalar('id'))
-    # A posting stops being public as soon as its owner/Admin accepts someone.
-    # The exclusion also repairs legacy records whose application was accepted
-    # before the posting status was consistently changed to ``closed``.
-    # Only the referenced posting id is needed here.  ``select_related`` used
-    # to hydrate every Tutor/JobPosting document on every cache miss, which
-    # made the public recruitment list scan grow linearly with applications.
+def _active_subject_ids():
+    """Cache the small reference list used by every public job query."""
+    key = 'public-recruitment-active-subject-ids:v1'
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    subject_ids = list(Subject.objects(Q(status=1) | Q(status__exists=False)).scalar('id'))
+    # Reference changes are uncommon, but a short TTL keeps an Admin toggle
+    # visible on the public board without forcing a cache flush in every
+    # legacy management action.
+    cache.set(key, subject_ids, 30)
+    return subject_ids
+
+
+def _filled_recruitment_job_ids():
+    """Avoid rescanning accepted applications for every public board request.
+
+    The list is deliberately short-lived: the list endpoint already has a
+    five-second response cache, while this shared cache also coalesces the
+    same scan when the class and recruitment boards are opened together.
+    """
+    key = 'public-recruitment-filled-job-ids:v1'
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
     def referenced_job_ids(query):
         return {
             int(reference.id)
@@ -71,6 +88,21 @@ def open_recruitment_jobs(posted_by_type=None):
     filled_job_ids.update(referenced_job_ids(
         TutorApplication.objects(status='approved', job_posting__ne=None),
     ))
+    value = list(filled_job_ids)
+    cache.set(key, value, 5)
+    return value
+
+
+def open_recruitment_jobs(posted_by_type=None):
+    """Return only jobs that are eligible to appear on the public website."""
+    active_subject_ids = _active_subject_ids()
+    # A posting stops being public as soon as its owner/Admin accepts someone.
+    # The exclusion also repairs legacy records whose application was accepted
+    # before the posting status was consistently changed to ``closed``.
+    # Only the referenced posting id is needed here.  ``select_related`` used
+    # to hydrate every Tutor/JobPosting document on every cache miss, which
+    # made the public recruitment list scan grow linearly with applications.
+    filled_job_ids = _filled_recruitment_job_ids()
     filters = {
         'status': 'open',
         'subject__in': active_subject_ids,
