@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { usePathname } from "next/navigation";
 import { EduUserButton, useEduUser } from "@/lib/auth";
 import { getAuthSession } from "@/lib/auth-session";
@@ -127,6 +127,7 @@ export function Header() {
           {/* Logo EduTutor */}
           <Link
             href="/"
+            prefetch={false}
             className="flex items-center group focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-600 rounded-xl py-1 px-1 transition-colors"
           >
             <span className="text-2xl font-black tracking-tight text-blue-900 select-none">
@@ -154,6 +155,7 @@ export function Header() {
                 <Link
                   key={item.label}
                   href={item.href}
+                  prefetch={false}
                   className={`px-3.5 py-2 rounded-xl text-sm font-semibold transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     item.isActive
                       ? "text-blue-600 bg-blue-50 font-bold"
@@ -212,6 +214,7 @@ export function Header() {
                   ) : isSignedIn ? (
                     <Link
                       href="/profile"
+                      prefetch={false}
                       role="menuitem"
                       onClick={() => setMoreMenuOpen(false)}
                       className="flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
@@ -222,6 +225,7 @@ export function Header() {
                   ) : (
                     <Link
                       href="/login"
+                      prefetch={false}
                       role="menuitem"
                       onClick={() => setMoreMenuOpen(false)}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors cursor-pointer text-left"
@@ -252,6 +256,7 @@ export function Header() {
               <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
                 <Link
                   href="/profile"
+                  prefetch={false}
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                 >
                   <UserOutlined className="text-sm text-blue-600" />
@@ -262,6 +267,7 @@ export function Header() {
             ) : (
               <Link
                 href="/login"
+                prefetch={false}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 text-slate-700 hover:text-blue-600 text-sm font-semibold transition-all cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <LoginOutlined />
@@ -306,6 +312,7 @@ export function Header() {
                   <Link
                     key={item.label}
                     href={item.href}
+                    prefetch={false}
                     onClick={() => setMobileMenuOpen(false)}
                     className={`px-4 py-3 rounded-xl text-sm font-semibold transition-colors ${
                       item.isActive
@@ -355,6 +362,7 @@ export function Header() {
                 <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
                   <Link
                     href="/profile"
+                    prefetch={false}
                     onClick={() => setMobileMenuOpen(false)}
                     className="flex items-center gap-2 text-sm font-semibold text-slate-800 truncate"
                   >
@@ -366,6 +374,7 @@ export function Header() {
               ) : (
                 <Link
                   href="/login"
+                  prefetch={false}
                   onClick={() => setMobileMenuOpen(false)}
                   className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 cursor-pointer"
                 >

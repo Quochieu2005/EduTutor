@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { FormEvent, useEffect, useState } from "react";
 import { recoveryError, requestPasswordReset } from "@/lib/password-reset-api";
 import { toast } from "@/lib/toast";

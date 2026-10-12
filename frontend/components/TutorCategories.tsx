@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import {
   LeftOutlined,
   RightOutlined,

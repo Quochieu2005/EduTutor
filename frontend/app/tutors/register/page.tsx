@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/AppLink";
 import { useEduUser, useEduClerk } from "@/lib/auth";
 
 import { Header } from "@/components/Header";
