@@ -23,6 +23,7 @@ ACTION_LABELS = {
     'login': 'Đăng nhập', 'logout': 'Đăng xuất',
     'logout_all': 'Đăng xuất tất cả thiết bị',
     'create': 'Thêm mới', 'update': 'Cập nhật', 'delete': 'Xóa',
+    'archive': 'Lưu trữ',
     'toggle_status': 'Đổi trạng thái', 'change_password': 'Đổi mật khẩu',
     'reply': 'Gửi phản hồi',
     'reset_password': 'Đặt lại mật khẩu', 'update_email': 'Đổi email',

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -70,7 +70,14 @@ function LessonScheduleDetails({ lesson }: { lesson: LessonRequest }) {
 }
 
 function TutorSessionList({ sessions, saving, onAttendance }: { sessions: LessonSession[]; saving: boolean; onAttendance: (id: string, status: "completed" | "no_show") => void }) {
-  return <div className="border-t border-slate-100 pt-6"><div><h3 className="text-base font-bold text-slate-900">Lịch dạy & điểm danh</h3><p className="mt-1 text-sm text-slate-500">Tất cả buổi học đã được hai bên xác nhận trong tháng.</p></div>{sessions.length ? <div className="mt-4 space-y-2">{sessions.map((session) => <article key={session.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3"><div className="min-w-32"><p className="font-bold text-slate-900">{new Date(`${session.sessionDate}T12:00:00`).toLocaleDateString("vi-VN")}</p><p className="text-xs text-blue-700">{session.startTime}–{session.endTime}</p></div><div className="min-w-48 flex-1"><p className="font-semibold text-slate-900">{session.studentName} · {session.subject}</p><p className="text-xs text-slate-500">{session.mode === "online" ? "Online" : session.location || "Học trực tiếp"}</p></div>{session.status === "scheduled" ? <div className="flex gap-2"><button type="button" disabled={saving} onClick={() => onAttendance(session.id, "completed")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">Có học</button><button type="button" disabled={saving} onClick={() => onAttendance(session.id, "no_show")} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 disabled:opacity-60">Vắng</button></div> : <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${session.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{session.status === "completed" ? "Đã điểm danh: có học" : "Đã điểm danh: vắng"}</span>}</article>)}</div> : <p className="mt-4 rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">Chưa có buổi học nào được xác nhận.</p>}</div>;
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const updateNow = () => setNow(Date.now());
+    updateNow();
+    const interval = window.setInterval(updateNow, 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+  return <div className="border-t border-slate-100 pt-6"><div><h3 className="text-base font-bold text-slate-900">Lịch dạy & điểm danh</h3><p className="mt-1 text-sm text-slate-500">Nút điểm danh chỉ mở từ thời điểm bắt đầu buổi học.</p></div>{sessions.length ? <div className="mt-4 space-y-2">{sessions.map((session) => { const canAttend = session.attendanceAvailable ?? (now > 0 && new Date(`${session.sessionDate}T${session.startTime}`).getTime() <= now); return <article key={session.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3"><div className="min-w-32"><p className="font-bold text-slate-900">{new Date(`${session.sessionDate}T12:00:00`).toLocaleDateString("vi-VN")}</p><p className="text-xs text-blue-700">{session.startTime}–{session.endTime}</p></div><div className="min-w-48 flex-1"><p className="font-semibold text-slate-900">{session.studentName} · {session.subject}</p><p className="text-xs text-slate-500">{session.mode === "online" ? "Online" : session.location || "Học trực tiếp"}</p></div>{session.status === "scheduled" ? <div className="flex flex-wrap items-center justify-end gap-2"><div className="flex gap-2"><button type="button" disabled={saving || !canAttend} onClick={() => onAttendance(session.id, "completed")} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">Có học</button><button type="button" disabled={saving || !canAttend} onClick={() => onAttendance(session.id, "no_show")} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 disabled:cursor-not-allowed disabled:opacity-45">Vắng</button></div>{!canAttend && <span className="basis-full text-right text-[11px] font-semibold text-slate-400">Chưa đến giờ học</span>}</div> : <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${session.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{session.status === "completed" ? "Đã điểm danh: có học" : "Đã điểm danh: vắng"}</span>}</article>; })}</div> : <p className="mt-4 rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">Chưa có buổi học nào được xác nhận.</p>}</div>;
 }
 
 function toForm(profile: TutorProfile) {
@@ -111,7 +118,6 @@ export function TutorPortal() {
   const [subjectsLoaded, setSubjectsLoaded] = useState(false);
   const [lessons, setLessons] = useState<LessonRequest[]>([]);
   const [sessions, setSessions] = useState<LessonSession[]>([]);
-  const [lessonDataLoaded, setLessonDataLoaded] = useState(false);
   const [schedulingLesson, setSchedulingLesson] = useState<LessonRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -134,7 +140,7 @@ export function TutorPortal() {
     }
   };
 
-  const refreshLessonData = async () => {
+  const refreshLessonData = useCallback(async () => {
     try {
       const [nextLessons, nextSessions] = await Promise.all([
         getLessons(),
@@ -142,11 +148,10 @@ export function TutorPortal() {
       ]);
       setLessons(nextLessons);
       setSessions(nextSessions);
-      setLessonDataLoaded(true);
     } catch {
       // Keep the last successful snapshot during a transient network error.
     }
-  };
+  }, []);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void load(), 0);
@@ -179,10 +184,26 @@ export function TutorPortal() {
   }, [profile, subjectsLoaded, tab]);
 
   useEffect(() => {
-    if (!profile || lessonDataLoaded || !["lessons", "schedule", "timetable"].includes(tab)) return;
-    const initialLoad = window.setTimeout(() => void refreshLessonData(), 0);
-    return () => window.clearTimeout(initialLoad);
-  }, [lessonDataLoaded, profile, tab]);
+    if (!profile || !["lessons", "schedule", "timetable"].includes(tab)) return;
+    let lastRefreshAt = 0;
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastRefreshAt < 10_000) return;
+      lastRefreshAt = now;
+      void refreshLessonData();
+    };
+    const initialLoad = window.setTimeout(refreshWhenVisible, 0);
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [profile, refreshLessonData, tab]);
 
   const pendingCount = changes.filter((item) => item.status === "pending").length;
   const toggleSlot = (weekday: number, period: TutorAvailability["slots"][number]["period"]) => {
@@ -291,7 +312,10 @@ export function TutorPortal() {
       const updated = await edututorApi.markLessonAttendance(id, status);
       setSessions((current) => current.map((item) => item.id === updated.id ? updated : item));
       toast.success(status === "completed" ? "Đã điểm danh học viên có mặt." : "Đã ghi nhận học viên vắng mặt.");
-    } catch { toast.error("Không thể điểm danh buổi học này."); }
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      toast.error(typeof detail === "string" && detail.trim() ? detail : "Không thể điểm danh buổi học này.");
+    }
     finally { setSaving(false); }
   };
 

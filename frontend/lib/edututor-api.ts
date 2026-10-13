@@ -63,12 +63,17 @@ export type TutorJob = { slug: string; posted_by_type: "admin" | "parent" | "stu
 export type TutorJobApplication = { id: number; job_slug: string; status: "pending" | "accepted" | "rejected"; cover_letter: string | null; created_at: string };
 export type PostedClassApplication = { id: number; status: "pending" | "accepted" | "rejected"; cover_letter: string | null; created_at: string; tutor: { id: number; slug: string; name: string; email: string; phone: string | null; avatar: string | null; headline: string | null; experience_years: number; rating_avg: number; rating_count: number } };
 export type PostedClassWithApplications = { slug: string; title: string; subject: string; status: "open" | "closed"; created_at: string; learning_request_id: number | null; applications: PostedClassApplication[] };
-export type ActorNotification = { id: number; title: string; content: string; is_read: boolean; created_at: string; type?: string };
+export type ActorNotification = {
+  id: number; title: string; message: string; audience: string;
+  delivered_at: string | null; sent_at: string | null; read_at: string | null;
+  is_read: boolean;
+};
 export type LessonSession = {
   id: string; requestId: string; subject: string; studentName: string; studentPhone: string;
   tutorName: string; sessionDate: string; startTime: string; endTime: string;
   mode: "online" | "offline"; location: string; meetingUrl: string;
   status: "scheduled" | "completed" | "cancelled" | "no_show"; seriesId: string;
+  attendanceAvailable?: boolean;
 };
 
 function page<T>(data: T[] | Page<T>): Page<T> {

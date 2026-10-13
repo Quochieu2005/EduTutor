@@ -91,6 +91,8 @@ from templates.views import (
     payment_mark_tutor_paid,
 
     users,
+    user_delete,
+    user_delete_selected,
 )
 from core.admin_contacts import contact_delete
 from core.admin_header_notifications import admin_notifications_live
@@ -113,6 +115,8 @@ urlpatterns = [
     path('admin/students/<slug:slug>/delete/', student_delete, name='student-delete'),
     path('admin/students/<slug:slug>/toggle-status/', student_toggle_status, name='student-toggle-status'),
     path('admin/users/', users, name='users'),
+    path('admin/users/<str:username>/delete/', user_delete, name='user-delete'),
+    path('admin/users/delete-selected/', user_delete_selected, name='user-delete-selected'),
     path('admin/management/contacts/<int:contact_id>/delete/', contact_delete, name='contact-delete'),
     path('admin/management/tutor-subject-requests/', tutor_subject_change_requests, name='admin-tutor-subject-changes'),
     path('admin/management/tutor-subject-requests/<int:change_id>/review/', tutor_subject_change_review, name='admin-tutor-subject-change-review'),

@@ -1,4 +1,4 @@
-<section class="users-list users-login-list" aria-label="Danh sách tài khoản đăng nhập">
+<section class="users-list users-login-list" aria-label="Danh sách tài khoản đăng nhập" data-delete-selected-url="{% url 'user-delete-selected' %}">
   <div class="users-toolbar">
     <div class="users-toolbar__filters">
       <label class="users-search">
@@ -12,22 +12,34 @@
   <div class="users-table-wrap">
     <div class="users-table-scroll">
       <table class="users-table">
-        <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th><th>Phương thức đăng nhập</th><th>Ngày tạo</th><th>Trạng thái</th></tr></thead>
+        <thead><tr><th><input type="checkbox" aria-label="Chọn tất cả" data-login-user-select-all /></th><th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th><th>Phương thức đăng nhập</th><th>Ngày tạo</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
         <tbody data-login-user-body>
           {% for account in login_users %}
-            <tr data-login-user-row>
+            <tr data-login-user-row data-username="{{ account.username }}" data-delete-url="{{ account.delete_url }}">
+              <td><input type="checkbox" aria-label="Chọn {{ account.username }}" data-login-user-select /></td>
               <td title="{{ account.username }}">{{ account.username }}</td>
               <td>{{ account.name }}</td>
               <td title="{{ account.email }}">{{ account.email }}</td>
               <td>{{ account.provider }}</td>
               <td>{{ account.created_at }}</td>
               <td>{{ account.status }}</td>
+              <td><button class="users-row-menu" type="button" aria-label="Thao tác với {{ account.username }}">&hellip;</button></td>
             </tr>
           {% empty %}
-            <tr class="users-no-results"><td colspan="6">Chưa có tài khoản người dùng.</td></tr>
+            <tr class="users-no-results"><td colspan="8">Chưa có tài khoản người dùng.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+  </div>
+  <div class="users-bulk-actions" role="toolbar" aria-label="Mục đã chọn" data-login-user-bulk hidden>
+    <button type="button" data-login-user-clear aria-label="Bỏ chọn" data-tooltip="Bỏ chọn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+    </button><i></i>
+    <span><b data-login-user-selected-count>0</b> mục đã chọn</span>
+    <button type="button" class="users-bulk-actions__delete" data-login-user-delete-selected data-tooltip="Xóa mục đã chọn" aria-label="Xóa mục đã chọn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 11v6M14 11v6M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+      <span class="sr-only">Xóa mục đã chọn</span>
+    </button>
   </div>
 </section>

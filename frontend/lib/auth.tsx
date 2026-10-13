@@ -27,7 +27,10 @@ export function useEduUser() {
     const session = getAuthSession();
     if (!session) return null;
     const account = session.account;
-    const name = String(account.name ?? account.display_name ?? account.username ?? "Tài khoản");
+    // Website accounts store the human name in ``display_name`` while tutor
+    // and admin accounts use ``name``. Prefer the website field so an older
+    // session cannot leave the header stuck on a generic label.
+    const name = String(account.display_name ?? account.name ?? account.username ?? "Tài khoản");
     const email = String(account.email ?? "");
     return {
       id: String(account.id ?? "local"), fullName: name,

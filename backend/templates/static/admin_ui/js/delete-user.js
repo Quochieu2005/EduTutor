@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const username = row.children[1].textContent.trim();
     const modal = document.createElement('div');
     modal.className = 'delete-modal';
-    modal.innerHTML = '<div class="delete-dialog"><h2>&#9888; Delete</h2><p>Are you sure you want to delete <b data-delete-username></b>?<br>This action will permanently remove this account from the system. This cannot be undone.</p><label>Username: <input placeholder="Enter username to confirm deletion."></label><aside><b>Warning!</b><br>Please be careful, this operation can not be rolled back.</aside><footer><button>Cancel</button><button disabled>Delete</button></footer></div>';
+    modal.innerHTML = '<div class="delete-dialog"><h2>&#9888; Xóa tài khoản</h2><p>Bạn có chắc muốn xóa <b data-delete-username></b>?<br>Tài khoản sẽ bị xóa vĩnh viễn và không thể hoàn tác.</p><label>Nhập username để xác nhận: <input placeholder="Nhập username chính xác"></label><aside><b>Lưu ý:</b><br>Hãy kiểm tra kỹ trước khi thực hiện thao tác này.</aside><footer><button>Hủy</button><button disabled>Xóa</button></footer></div>';
     modal.querySelector('[data-delete-username]').textContent = username;
     document.body.append(modal);
     const [cancel, remove] = modal.querySelectorAll('footer button');
@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
           throw new Error(result?.message || 'Không thể xóa dữ liệu.');
         }
         row.remove();
+        document.dispatchEvent(new CustomEvent('login-user-row-removed'));
         modal.remove();
         showNotice(result.message || 'Đã xóa dữ liệu.');
       } catch (error) {

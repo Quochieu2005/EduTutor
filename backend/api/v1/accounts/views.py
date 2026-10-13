@@ -170,9 +170,16 @@ class UnifiedLoginView(PublicAuthView):
         has_user = any(kind in {'user', 'student', 'parent'} for kind in owner_types)
         has_tutor = 'tutor' in owner_types
         has_admin = 'admin' in owner_types
+        # The registry already checked every authenticatable collection. Do
+        # not issue a fourth lookup for an email that is known not to exist.
+        if not owners:
+            return Response({'detail': 'Email hoặc mật khẩu không chính xác.'}, status=status.HTTP_401_UNAUTHORIZED)
         if account_type == 'auto' and has_admin:
             from accounts.documents import Admin
-            admin = Admin.objects(email=email).first()
+            # ``email_owners`` already loaded this Admin document. Reusing it
+            # avoids a second round trip to MongoDB on every unified login.
+            admin_owner = next((owner for owner in owners if owner['kind'] == 'admin'), None)
+            admin = admin_owner['document'] if admin_owner else Admin.objects(email=email).first()
             if admin is None or not admin.check_password(values['password']):
                 return Response({'detail': 'Email hoặc mật khẩu không chính xác.'}, status=status.HTTP_401_UNAUTHORIZED)
             if admin.status != Admin.STATUS_ACTIVE:
@@ -193,13 +200,33 @@ class UnifiedLoginView(PublicAuthView):
 
         try:
             if account_type == 'tutor' or (account_type == 'auto' and has_tutor):
-                tutor = login_tutor(email=email, password=values['password'])
+                # ``email_owners`` already loaded the tutor. Avoid querying
+                # the same document again before checking its bcrypt hash.
+                tutor_owner = next((owner for owner in owners if owner['kind'] == 'tutor'), None)
+                tutor = tutor_owner['document'] if tutor_owner else None
+                if tutor is None or not tutor.check_password(values['password']):
+                    raise TutorAuthError('Email hoặc mật khẩu không chính xác.')
+                from tutors.documents import Tutor
+                if not isinstance(tutor, Tutor) or tutor.status != Tutor.STATUS_ACTIVE:
+                    raise TutorAuthError('Tài khoản gia sư đã bị vô hiệu hóa.')
                 payload = tutor_token_pair(tutor)
                 payload['actor_type'] = 'tutor'
                 payload['account'] = payload.pop('tutor')
                 return Response(payload, headers={'Cache-Control': 'no-store'})
 
-            user = login_user(email=email, password=values['password'])
+            # The owner registry also carries the User document. Reusing it
+            # removes the duplicate User lookup while preserving the exact
+            # password and account-type checks below.
+            user_owner = next(
+                (owner for owner in owners if owner['kind'] in {'user', 'student', 'parent'}),
+                None,
+            )
+            user = user_owner['document'] if user_owner else login_user(
+                email=email,
+                password=values['password'],
+            )
+            if user_owner is not None and (not isinstance(user, User) or not user.check_password(values['password'])):
+                raise SocialTokenError('Email hoặc mật khẩu không chính xác.')
             resolved_type = _account_type_for(user)
             if account_type in {'student', 'parent'} and resolved_type != account_type:
                 return Response({

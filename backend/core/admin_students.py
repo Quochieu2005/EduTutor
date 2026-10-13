@@ -8,8 +8,9 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from mongoengine import ValidationError
 
-from accounts.documents import Student
+from accounts.documents import Admin, Student
 from core.admin_audit import record_admin_activity
+from core.account_lifecycle import delete_student_cascade
 
 
 STATUS_LABELS = {
@@ -130,30 +131,23 @@ def student_edit(request, slug):
 def student_delete(request, slug):
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'message': 'Yêu cầu không hợp lệ.'}, status=405)
+    if getattr(request, 'admin_account', None) is None or request.admin_account.role != Admin.ROLE_SUPER_ADMIN:
+        return JsonResponse({'ok': False, 'message': 'Chỉ Super Admin mới được xóa học viên.'}, status=403)
     student = _student_or_error(slug)
     if student is None:
         return JsonResponse({'ok': False, 'message': 'Không tìm thấy học viên.'}, status=404)
 
-    # Preserve lessons and invoices: a historical account is safely archived
-    # instead of leaving broken references throughout the system.
-    from core.documents import Payment
-    from lessons.documents import Lesson
-
-    if Lesson.objects(student=student).first() or Payment.objects(student=student).first():
-        student.status = 'inactive'
-        student.save()
-        record_admin_activity(request, 'archive', student)
-        return JsonResponse({
-            'ok': True,
-            'deleted': False,
-            'status': 'Inactive',
-            'status_code': 'inactive',
-            'message': 'Học viên có lịch sử học hoặc hóa đơn nên đã được chuyển sang Inactive thay vì xóa.',
-        })
-
+    summary = delete_student_cascade(student)
     record_admin_activity(request, 'delete', student)
-    student.delete()
-    return JsonResponse({'ok': True, 'deleted': True, 'message': 'Đã xóa học viên.'})
+    return JsonResponse({
+        'ok': True,
+        'deleted': True,
+        'message': (
+            'Đã xóa học viên và toàn bộ dữ liệu liên quan '
+            f"({summary['lessons']} buổi học, {summary['payments']} thanh toán, "
+            f"{summary['job_postings']} tin đăng lớp)."
+        ),
+    })
 
 
 def student_toggle_status(request, slug):

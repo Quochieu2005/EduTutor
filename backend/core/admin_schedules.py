@@ -13,8 +13,7 @@ from mongoengine import ValidationError
 from accounts.documents import Student
 from core.admin_audit import record_admin_activity
 from core.admin_subjects import subject_is_active
-from core.documents import PaymentItem
-from lessons.documents import Lesson, Review
+from lessons.documents import Lesson
 from tutors.documents import Province, Subject, Tutor, TutorSubject, Ward
 
 
@@ -36,6 +35,14 @@ def _reference_label(reference, fallback='—'):
     """Read names safely even if an old MongoDB reference no longer exists."""
     try:
         return reference.name if reference else fallback
+    except Exception:
+        return fallback
+
+
+def _lesson_reference_label(lesson, field_name, fallback='—'):
+    """Resolve one lesson reference lazily so an orphan DBRef is displayable."""
+    try:
+        return _reference_label(getattr(lesson, field_name), fallback)
     except Exception:
         return fallback
 
@@ -66,14 +73,15 @@ def _format_money(value):
 
 def schedule_page_config():
     """Build the schedule table directly from the lessons collection."""
-    lessons = list(
-        Lesson.objects.order_by('-session_date', 'start_time').select_related()
-    )
+    # Keep legacy lessons readable even when an old tutor/student document was
+    # removed.  ``select_related`` would dereference the missing record while
+    # loading the queryset and make the entire admin page return 500.
+    lessons = list(Lesson.objects.order_by('-session_date', 'start_time'))
     return {
         'title': 'Lịch học & Lịch biểu',
         'group': 'Quản lý',
         'singular': 'buổi học',
-        'description': 'Sắp lịch, tránh trùng giờ và theo dõi trạng thái từng buổi học.',
+        'description': 'Sắp lịch, tránh trùng giờ và theo dõi trạng thái từng buổi học. Lịch được xóa cùng tài khoản liên quan, không xóa riêng lẻ.',
         'columns': [
             ('date', 'Ngày học'), ('time', 'Thời gian'), ('student', 'Học viên'),
             ('tutor', 'Gia sư'), ('subject', 'Môn học'), ('mode', 'Hình thức'),
@@ -86,9 +94,9 @@ def schedule_page_config():
             (
                 lesson.session_date.strftime('%d/%m/%Y'),
                 f'{lesson.start_time} - {lesson.end_time}',
-                _reference_label(lesson.student),
-                _reference_label(lesson.tutor),
-                _reference_label(lesson.subject),
+                _lesson_reference_label(lesson, 'student'),
+                _lesson_reference_label(lesson, 'tutor'),
+                _lesson_reference_label(lesson, 'subject'),
                 MODE_LABELS.get(lesson.mode, lesson.mode),
                 _lesson_place(lesson),
                 _format_money(lesson.price),
@@ -419,23 +427,3 @@ def schedule_delete(request, lesson_id):
         'ok': False,
         'message': 'Không thể xóa lịch học. Hãy cập nhật trạng thái sang Đã hủy nếu buổi học không diễn ra.',
     }, status=403)
-    if request.method != 'POST':
-        return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
-    lesson = Lesson.objects(id=lesson_id).first()
-    if lesson is None:
-        return JsonResponse({'ok': False, 'message': 'Không tìm thấy buổi học.'}, status=404)
-    review_count = Review.objects(lesson=lesson).count()
-    payment_item_count = PaymentItem.objects(lesson=lesson).count()
-    if review_count or payment_item_count:
-        linked = []
-        if review_count:
-            linked.append('đánh giá')
-        if payment_item_count:
-            linked.append('dòng thanh toán')
-        return JsonResponse({
-            'ok': False,
-            'message': f"Không thể xóa buổi học đã có {' và '.join(linked)}.",
-        }, status=409)
-    lesson.delete()
-    record_admin_activity(request, 'delete', lesson)
-    return JsonResponse({'ok': True, 'message': 'Đã xóa buổi học.'})

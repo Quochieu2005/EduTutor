@@ -282,6 +282,9 @@ class TutorApplication(TimestampedDocument):
         'indexes': [
             'status', 'workflow_stage', 'email', 'job_posting', 'reviewed_by',
             'onboarding_status', '-created_at',
+            # Public boards exclude postings whose tutor application was
+            # approved; this avoids scanning every approved application.
+            {'fields': ['status', 'job_posting'], 'name': 'approved_job_posting_v1'},
         ],
     }
 
@@ -311,6 +314,10 @@ class JobPosting(TimestampedDocument):
     status = StringField(required=True, choices=('open', 'closed'), default='open')
     meta = {'collection': 'job_postings', 'indexes': [
         'status', 'posted_by_type', 'subject', 'province', 'district', 'ward', '-created_at',
+        # Public class/recruitment boards filter open postings by subject and
+        # then sort newest first. Keep that common paginated query covered as
+        # the number of postings grows.
+        {'fields': ['status', 'subject', '-created_at'], 'name': 'public_open_jobs_v1'},
         # The learner portal filters their own postings then displays newest
         # first. Keep that request on one index instead of a collection scan.
         {'fields': ['posted_by_type', 'posted_by_id', '-created_at'], 'name': 'owner_class_postings_v1'},
