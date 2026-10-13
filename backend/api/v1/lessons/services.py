@@ -308,6 +308,15 @@ def visible_lesson_sessions(user):
 
 def lesson_session_payload(lesson):
     """The same concrete, one-month timetable for both learner and tutor."""
+    try:
+        attendance_available = (
+            lesson.status == 'scheduled'
+            and lesson_start_datetime(lesson) <= datetime.now(VIETNAM_TIME_ZONE)
+        )
+    except LessonWorkflowError:
+        # Keep legacy rows visible even if an old record has a malformed time;
+        # the write path will still reject an unsafe attendance update.
+        attendance_available = False
     return {
         'id': str(lesson.id),
         'requestId': str(lesson.request.id) if lesson.request else '',
@@ -323,7 +332,23 @@ def lesson_session_payload(lesson):
         'meetingUrl': lesson.meeting_url or '',
         'status': lesson.status,
         'seriesId': lesson.series_id or '',
+        'attendanceAvailable': attendance_available,
     }
+
+
+def lesson_start_datetime(lesson):
+    """Return a lesson's start in the app timezone for attendance checks."""
+    start_time = (lesson.start_time or '').strip()
+    parsed_time = None
+    for time_format in ('%H:%M', '%H:%M:%S'):
+        try:
+            parsed_time = datetime.strptime(start_time, time_format).time()
+            break
+        except (TypeError, ValueError):
+            continue
+    if parsed_time is None:
+        raise LessonWorkflowError('Buổi học có giờ bắt đầu không hợp lệ.')
+    return datetime.combine(lesson.session_date, parsed_time, tzinfo=VIETNAM_TIME_ZONE)
 
 
 def update_lesson_attendance(user, lesson, next_status):
@@ -332,6 +357,8 @@ def update_lesson_attendance(user, lesson, next_status):
         raise LessonWorkflowError('Chỉ gia sư phụ trách mới có thể điểm danh buổi học này.')
     if lesson.status != 'scheduled':
         raise LessonWorkflowError('Buổi học này đã được cập nhật trước đó.')
+    if lesson_start_datetime(lesson) > datetime.now(VIETNAM_TIME_ZONE):
+        raise LessonWorkflowError('Chưa đến giờ học. Bạn chỉ có thể điểm danh từ thời điểm bắt đầu buổi học.')
     lesson.status = next_status
     lesson.save()
     if lesson.request:

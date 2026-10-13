@@ -77,6 +77,6 @@
   </footer>
 
   <div class="users-bulk-actions" role="toolbar" aria-label="Bulk actions" data-resource-bulk hidden>
-    <button type="button" data-resource-clear aria-label="Bỏ chọn">&times;</button><i></i><span><b data-resource-selected-count>0</b> mục đã chọn</span>{% if page.key != 'activity-logs' and not page.show_actions %}{% if page.key != 'administrators' or page.can_delete %}<i></i><button class="users-bulk-actions__delete" type="button" data-resource-delete-selected aria-label="Xóa mục đã chọn">&#9003;</button>{% endif %}{% endif %}
+    <button type="button" data-resource-clear aria-label="Bỏ chọn">&times;</button><i></i><span><b data-resource-selected-count>0</b> mục đã chọn</span>{% if page.key != 'activity-logs' and page.key != 'classes' and page.key != 'schedules' and page.key != 'tutors' and not page.show_actions %}{% if page.key != 'administrators' or page.can_delete %}<i></i><button class="users-bulk-actions__delete" type="button" data-resource-delete-selected aria-label="Xóa mục đã chọn">&#9003;</button>{% endif %}{% elif page.key == 'tutors' and page.can_delete %}<i></i><button class="users-bulk-actions__delete" type="button" data-resource-delete-selected aria-label="Xóa mục đã chọn">&#9003;</button>{% endif %}
   </div>
 </section>

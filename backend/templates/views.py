@@ -27,17 +27,18 @@ from mongoengine import NotUniqueError, ValidationError
 from mongoengine.connection import ConnectionFailure
 from pymongo.errors import PyMongoError
 
-from accounts.documents import Admin, AuthToken, Student, User
+from accounts.documents import Admin, AuthToken, Parent, Student, User, UserPasswordResetToken
 from accounts.email_registry import assert_email_available
 from accounts.cloudinary_media import (
     delete_asset, upload_admin_avatar, upload_banner_image, upload_blog_thumbnail,
     upload_tutor_avatar,
 )
 from accounts.session import admin_session_is_valid, clear_admin_session
-from core.documents import AuditLog, Banner, BlogCategory, BlogPost, Contact, Payment
+from core.documents import AuditLog, Banner, BlogCategory, BlogPost, Complaint, Contact, Payment, SystemNotification
 from core.admin_audit import activity_logs, record_admin_activity
 from core.admin_query_stats import reference_counts
 from core.admin_classes import classes_page_config
+from core.account_lifecycle import delete_tutor_cascade
 from core.admin_students import (
     student_delete,
     student_edit,
@@ -93,7 +94,7 @@ from core.admin_tutor_requests import (
 from lessons.documents import LearningRequest, Lesson
 from tutors.documents import (
     JobApplication, JobPosting, Province, Subject, Tutor, TutorApplication, TutorSubject,
-    TutorAvailability, TutorTeachingArea, Ward,
+    TutorAvailability, TutorSubjectChangeRequest, TutorTeachingArea, Ward,
 )
 
 
@@ -464,10 +465,26 @@ def _recruitment_reference_name(reference):
         return '-'
 
 
+def _recruitment_field_name(document, field_name):
+    """Resolve a reference field lazily, including legacy orphan DBRefs."""
+    try:
+        return _recruitment_reference_name(getattr(document, field_name))
+    except Exception:
+        return '-'
+
+
 def _recruitment_reference_id(reference):
     """Return a reference id while tolerating legacy dangling references."""
     try:
         return str(reference.id) if reference else ''
+    except Exception:
+        return ''
+
+
+def _recruitment_field_id(document, field_name):
+    """Resolve a reference id without dereferencing a missing legacy record."""
+    try:
+        return _recruitment_reference_id(getattr(document, field_name))
     except Exception:
         return ''
 
@@ -1787,6 +1804,8 @@ def tutor_create(request):
                 'Tài khoản gia sư EduTutor của bạn đã được tạo.\n'
                 f'Email đăng nhập: {tutor.email}\n'
                 f'Mật khẩu tạm thời: {temporary_password}\n\n'
+                'Nếu bạn nhận nhiều email, chỉ sử dụng email mới nhất. '
+                'Mỗi lần cấp lại thông tin đăng nhập sẽ vô hiệu hóa mật khẩu trước đó.\n\n'
                 'Bạn có thể đăng nhập bằng mật khẩu này. '
                 'Hệ thống sẽ yêu cầu bạn đổi mật khẩu để bảo mật tài khoản.\n\n'
                 'Trân trọng,\nEduTutor'
@@ -1867,6 +1886,8 @@ def tutor_send_credentials(request):
                         'Tài khoản gia sư EduTutor của bạn đã được thiết lập.\n'
                         f'Email đăng nhập: {tutor.email}\n'
                         f'Mật khẩu tạm thời: {temporary_password}\n\n'
+                        'Nếu bạn nhận nhiều email, chỉ sử dụng email mới nhất. '
+                        'Mỗi lần cấp lại thông tin đăng nhập sẽ vô hiệu hóa mật khẩu trước đó.\n\n'
                         'Vui lòng đăng nhập và đổi mật khẩu ngay sau khi đăng nhập để bảo mật tài khoản. '
                         'Không chia sẻ thông tin này với bất kỳ ai.\n\n'
                         'Trân trọng,\nEduTutor'
@@ -1901,16 +1922,24 @@ def tutor_send_credentials(request):
 def tutor_delete(request, slug):
     if request.method != 'POST':
         return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
+    if not _require_super_admin(request):
+        return JsonResponse({'ok': False, 'message': 'Chỉ Super Admin mới được xóa gia sư.'}, status=403)
     tutor = Tutor.objects(slug=slug).first()
     if tutor is None:
         return JsonResponse({'ok': False, 'message': 'Không tìm thấy gia sư.'}, status=404)
-    TutorSubject.objects(tutor=tutor).delete()
-    TutorTeachingArea.objects(tutor=tutor).delete()
-    TutorAvailability.objects(tutor=tutor).delete()
+
     delete_asset(tutor.avatar_public_id)
-    tutor.delete()
+    summary = delete_tutor_cascade(tutor)
     record_admin_activity(request, 'delete', tutor)
-    return JsonResponse({'ok': True, 'message': 'Xóa gia sư thành công.'})
+    return JsonResponse({
+        'ok': True,
+        'deleted': True,
+        'message': (
+            'Đã xóa gia sư và toàn bộ dữ liệu liên quan '
+            f"({summary['lessons']} buổi học, {summary['payments']} thanh toán, "
+            f"{summary['applications']} hồ sơ ứng tuyển)."
+        ),
+    })
 
 
 def tutor_toggle_status(request, slug):
@@ -2312,6 +2341,8 @@ def _send_tutor_credentials_email(tutor, temporary_password):
             'Hồ sơ tuyển dụng của bạn đã đạt và tài khoản gia sư EduTutor đã được tạo.\n'
             f'Email đăng nhập: {tutor.email}\n'
             f'Mật khẩu tạm thời: {temporary_password}\n\n'
+            'Nếu bạn nhận nhiều email, chỉ sử dụng email mới nhất. '
+            'Mỗi lần cấp lại thông tin đăng nhập sẽ vô hiệu hóa mật khẩu trước đó.\n\n'
             'Vui lòng đăng nhập và đổi mật khẩu ngay lần đầu sử dụng. '
             'Sau đó bổ sung môn dạy, khu vực và thông tin chuyên môn trong hồ sơ.\n\n'
             'Trân trọng,\nEduTutor'
@@ -2472,6 +2503,7 @@ def management_page(request, module):
     if module == 'tutors':
         page['can_create'] = True
         page['create_url'] = reverse('tutor-create')
+        page['can_delete'] = request.admin_account.role == Admin.ROLE_SUPER_ADMIN
     if module == 'slides':
         page['create_url'] = reverse('banner-create')
     if module == 'notifications':
@@ -2687,13 +2719,16 @@ def management_page(request, module):
                 'slug': tutor.slug,
                 'avatar_url': tutor.avatar or '',
                 'edit_url': reverse('tutor-edit', kwargs={'slug': tutor.slug}),
-                'delete_url': reverse('tutor-delete', kwargs={'slug': tutor.slug}),
+                'delete_url': (
+                    reverse('tutor-delete', kwargs={'slug': tutor.slug})
+                    if request.admin_account.role == Admin.ROLE_SUPER_ADMIN else ''
+                ),
                 'status_toggle_url': reverse('tutor-toggle-status', kwargs={'slug': tutor.slug}),
                 # The generic row-menu reads these explicit flags.  Without
                 # them Django renders both values as false, so the menu opens
                 # as an empty popup even though the edit/delete URLs exist.
                 'can_edit': True,
-                'can_delete': True,
+                'can_delete': request.admin_account.role == Admin.ROLE_SUPER_ADMIN,
                 'form_values': json.dumps({
                     'name': tutor.name, 'email': tutor.email, 'phone': tutor.phone or '',
                     'headline': tutor.headline or '', 'bio': tutor.bio or '',
@@ -2791,26 +2826,25 @@ def management_page(request, module):
                 'id': str(lesson.id),
                 'slug': str(lesson.id),
                 'edit_url': reverse('schedule-edit', kwargs={'lesson_id': lesson.id}),
-                'delete_url': reverse('schedule-delete', kwargs={'lesson_id': lesson.id}),
                 'form_values': json.dumps({
-                    'student_id': _recruitment_reference_id(lesson.student),
-                    'tutor_id': _recruitment_reference_id(lesson.tutor),
-                    'subject_id': _recruitment_reference_id(lesson.subject),
+                    'student_id': _recruitment_field_id(lesson, 'student'),
+                    'tutor_id': _recruitment_field_id(lesson, 'tutor'),
+                    'subject_id': _recruitment_field_id(lesson, 'subject'),
                     'session_date': lesson.session_date.isoformat(),
                     'start_time': lesson.start_time,
                     'end_time': lesson.end_time,
                     'series_id': lesson.series_id or '',
                     'mode': lesson.mode,
-                    'province_id': _recruitment_reference_id(lesson.province),
-                    'ward_id': _recruitment_reference_id(lesson.ward),
+                    'province_id': _recruitment_field_id(lesson, 'province'),
+                    'ward_id': _recruitment_field_id(lesson, 'ward'),
                     'meeting_url': lesson.meeting_url or '',
                     'price': lesson.price if lesson.price is not None else '',
                     'payment_status': lesson.payment_status,
                     'status': lesson.status,
                     'note': lesson.note or '',
                 }),
-                'can_edit': True,
-                'can_delete': True,
+                'can_edit': False,
+                'can_delete': False,
             })
         elif module == 'payments':
             payment = config['records'][index - 1]
@@ -3262,7 +3296,32 @@ def administrator_delete(request, slug):
         return JsonResponse({'ok': False, 'message': 'Hệ thống phải còn ít nhất một Super Admin đang hoạt động.'}, status=400)
 
     name = admin.name
+    # Blog posts keep a required author reference.  Preserve an administrator
+    # that has authored content rather than creating a new dangling DBRef.
+    if BlogPost.objects(admin=admin).first() is not None:
+        AuthToken.objects(user_type='admin', user_id=int(admin.id)).delete()
+        admin.status = Admin.STATUS_INACTIVE
+        admin.session_version = (admin.session_version or 1) + 1
+        admin.save()
+        record_admin_activity(request, 'archive', admin)
+        return JsonResponse({
+            'ok': True,
+            'deleted': False,
+            'status': Admin.STATUS_INACTIVE,
+            'status_code': Admin.STATUS_INACTIVE,
+            'message': 'Quản trị viên đã có bài viết nên được chuyển sang Inactive và đăng xuất khỏi mọi phiên.',
+        })
+
+    # Optional references are cleared before the account is removed so their
+    # admin pages continue to render normally.
+    SystemNotification.objects(created_by=admin).update(unset__created_by=1)
+    Complaint.objects(handled_by=admin).update(unset__handled_by=1)
+    TutorApplication.objects(reviewed_by=admin).update(unset__reviewed_by=1)
+    TutorSubjectChangeRequest.objects(reviewed_by=admin).update(unset__reviewed_by=1)
     delete_asset(admin.profile_image_public_id)
+    # Remove any legacy reset/access token rows as well.  JWTs and browser
+    # sessions are rejected immediately because the Admin document disappears.
+    AuthToken.objects(user_type='admin', user_id=int(admin.id)).delete()
     admin.delete()
     record_admin_activity(request, 'delete', admin)
     messages.success(request, f'Đã xóa quản trị viên {name}.')
@@ -3552,11 +3611,11 @@ def _dashboard_data(today, week_end, *, finance_period='month', now=None):
     """Build a short-lived shared dashboard snapshot for Atlas-backed admin."""
     now = now or datetime.now(timezone.utc)
     analytics = _dashboard_analytics(today, now)
-    paid_payments = list(Payment.objects(status='paid').select_related())
+    paid_payments = list(Payment.objects(status='paid'))
     revenue = sum(payment.total_amount or 0 for payment in paid_payments)
     upcoming_lessons = list(
         Lesson.objects(session_date__gte=today, session_date__lte=week_end)
-        .order_by('session_date', 'start_time').limit(6).select_related()
+        .order_by('session_date', 'start_time').limit(6)
     )
     recent_applications = list(TutorApplication.objects.order_by('-created_at').limit(5))
     paid_count = len(paid_payments)
@@ -3582,7 +3641,7 @@ def _dashboard_data(today, week_end, *, finance_period='month', now=None):
     paid_in_period = payments_in_window(finance_window['start'], finance_window['end'])
     pending_in_period = list(Payment.objects(
         status='pending', created_at__gte=finance_window['start'], created_at__lte=finance_window['end'],
-    ).select_related())
+    ))
     pending_total = sum(payment.total_amount or 0 for payment in pending_in_period)
     payout_due = sum(
         payment.tutor_payout_amount or 0 for payment in paid_in_period
@@ -3599,8 +3658,8 @@ def _dashboard_data(today, week_end, *, finance_period='month', now=None):
     def finance_payment_row(payment):
         return {
             'code': f"HP-{(payment.billing_month or payment.created_at.strftime('%Y-%m')).replace('-', '')}-{int(payment.id):05d}",
-            'student': _recruitment_reference_name(payment.student),
-            'tutor': _recruitment_reference_name(payment.tutor),
+            'student': _recruitment_field_name(payment, 'student'),
+            'tutor': _recruitment_field_name(payment, 'tutor'),
             'amount': _format_currency(payment.total_amount),
             'payout': _format_currency(payment.tutor_payout_amount),
             'status': 'Đã thanh toán' if payment.status == 'paid' else 'Chờ thanh toán',
@@ -3637,7 +3696,7 @@ def _dashboard_data(today, week_end, *, finance_period='month', now=None):
             {'title': 'Tin tuyển dụng đang mở', 'count': JobPosting.objects(posted_by_type='admin', status='open').count(), 'description': 'Tin do Admin đăng để tuyển gia sư', 'url': reverse('management-page', kwargs={'module': 'tutor-jobs'}), 'tone': 'green'},
         ],
         'lessons': [
-            {'subject': _recruitment_reference_name(lesson.subject), 'student': _recruitment_reference_name(lesson.student), 'tutor': _recruitment_reference_name(lesson.tutor), 'time': f'{lesson.session_date.strftime("%d/%m")} · {lesson.start_time}–{lesson.end_time}', 'mode': 'Trực tuyến' if lesson.mode == 'online' else 'Trực tiếp'}
+            {'subject': _recruitment_field_name(lesson, 'subject'), 'student': _recruitment_field_name(lesson, 'student'), 'tutor': _recruitment_field_name(lesson, 'tutor'), 'time': f'{lesson.session_date.strftime("%d/%m")} · {lesson.start_time}–{lesson.end_time}', 'mode': 'Trực tuyến' if lesson.mode == 'online' else 'Trực tiếp'}
             for lesson in upcoming_lessons
         ],
         'applications': [
@@ -3690,15 +3749,20 @@ def users(request):
         'local': 'Email & mật khẩu', 'google': 'Google',
         'facebook': 'Facebook', 'clerk': 'Clerk',
     }
-    # Do not surface a legacy duplicate User document for an account issued to
-    # a tutor or an administrator.  Those identities are managed exclusively
-    # in their own back-office sections.
+    # Do not surface a duplicate User document for a learner, parent, tutor or
+    # administrator. Those identities are managed in their own sections.
     non_user_emails = {
         (email or '').strip().lower()
         for email in Tutor.objects.scalar('email')
     } | {
         (email or '').strip().lower()
         for email in Admin.objects.scalar('email')
+    } | {
+        (email or '').strip().lower()
+        for email in Parent.objects.scalar('email')
+    } | {
+        (email or '').strip().lower()
+        for email in Student.objects.scalar('email')
     }
     account_rows = [
         {
@@ -3708,6 +3772,7 @@ def users(request):
             'provider': provider_labels.get(account.oauth_provider or 'local', 'Email & mật khẩu'),
             'created_at': _recruitment_date(account.created_at),
             'status': 'Đang hoạt động',
+            'delete_url': reverse('user-delete', kwargs={'username': account.username}),
         }
         for account in User.objects.order_by('-created_at')
         if (account.email or '').strip().lower() not in non_user_emails
@@ -3715,12 +3780,99 @@ def users(request):
     return render(request, 'admin/user/users.html', {'login_users': account_rows})
 
 
+def user_delete(request, username):
+    """Delete a website login account from the dedicated Users screen."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
+    account = User.objects(username=username).first()
+    if account is None:
+        return JsonResponse({'ok': False, 'message': 'Không tìm thấy tài khoản.'}, status=404)
+    # Tutor, learner, parent and admin records have their own lifecycle and
+    # are intentionally never removed from this generic website-account page.
+    email = (account.email or '').strip().lower()
+    if (
+        Tutor.objects(email=email).first()
+        or Student.objects(email=email).first()
+        or Parent.objects(email=email).first()
+        or Admin.objects(email=email).first()
+    ):
+        return JsonResponse({
+            'ok': False,
+            'message': 'Tài khoản đang gắn với hồ sơ riêng, hãy xóa hoặc quản lý ở đúng mục tương ứng.',
+        }, status=409)
+    name = account.display_name or account.username
+    UserPasswordResetToken.objects(user=account).delete()
+    account.delete()
+    record_admin_activity(request, 'delete', account)
+    return JsonResponse({'ok': True, 'message': f'Đã xóa tài khoản {name}.'})
+
+
+def user_delete_selected(request):
+    """Delete selected standalone website accounts in one idempotent request."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'Phương thức không hợp lệ.'}, status=405)
+    try:
+        payload = json.loads(request.body or '{}')
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'message': 'Dữ liệu xóa không hợp lệ.'}, status=400)
+    usernames = payload.get('usernames') if isinstance(payload, dict) else None
+    if not isinstance(usernames, list):
+        return JsonResponse({'ok': False, 'message': 'Danh sách tài khoản không hợp lệ.'}, status=400)
+    usernames = list(dict.fromkeys(
+        str(username).strip() for username in usernames
+        if str(username).strip()
+    ))
+    if not usernames:
+        return JsonResponse({'ok': False, 'message': 'Chưa chọn tài khoản nào.'}, status=400)
+    if len(usernames) > 100:
+        return JsonResponse({'ok': False, 'message': 'Chỉ được xóa tối đa 100 tài khoản mỗi lần.'}, status=400)
+
+    accounts = {account.username: account for account in User.objects(username__in=usernames)}
+    deleted_usernames = []
+    skipped_usernames = []
+    for username in usernames:
+        account = accounts.get(username)
+        if account is None:
+            continue
+        email = (account.email or '').strip().lower()
+        if (
+            Tutor.objects(email=email).first()
+            or Student.objects(email=email).first()
+            or Parent.objects(email=email).first()
+            or Admin.objects(email=email).first()
+        ):
+            skipped_usernames.append(username)
+            continue
+        UserPasswordResetToken.objects(user=account).delete()
+        record_admin_activity(request, 'delete', account)
+        account.delete()
+        deleted_usernames.append(username)
+
+    if not deleted_usernames and skipped_usernames:
+        return JsonResponse({
+            'ok': False,
+            'message': 'Các tài khoản đã chọn đều đang gắn với hồ sơ riêng; hãy quản lý ở mục tương ứng.',
+            'deleted_usernames': [],
+            'skipped_count': len(skipped_usernames),
+        }, status=409)
+    return JsonResponse({
+        'ok': True,
+        'deleted_usernames': deleted_usernames,
+        'skipped_count': len(skipped_usernames),
+        'message': f'Đã xóa {len(deleted_usernames)} tài khoản.',
+    })
+
+
 def chats(request):
     return render(request, 'admin/chat/chats.html')
 
 
 def students(request):
-    return render(request, 'admin/students/students.html', {'page': student_page()})
+    page = student_page()
+    page['can_delete'] = request.admin_account.role == Admin.ROLE_SUPER_ADMIN
+    for row in page['rows']:
+        row['can_delete'] = page['can_delete']
+    return render(request, 'admin/students/students.html', {'page': page})
 
 
 def profile(request):

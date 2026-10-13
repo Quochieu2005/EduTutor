@@ -103,6 +103,19 @@ export default function ProfilePage() {
     edututorApi.accountProfile().then((profile) => {
       if (cancelled) return;
       const detail = profile.student ?? profile.parent ?? {};
+      const session = getAuthSession();
+      const currentAccount = profile.account ?? {};
+      // Keep the shared header in sync with the canonical profile response.
+      // Older sessions may contain only a generic display label until this
+      // page is opened once after the profile was created or renamed.
+      if (session && session.actorType === actorType) {
+        saveAuthSession({
+          ...session,
+          account: { ...session.account, ...currentAccount },
+          source: "local",
+        });
+      }
+      setApiAccount((current) => ({ ...current, ...currentAccount }));
       setProfileForm({
         displayName: String(profile.account?.display_name ?? detail.name ?? ""),
         username: String(profile.account?.username ?? ""),
@@ -166,15 +179,20 @@ export default function ProfilePage() {
       if (["lessons", "schedule", "timetable"].includes(userTab)) void refreshLearnerData(false);
     };
     // Refresh only the data currently on screen after the user returns to the
-    // tab or completes a write. Repeated background polling overloaded the
-    // hosted API even while the portal was idle.
+    // tab, completes a write, or while an active schedule view is open. The
+    // interval is deliberately scoped to the visible data instead of polling
+    // the whole portal in the background.
     window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
+    const interval = window.setInterval(() => {
+      if (["applications", "lessons", "schedule", "timetable"].includes(userTab)) refreshWhenVisible();
+    }, 30_000);
     return () => {
       window.removeEventListener("focus", refreshWhenVisible);
       window.removeEventListener(API_DATA_CHANGED_EVENT, refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.clearInterval(interval);
     };
   }, [refreshLearnerData, refreshPostedClasses, userTab]);
 
@@ -385,7 +403,7 @@ export default function ProfilePage() {
     }
   };
 
-  const profileName = String(apiAccount.name ?? apiAccount.display_name ?? user?.fullName ?? "Thành viên EduTutor");
+  const profileName = String(apiAccount.display_name ?? apiAccount.name ?? user?.fullName ?? "Thành viên EduTutor");
   const profileEmail = String(apiAccount.email ?? user?.primaryEmailAddress?.emailAddress ?? "");
   const profileAvatar = String(apiAccount.avatar ?? user?.imageUrl ?? "");
   const roleLabel = actorType === "admin" ? "Quản trị viên" : actorType === "tutor" ? "Gia sư" : actorType === "parent" ? "Phụ huynh" : actorType === "student" ? "Học viên" : "Người dùng";

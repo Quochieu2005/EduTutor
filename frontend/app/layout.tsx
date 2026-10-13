@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AuthProvider } from "@/components/AuthProvider";
+import { NotificationPoller } from "@/components/NotificationPoller";
 import { ToastProvider } from "@/components/ToastProvider";
 import "./globals.css";
 
@@ -47,7 +48,10 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning>
         <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <NotificationPoller />
+            {children}
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>

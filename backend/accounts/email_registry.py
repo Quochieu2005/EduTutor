@@ -38,18 +38,31 @@ def email_owners(email, *, exclude_kind=None, exclude_id=None):
             return
         owners.append({'kind': kind, 'id': str(document_id), 'document': document})
 
-    user = User.objects(email=email).first()
+    user = User.objects(email=email).only(
+        'email', 'username', 'display_name', 'phone', 'avatar',
+        'password_hash', 'account_type', 'oauth_provider', 'token_version',
+        'created_at',
+    ).first()
     if user is not None:
         account_type = getattr(user, 'account_type', None)
         kind = account_type if account_type in {'student', 'parent'} else 'user'
         add(kind, user)
     else:
         # These normally mirror a User. Treat a row without User as reserved.
-        add('student', Student.objects(email=email).first())
-        add('parent', Parent.objects(email=email).first())
+        add('student', Student.objects(email=email).only('id').first())
+        add('parent', Parent.objects(email=email).only('id').first())
 
-    add('tutor', Tutor.objects(email=email).first())
-    add('admin', Admin.objects(email=email).first())
+    # Login only needs the credential/status fields and the small token
+    # payload. In particular, do not hydrate Admin.profile_image (which may
+    # contain a multi-megabyte binary) just to check whether an email exists.
+    add('tutor', Tutor.objects(email=email).only(
+        'slug', 'name', 'email', 'avatar', 'status', 'password_hash',
+        'token_version', 'must_change_password',
+    ).first())
+    add('admin', Admin.objects(email=email).only(
+        'name', 'email', 'profile_image_url', 'role', 'status',
+        'password_hash', 'session_version',
+    ).first())
     return owners
 
 

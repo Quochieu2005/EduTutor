@@ -26,6 +26,14 @@ def _label(reference, fallback='—'):
         return fallback
 
 
+def _field_label(document, field_name, fallback='—'):
+    """Read a ReferenceField without crashing on legacy orphaned DBRefs."""
+    try:
+        return _label(getattr(document, field_name), fallback)
+    except Exception:
+        return fallback
+
+
 def _identifier(reference):
     try:
         return str(reference.id)
@@ -62,7 +70,10 @@ def _class_status(lessons):
 def classes_page_config():
     """Create summary rows from real lessons, grouped into learning classes."""
     groups = OrderedDict()
-    lessons = list(Lesson.objects.order_by('session_date', 'start_time').select_related())
+    # Do not eager-dereference legacy references here.  A tutor/student may
+    # have been removed before the lifecycle guard existed; those lessons
+    # still need to remain visible to the administrator.
+    lessons = list(Lesson.objects.order_by('session_date', 'start_time'))
     for lesson in lessons:
         groups.setdefault(_group_key(lesson), []).append(lesson)
 
@@ -78,9 +89,9 @@ def classes_page_config():
         next_lesson = min(upcoming, key=lambda lesson: (lesson.session_date, lesson.start_time), default=None)
         rows.append((
             _class_code(key, first),
-            _label(first.subject),
-            _label(first.tutor),
-            _label(first.student),
+            _field_label(first, 'subject'),
+            _field_label(first, 'tutor'),
+            _field_label(first, 'student'),
             f'{completed}/{len(class_lessons)} buổi',
             (
                 f'{next_lesson.session_date.strftime("%d/%m/%Y")} · '
@@ -94,7 +105,7 @@ def classes_page_config():
         'title': 'Quản lý lớp học',
         'group': 'Quản lý',
         'singular': 'lớp học',
-        'description': 'Quản lý lớp, gia sư, học viên và tiến độ học tập.',
+        'description': 'Quản lý lớp, gia sư, học viên và tiến độ học tập. Lớp được xóa cùng tài khoản liên quan, không xóa riêng lẻ.',
         'columns': [
             ('code', 'Mã lớp'), ('subject', 'Môn học'), ('tutor', 'Gia sư'),
             ('student', 'Học viên'), ('progress', 'Tiến độ'),

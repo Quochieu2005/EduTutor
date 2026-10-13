@@ -1116,7 +1116,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!targets.length) return;
     const overlay = document.createElement("div");
     overlay.className = "delete-modal";
-    overlay.innerHTML = `<div class="delete-dialog"><h2>&#9888; Xóa ${targets.length > 1 ? `${targets.length} mục đã chọn` : entity}</h2><p>Bạn có chắc muốn xóa dữ liệu đã chọn?<br>Thao tác này không thể hoàn tác.</p><aside><b>Lưu ý:</b><br>Hãy kiểm tra kỹ trước khi xóa.</aside><footer><button type="button">Hủy</button><button type="button">Xóa</button></footer></div>`;
+    const isAccountCascade = resourceKey === "students" || resourceKey === "tutors";
+    const warning = isAccountCascade
+      ? "Tài khoản, hồ sơ và toàn bộ dữ liệu liên quan (lịch học, lớp, tin nhắn, thanh toán...) sẽ bị xóa vĩnh viễn."
+      : "Bạn có chắc muốn xóa dữ liệu đã chọn?";
+    overlay.innerHTML = `<div class="delete-dialog"><h2>&#9888; Xóa ${targets.length > 1 ? `${targets.length} mục đã chọn` : entity}</h2><p>${warning}<br>Thao tác này không thể hoàn tác.</p><aside><b>Lưu ý:</b><br>Hãy kiểm tra kỹ trước khi xóa.</aside><footer><button type="button">Hủy</button><button type="button">Xóa</button></footer></div>`;
     document.body.appendChild(overlay);
     const [cancel, remove] = overlay.querySelectorAll("footer button");
     cancel.addEventListener("click", () => overlay.remove());
